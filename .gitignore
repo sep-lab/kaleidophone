@@ -1,0 +1,72 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# --- Personal media: NEVER commit these ---
+# mvideo's whole job is to work on YOUR real photos, audio and footage. None
+# of that belongs in git — not as "just one small sample". See
+# docs/decisions/0003-public-framework-private-assets.md and AGENTS.md,
+# "Rules for handling user data". CI enforces this; see
+# .github/workflows/scripts/check_no_media.sh.
+*.wav
+*.aif
+*.aiff
+*.flac
+*.mp3
+*.m4a
+*.ogg
+*.opus
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.heif
+*.tiff
+*.tif
+*.bmp
+*.gif
+*.webp
+*.psd
+
+# --- Local / private briefs ---
+# A real creative brief points at real local media paths and may name real
+# people. examples/ ships only scrubbed, synthetic, or genericized briefs.
+private/
+local/
+*.local.yaml
+*.private.yaml
+
+# --- Render outputs / caches (derived, rebuildable — never history) ---
+# Same principle as docs/decisions/0001: the render is a cache, not source.
+renders/
+*_out/
+.mvideo-cache/
+
+# generate_fixtures.py writes here on every local/CI demo run. The media
+# inside is already caught by the extensions above, but the *_fixtures/
+# also collects generated_brief.yaml/edl.json/promo_pack.md siblings that
+# aren't media by extension — ignore the whole scratch directory rather than
+# rely on remembering every non-media byproduct.
+examples/demo/_fixtures/
+
+# --- OS / editor cruft ---
+.DS_Store
+.vscode/
+.idea/
+*.swp

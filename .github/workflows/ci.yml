@@ -1,0 +1,269 @@
+# CI for mvideo
+#
+# What this pipeline actually protects, in priority order:
+#
+#   1. The promise that no real photo, video, or audio file -- and no
+#      absolute personal path -- ever enters this repository
+#         -> job: guardrails
+#   2. Ordinary correctness: the pure-logic test suite, and lint
+#         -> jobs: test, lint
+#   3. The actual end-to-end promise ("a song + your photos -> a video")
+#      still works, on real ffmpeg, from a clean checkout
+#         -> job: demo
+#
+# Every failure message in this pipeline should say what to do next, not
+# just what went wrong. If a check ever fails for a reason a contributor
+# cannot act on, that is a bug in the check -- see CONTRIBUTING.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A superseded push or PR update cancels its own earlier run. main is
+  # exempt: its history of green runs is worth more than the runner minutes.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  # ---------------------------------------------------------------------
+  # THE COVERAGE FLOOR. One number, deliberately in one obvious place.
+  #
+  # Honest status when this pipeline was written: 81 tests, all pure-logic
+  # (schema, compose, autobrief, curation, effects, cover/promo/wavemap
+  # logic, plus one real librosa run) exercising src/mvideo at ~61%. The
+  # render/ pipeline modules that shell out to ffmpeg (ffmpeg_pipeline.py,
+  # variants.py, _ffmpeg_util.py) and cli.py are close to 0% -- proven by
+  # the `demo` job actually running them instead, not by unit tests, per
+  # docs/decisions/0002 (ffmpeg is a subprocess, not a Python dependency).
+  #
+  # So the floor is 55, with a few points of headroom under the measured
+  # number, not 80. It is a ratchet against regression, not a target: raise
+  # it as ffmpeg_pipeline.py grows tests (e.g. with a mocked `run()`), and
+  # do not lower it to make a build green -- a drop is itself the finding.
+  # ---------------------------------------------------------------------
+  COVERAGE_FLOOR: "55"
+
+  # Pinned so a lint upgrade lands as a reviewable dependency bump rather
+  # than a surprise failure on someone else's unrelated change.
+  RUFF_VERSION: "0.16.1"
+
+jobs:
+  # =========================================================================
+  lint:
+    name: Lint (ruff, shellcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: python -m pip install --disable-pip-version-check "ruff==${RUFF_VERSION}"
+
+      - name: ruff check
+        run: |
+          echo "Config: ruff.toml at the repo root. Rules are deliberately pragmatic --"
+          echo "correctness and unused/undefined names, not style opinions."
+          echo "Most findings are auto-fixable:  ruff check --fix ."
+          echo
+          ruff check --output-format=github .
+
+      - name: ruff format (advisory only, never fails)
+        continue-on-error: true
+        run: |
+          if ! ruff format --check . ; then
+            echo "::notice::Formatting differs from 'ruff format'. This is advisory."
+            echo "Run 'ruff format .' if you want it, or ignore this -- it does not gate merge."
+          fi
+
+      - name: Shell scripts pass shellcheck
+        run: |
+          command -v shellcheck >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y shellcheck; }
+          shellcheck --version
+          shellcheck .github/workflows/scripts/*.sh examples/demo/*.sh
+
+  # =========================================================================
+  test:
+    name: Tests · Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install mvideo with dev/test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: pytest with coverage
+        env:
+          # The floor is enforced once, on one leg, so a coverage shortfall
+          # is a single clear signal instead of three identical red boxes.
+          IS_PRIMARY: ${{ matrix.python-version == '3.11' }}
+        run: |
+          set -o pipefail
+          extra=""
+          if [ "$IS_PRIMARY" = "true" ]; then
+            extra="--cov-fail-under=${COVERAGE_FLOOR}"
+            echo "This leg enforces the coverage floor of ${COVERAGE_FLOOR}%."
+          fi
+          python -m pytest tests/ \
+            --cov=src/mvideo \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            $extra \
+            2>&1 | tee pytest-output.txt
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo "### Tests -- Python ${{ matrix.python-version }}"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -f coverage.xml ]; then
+            total=$(python -c "import xml.etree.ElementTree as E; print(round(float(E.parse('coverage.xml').getroot().get('line-rate')) * 100, 1))" 2>/dev/null || echo "?")
+            echo "**Total line coverage: ${total}%** (floor ${COVERAGE_FLOOR}%, enforced on Python 3.11)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No coverage report produced._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-py${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            pytest-output.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # =========================================================================
+  guardrails:
+    name: Guardrails (no media, no private paths, repo stays small)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Needed for an honest history-size measurement; on a shallow
+          # clone the size check says so instead of passing quietly.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: No audio, video, image files, or oversized files
+        run: bash .github/workflows/scripts/check_no_media.sh
+
+      - name: Repository stays small
+        run: bash .github/workflows/scripts/check_repo_size.sh
+
+      - name: No absolute personal paths committed
+        run: python3 .github/workflows/scripts/check_no_personal_paths.py
+
+      - name: Why these checks exist
+        if: always()
+        run: |
+          {
+            echo "### Guardrails"
+            echo
+            echo "| Check | Why it exists |"
+            echo "|---|---|"
+            echo "| no media / oversized files | mvideo exists to work on *your* real photos, video, and audio -- a repo that committed any would refute its own premise, and would carry real people's copyrighted work and likenesses. See docs/decisions/0003. |"
+            echo "| per-file + repo size ceiling | Catches a format nobody thought to blocklist. History size cannot be undone by a later delete. |"
+            echo "| no absolute personal paths | A real CreativeBrief's \`media_dir\`/\`audio_path\` are local paths into someone's actual folders. Pasting one into a doc or issue leaks a username and folder structure. See AGENTS.md. |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # =========================================================================
+  demo:
+    name: Demo — the actual pipeline, on real ffmpeg, from a clean checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Install mvideo
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          python -m pip install -e .
+
+      - name: Run the fully-synthetic demo end to end
+        run: bash examples/demo/run_demo.sh
+
+      - name: Every documented output actually exists and isn't empty
+        run: |
+          out=examples/demo/_fixtures/out
+          fail=0
+          for f in "$out/master.mp4" "$out/cover.jpg" "$out/promo_pack.md" "$out/wavemap.png" "$out/edl.json"; do
+            if [ ! -s "$f" ]; then
+              echo "::error::${f} is missing or empty -- the demo pipeline silently produced nothing."
+              fail=1
+            else
+              echo "ok: $f ($(wc -c < "$f") bytes)"
+            fi
+          done
+          exit "$fail"
+
+      - name: Upload demo output for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-output
+          path: examples/demo/_fixtures/out/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # =========================================================================
+  ci-ok:
+    # One check to require in branch protection, so adding a matrix leg
+    # later doesn't mean editing repository settings.
+    name: CI
+    if: always()
+    needs: [lint, test, guardrails, demo]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any required job did not succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::A required job did not succeed ($RESULTS)."
+              exit 1
+            fi
+          done
+          echo "all required jobs succeeded"

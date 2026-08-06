@@ -1,0 +1,10 @@
+# Personal filesystem paths that are permitted to appear in tracked files.
+#
+# This file should stay EMPTY. A real CreativeBrief embeds absolute paths
+# like /Users/<someone>/Photos/..., and pasting one into a doc publishes a
+# stranger's (or your own) home directory and username. Use a placeholder
+# instead, e.g. /path/to/your/photos/ -- see examples/love/brief.yaml for
+# the pattern.
+#
+# If you find yourself adding an entry here, redact the document instead --
+# that is almost always the correct fix.

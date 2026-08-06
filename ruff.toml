@@ -1,0 +1,47 @@
+# Ruff configuration for mvideo.
+#
+# Adapted from sep-lab/Wit's ruff.toml (see docs/decisions/README.md's intro
+# and the project's own git history for that inspiration). Same philosophy:
+# a pragmatic ruleset. Real bugs and unused/undefined names are errors.
+# Style opinions that don't change whether the code is correct are not
+# enabled. If a rule here ever blocks a good contribution for a bad reason,
+# delete it -- see CONTRIBUTING.md.
+
+target-version = "py310"   # matches pyproject.toml's requires-python floor
+line-length = 110          # generous: docstrings here are prose, and error
+                            # messages are meant to be read whole, not wrapped
+extend-exclude = ["__pycache__", ".venv", "venv", "*.egg-info", "build", "dist"]
+
+[lint]
+select = [
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "F",    # pyflakes -- undefined names, unused imports, the bugs that matter
+  "I",    # import sorting -- cheap, auto-fixable, ends the diff churn argument
+  "B",    # flake8-bugbear -- mutable default args, silent except, real footguns
+  "C4",   # comprehension / literal misuse
+  "RUF",  # ruff's own correctness lints
+]
+
+# Deliberately NOT enabled:
+#   UP  (pyupgrade) -- not worth the churn on a repo this size yet; revisit
+#       once the 3.10 floor has been stable for a while.
+#   D   (docstrings) -- every module here already documents itself where it
+#       counts, in its module docstring. Per-function docstring nagging is
+#       not the bar for a v0.1 tool.
+#   ANN (annotations) -- public signatures are already typed where it
+#       matters (see timeline/schema.py, timeline/model.py); blanket
+#       enforcement on every internal helper would just add noise.
+
+ignore = [
+  "E501",   # line length -- prose docstrings and specific error messages
+            # read better whole than reflowed; see the rationale above
+  "B905",   # zip() without strict=: several places pairwise-zip a sequence
+            # against itself offset by one (zip(xs, xs[1:])) by design --
+            # strict=True would be wrong there, not missing
+  "RUF001", "RUF002", "RUF003",  # ambiguous unicode -- this codebase uses
+            # plain ASCII "--" throughout on purpose, not an em-dash typo
+]
+
+[format]
+quote-style = "double"

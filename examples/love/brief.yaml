@@ -1,0 +1,115 @@
+# A structural reconstruction of docs/case-studies/love.md's reference
+# project -- real timestamps, real BPM, real station/effect design. Media
+# paths below are placeholders: point them at your own photos to actually
+# run this (see AGENTS.md -- never commit real paths or media). Collaborator
+# names, handles, and the original artist/label naming have been removed;
+# see docs/case-studies/love.md for what was scrubbed and why.
+
+song:
+  title: "Untitled (Two Rooms, One Frequency)"
+  audio_path: "/path/to/your/song.wav"
+  bpm: 129.0
+
+stations:
+  - name: amber-room
+    description: "Warm interiors, instruments, lamplight -- the intimate home-recorded feeling."
+    media_dir: "/path/to/your/photos/room"
+    temperature: 0.55
+    saturation: 1.05
+    contrast: 1.05
+    grain: 0.18
+    vignette: 0.28
+    duotone: ["#1a0f06", "#f2b25c"]
+  - name: noir-crush
+    description: "Black & white, crushed blacks, heavy grain and scanlines -- street/documentary energy."
+    media_dir: "/path/to/your/photos/city"
+    temperature: 0.0
+    saturation: 0.0
+    contrast: 1.35
+    grain: 0.4
+    vignette: 0.35
+    duotone: ["#050505", "#e8e8e8"]
+  - name: gold-hour
+    description: "Golden hour, backlit, slow -- for the song's quiet, held moment."
+    media_dir: "/path/to/your/photos/sun"
+    temperature: 0.7
+    saturation: 0.9
+    contrast: 0.9
+    grain: 0.1
+    vignette: 0.15
+    duotone: ["#241505", "#ffd27a"]
+  - name: fire-leak
+    description: "Boosted native color, light-leak energy -- for the song's loudest half."
+    media_dir: "/path/to/your/photos/fire"
+    temperature: 0.4
+    saturation: 1.6
+    contrast: 1.2
+    grain: 0.25
+    vignette: 0.1
+
+sections:
+  - name: PENDULUM_AMBER
+    start: 0.0
+    end: 61.0
+    station: amber-room
+    cut_density: every_2_beats
+    effects: [grain, vignette, halation, zoom_breathe, kaleidoscope]
+  - name: PENDULUM_NOIR
+    start: 61.0
+    end: 190.0
+    station: noir-crush
+    cut_density: every_beat
+    effects: [grain, vignette, scanlines, halation]
+  - name: HUSH
+    start: 190.0
+    end: 208.0
+    station: gold-hour
+    cut_density: static
+    effects: [grain, halation, zoom_breathe, static_noise]
+  - name: THE_SWITCH
+    start: 208.0
+    end: 330.0
+    station: fire-leak
+    cut_density: every_beat
+    effects: [grain, strobe, invert_flash, halation]
+  - name: STROBE_ARCHIVE
+    start: 330.0
+    end: 450.0
+    station: noir-crush
+    cut_density: every_beat
+    effects: [grain, scanlines, invert_flash, freeze_on_peak]
+  - name: DEEP_WAVES
+    start: 450.0
+    end: 588.0
+    station: fire-leak
+    cut_density: every_beat
+    effects: [grain, strobe, freeze_on_peak, halation]
+  - name: DESCENT
+    start: 588.0
+    end: 655.0
+    station: amber-room
+    cut_density: every_4_beats
+    effects: [grain, vignette, static_noise]
+
+output:
+  resolution: [1280, 720]
+  fps: 24
+  thumbnail_count: 3
+  cover_size: 3000
+  teasers:
+    - name: teaser_drop
+      duration: 15.0
+      aspect: "9:16"
+      source_start: 198.0   # T-7 style teaser, built around the hush -> switch
+    - name: teaser_piano
+      duration: 15.0
+      aspect: "9:16"
+      source_start: 20.0
+    - name: teaser_solo
+      duration: 15.0
+      aspect: "9:16"
+      source_start: 470.0
+
+promo:
+  handles: []   # add your own collaborators' handles here -- never commit real ones, see AGENTS.md
+  teaser_cadence_days: [-7, -3, -1]
