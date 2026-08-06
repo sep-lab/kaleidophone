@@ -14,15 +14,15 @@ import typing
 import pytest
 from factories import make_analysis, make_brief, make_media_asset, make_section, make_station
 
-from mvideo.audio.analysis import EnergyJump
-from mvideo.timeline.compose import (
+from kaleidophone.audio.analysis import EnergyJump
+from kaleidophone.timeline.compose import (
     _BEAT_DIVISORS,
     _compose_section,
     _cut_boundaries,
     _effects_for_cut,
     compose,
 )
-from mvideo.timeline.schema import CutDensity
+from kaleidophone.timeline.schema import CutDensity
 
 
 def test_beat_divisors_cover_every_cut_density_the_schema_allows():
@@ -120,7 +120,7 @@ def test_compose_section_raises_a_clear_error_when_no_assets_were_curated():
 
 
 def test_compose_section_is_deterministic_and_matches_the_documented_seed_contract():
-    """docs/decisions/0001 and the mvideo-timeline-compose skill both claim
+    """docs/decisions/0001 and the kaleidophone-timeline-compose skill both claim
     'same seed, same shuffle, same edit, every time' -- pin that against the
     actual random.Random(seed) contract, not just against itself twice."""
     analysis = make_analysis(duration=6.0, beat_times=(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0))

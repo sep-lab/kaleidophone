@@ -6,7 +6,7 @@ from __future__ import annotations
 from factories import make_analysis
 from PIL import Image
 
-from mvideo.audio.wavemap import render_wavemap
+from kaleidophone.audio.wavemap import render_wavemap
 
 
 def test_render_wavemap_writes_an_image_of_the_requested_size(tmp_path):

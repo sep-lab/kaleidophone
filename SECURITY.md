@@ -9,7 +9,7 @@ reproduce it, and what an attacker could achieve.
 
 ## Scope
 
-mvideo runs `ffmpeg` as a subprocess with filter graphs it constructs from a
+kaleidophone runs `ffmpeg` as a subprocess with filter graphs it constructs from a
 `CreativeBrief` and reads/writes files under a run's output directory. The
 attack surface that matters:
 
@@ -22,12 +22,12 @@ attack surface that matters:
 - **Path traversal on output.** Every command takes an explicit
   `-o/--out`; nothing should let a crafted brief write outside the
   directory the user asked for.
-- **Untrusted media.** mvideo decodes photos/video/audio with OpenCV,
+- **Untrusted media.** kaleidophone decodes photos/video/audio with OpenCV,
   Pillow, and librosa/soundfile, and calls `ffmpeg` on them. A malformed
-  file causing a crash or hang in any of those is a real bug — mvideo is
+  file causing a crash or hang in any of those is a real bug — kaleidophone is
   meant to run on your own media, but "your own" doesn't mean "never
   malformed."
-- **The generated brief / promo pack.** `mvideo auto` and `mvideo promo`
+- **The generated brief / promo pack.** `kaleidophone auto` and `kaleidophone promo`
   write files that may later be pasted into a public description or
   caption. They should never echo a raw filesystem path from the run
   environment into that output.
@@ -36,16 +36,16 @@ attack surface that matters:
 
 - Anything in `examples/demo/` — synthetic, local-only, not part of any
   release artifact.
-- Resource exhaustion from deliberately pointing mvideo at a pathological
+- Resource exhaustion from deliberately pointing kaleidophone at a pathological
   file of your own making (e.g. a multi-hour audio file with `--out` on a
   full disk). Real bug reports about *unexpected* resource use on normal
   media are welcome as ordinary issues.
-- ffmpeg's own security surface — report those upstream. mvideo's
+- ffmpeg's own security surface — report those upstream. kaleidophone's
   responsibility is what it passes to ffmpeg, not ffmpeg's decoders.
 
 ## A note on your media
 
-mvideo is local-first: it never uploads or transmits your photos, audio, or
+kaleidophone is local-first: it never uploads or transmits your photos, audio, or
 video anywhere. If that ever changes, it will be opt-in, documented here,
 and announced in the changelog — not enabled by default. See
 [ADR-0003](docs/decisions/0003-public-framework-private-assets.md).

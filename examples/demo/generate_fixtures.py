@@ -16,7 +16,7 @@ WHAT THIS GENERATES
     _fixtures/brief.yaml        a CreativeBrief pointing at the above.
 
 Nothing here is faked *as a demo of the pipeline*: the generated song is a
-real WAV file, the generated images are real JPGs, and `mvideo run` on the
+real WAV file, the generated images are real JPGs, and `kaleidophone run` on the
 resulting brief goes through the exact same analyze/compose/render code path
 real material does. What's fake is the material itself, on purpose -- see
 docs/CREATIVE-GUIDE.md and AGENTS.md, "Rules for handling user data".
@@ -30,7 +30,7 @@ WHAT THIS DOES NOT HANDLE
 
 USAGE
     python3 examples/demo/generate_fixtures.py
-    python3 examples/demo/generate_fixtures.py --out /tmp/mvideo_demo
+    python3 examples/demo/generate_fixtures.py --out /tmp/kaleidophone_demo
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ def main() -> int:
     _write_brief(brief_path, song_path, photo_dirs)
     print(f"wrote {brief_path}")
     print()
-    print("Next: mvideo run", brief_path, "-o", out / "out")
+    print("Next: kaleidophone run", brief_path, "-o", out / "out")
     return 0
 
 
@@ -156,7 +156,7 @@ def _write_brief(path: Path, song_path: Path, photo_dirs: dict[str, Path]) -> No
 # nothing here is a real song or a real photo. See docs/CONFIG-SCHEMA.md for
 # what every field means.
 song:
-  title: "mvideo demo (synthetic)"
+  title: "kaleidophone demo (synthetic)"
   audio_path: "{song_path}"
   # bpm left unset on purpose -- let analysis.py detect it, so this demo also
   # exercises the beat tracker, not just the render path.

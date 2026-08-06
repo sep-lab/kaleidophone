@@ -24,7 +24,7 @@ repository, and CI refuses commits that would violate that, not just the
 
 Concretely:
 
-1. `.gitignore` blocklists every audio/video/image extension mvideo works
+1. `.gitignore` blocklists every audio/video/image extension kaleidophone works
    with, plus `private/`, `local/`, `*.local.yaml` for real briefs that
    point at real folders.
 2. `examples/` ships only two kinds of brief: fully synthetic
@@ -58,13 +58,13 @@ Concretely:
 - Every contributor's test fixtures have to be synthetic (see
   `examples/demo/generate_fixtures.py`), which is more setup than "just
   commit a sample photo" would be.
-- The size/extension blocklist needs updating if mvideo starts reading a
+- The size/extension blocklist needs updating if kaleidophone starts reading a
   new media format — a blocklist only catches what someone thought to list
   (mirrors the same tradeoff Wit's `check_no_binaries.sh` documents).
 
 ## What would overturn this
 
-- If mvideo ever needs a *repository* of shared, non-personal sample media
+- If kaleidophone ever needs a *repository* of shared, non-personal sample media
   (e.g. licensed stock footage for a public demo), that's a deliberate,
   reviewed exception with its own storage decision — not a reason to loosen
   this policy generally.

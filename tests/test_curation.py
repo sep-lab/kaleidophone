@@ -1,7 +1,7 @@
 """assets/curation.py: the scoring heuristic, its target-hue fix, and the
 starved-station failure mode it doesn't fully eliminate (see
 docs/decisions/0004-default-mode-and-auto-curation.md and the
-mvideo-asset-curation skill).
+kaleidophone-asset-curation skill).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import pytest
 from factories import make_media_asset, make_station
 from PIL import Image
 
-from mvideo.assets.curation import _target_hue, scan_media, score_for_station, suggest_stations
+from kaleidophone.assets.curation import _target_hue, scan_media, score_for_station, suggest_stations
 
 
 def _expected_hue(highlight_hex: str) -> float:
@@ -78,7 +78,7 @@ def test_suggest_stations_assigns_each_asset_to_its_best_scoring_station():
 
 def test_suggest_stations_can_starve_a_station_when_two_share_a_target_hue():
     """Documents the real failure mode rather than just avoiding it -- see
-    the mvideo-asset-curation skill, 'why the heuristic sometimes gets it
+    the kaleidophone-asset-curation skill, 'why the heuristic sometimes gets it
     visibly wrong'. This is exactly what build_default_brief() (see
     tests/test_autobrief.py) has to defend against downstream."""
     a = make_station(name="a", temperature=0.5, duotone=None)

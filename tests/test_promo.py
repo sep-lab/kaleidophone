@@ -1,6 +1,6 @@
 """promo/plan.py: the templated promo-pack generator.
 
-See the mvideo-promo-pack skill -- templated from structured facts, not
+See the kaleidophone-promo-pack skill -- templated from structured facts, not
 free-form generated text, so its output is safe to assert on directly.
 """
 
@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from factories import make_analysis, make_brief, make_section, make_station
 
-from mvideo.audio.analysis import EnergyJump
-from mvideo.promo.plan import generate_promo_pack
-from mvideo.timeline.schema import PromoConfig
+from kaleidophone.audio.analysis import EnergyJump
+from kaleidophone.promo.plan import generate_promo_pack
+from kaleidophone.timeline.schema import PromoConfig
 
 
 def test_promo_pack_includes_a_chapter_per_section():

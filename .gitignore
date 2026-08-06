@@ -14,7 +14,7 @@ htmlcov/
 coverage.xml
 
 # --- Personal media: NEVER commit these ---
-# mvideo's whole job is to work on YOUR real photos, audio and footage. None
+# kaleidophone's whole job is to work on YOUR real photos, audio and footage. None
 # of that belongs in git — not as "just one small sample". See
 # docs/decisions/0003-public-framework-private-assets.md and AGENTS.md,
 # "Rules for handling user data". CI enforces this; see
@@ -56,7 +56,7 @@ local/
 # Same principle as docs/decisions/0001: the render is a cache, not source.
 renders/
 *_out/
-.mvideo-cache/
+.kaleidophone-cache/
 
 # generate_fixtures.py writes here on every local/CI demo run. The media
 # inside is already caught by the extensions above, but the *_fixtures/
@@ -70,3 +70,4 @@ examples/demo/_fixtures/
 .vscode/
 .idea/
 *.swp
+_to_delete/

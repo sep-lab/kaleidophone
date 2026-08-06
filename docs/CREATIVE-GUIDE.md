@@ -1,6 +1,6 @@
 # Creative guide
 
-The visual and sonic language mvideo implements, distilled from
+The visual and sonic language kaleidophone implements, distilled from
 `docs/case-studies/love.md` into rules general enough to point at a
 different song and folder of photos. If `docs/CONFIG-SCHEMA.md` is the
 grammar, this is the style guide.
@@ -88,7 +88,7 @@ if every cut has it.
 
 ## Default mode vs. authored briefs
 
-`mvideo auto` exists so nobody has to learn this vocabulary before seeing a
+`kaleidophone auto` exists so nobody has to learn this vocabulary before seeing a
 result — see
 [ADR-0004](decisions/0004-default-mode-and-auto-curation.md). It picks
 real, working defaults (a cycling subset of the four presets above, effects
@@ -99,7 +99,7 @@ choice instead of trial and error.
 
 ## What this vocabulary is not
 
-It's specific to mvideo's actual mechanism: real photos/clips, cut and
+It's specific to kaleidophone's actual mechanism: real photos/clips, cut and
 graded by ffmpeg. It is not a general "psychedelic video" prompt vocabulary
 for a generative model — see
 [ADR-0002](decisions/0002-deterministic-edit-engine.md) for why that's a

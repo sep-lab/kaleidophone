@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mvideo"
+name = "kaleidophone"
 version = "0.1.0"
 description = "Compose the edit, not the pixels: a song + your photos -> a beat-synced, station-graded, loopish music video."
 readme = "README.md"
@@ -12,10 +12,10 @@ license = { text = "Apache-2.0" }
 authors = [{ name = "Sep" }]
 keywords = ["music-video", "ffmpeg", "librosa", "video-editing", "generative", "audio-analysis"]
 
-# Deliberately short. mvideo's whole pitch is "fast and minimal" (see
+# Deliberately short. kaleidophone's whole pitch is "fast and minimal" (see
 # docs/CREATIVE-GUIDE.md) -- a heavy dependency tree would be a quiet
 # contradiction of that. ffmpeg itself is a system binary, not a pip
-# dependency; mvideo shells out to it (docs/decisions/0002-deterministic-edit-engine.md).
+# dependency; kaleidophone shells out to it (docs/decisions/0002-deterministic-edit-engine.md).
 dependencies = [
     "librosa>=0.10",
     "soundfile>=0.12",
@@ -35,7 +35,7 @@ dev = [
 ]
 
 [project.scripts]
-mvideo = "mvideo.cli:main"
+kaleidophone = "kaleidophone.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

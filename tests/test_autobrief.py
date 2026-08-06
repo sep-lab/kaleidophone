@@ -13,8 +13,8 @@ from __future__ import annotations
 import pytest
 from factories import make_analysis, make_media_asset
 
-from mvideo.timeline import autobrief
-from mvideo.timeline.autobrief import (
+from kaleidophone.timeline import autobrief
+from kaleidophone.timeline.autobrief import (
     DEFAULT_STATION_CYCLE,
     MAX_SECTIONS,
     MIN_SECTIONS,

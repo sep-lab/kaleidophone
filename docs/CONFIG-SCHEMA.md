@@ -1,6 +1,6 @@
 # The creative brief: field reference
 
-The full schema lives in `src/mvideo/timeline/schema.py` (pydantic — it's
+The full schema lives in `src/kaleidophone/timeline/schema.py` (pydantic — it's
 the actual validator, this doc is a guide to it, not a duplicate source of
 truth). `examples/love/brief.yaml` and `examples/demo/generate_fixtures.py`
 are worked examples.
@@ -67,9 +67,9 @@ promo:                          # optional -- omit to skip promo-pack generation
 Two paths, same schema:
 
 - **Hand-authored** — write the YAML above directly. Full control.
-- **`mvideo auto <song> <media_dir>`** — generates one (`generated_brief.yaml`)
+- **`kaleidophone auto <song> <media_dir>`** — generates one (`generated_brief.yaml`)
   from audio analysis and heuristic curation, no manual authoring. Edit the
-  output and re-run with `mvideo run` for anything auto-mode didn't get
+  output and re-run with `kaleidophone run` for anything auto-mode didn't get
   right — see
   [ADR-0004](decisions/0004-default-mode-and-auto-curation.md) and
   `docs/CREATIVE-GUIDE.md`, "Default mode vs. authored briefs".

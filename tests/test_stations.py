@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mvideo.assets.stations import PRESETS, preset
+from kaleidophone.assets.stations import PRESETS, preset
 
 
 def test_every_preset_key_matches_its_own_station_name():

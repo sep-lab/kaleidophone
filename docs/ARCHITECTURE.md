@@ -1,6 +1,6 @@
 # Architecture
 
-How mvideo turns a brief into a video, cover, and promo pack — and why the
+How kaleidophone turns a brief into a video, cover, and promo pack — and why the
 pipeline is split where it's split.
 
 ---
@@ -40,7 +40,7 @@ reuses its output.
 1. **`CreativeBrief`** (`timeline/schema.py`, pydantic) — the one
    hand-authored file. Song, stations (a look), sections (a stretch of the
    song, a station, a cut density, an effect list), output config.
-   `mvideo auto` can generate one; either way it's the same schema.
+   `kaleidophone auto` can generate one; either way it's the same schema.
 
 2. **`AudioAnalysis`** (`audio/analysis.py`, librosa) — BPM, beat grid,
    onset times/strength, RMS envelope, plus two heuristics derived from RMS
@@ -48,7 +48,7 @@ reuses its output.
    switch"). Deterministic given the same audio file.
 
 3. **Curated assets** (`assets/curation.py`) — each station's `media_dir`
-   scanned and (for `mvideo auto`/`mvideo curate`) scored against the
+   scanned and (for `kaleidophone auto`/`kaleidophone curate`) scored against the
    station's palette. A `dict[station_name, list[MediaAsset]]`.
 
 4. **`EDL`** (`timeline/model.py` + `compose()`) — the resolved,
@@ -112,8 +112,8 @@ CONTRIBUTING.md, "Ground rules for claims" for how to reproduce these.
 
 | Stage | Resolution | Time |
 |---|---|---|
-| Full `mvideo run` (analyze -> render -> promo) | 640x360 | 25.7s |
-| Full `mvideo auto` (default 720p, 42 photos, 5 sections) | 1280x720 | 1m27s |
+| Full `kaleidophone run` (analyze -> render -> promo) | 640x360 | 25.7s |
+| Full `kaleidophone auto` (default 720p, 42 photos, 5 sections) | 1280x720 | 1m27s |
 | `render_silent` alone | 640x360 | 17.4s |
 | `mux_audio` alone (re-sync audio, no re-render) | 640x360 | 0.8s |
 | `render_silent` alone | 1280x720 | 55.4s |
@@ -141,7 +141,7 @@ BPM detection on the demo's synthetic click track (programmed at exactly
 120.0 BPM) comes back as **117.5** — a reminder that beat tracking is a
 heuristic first pass even on a clean signal, not just on a real
 performance; see `SongConfig.bpm` to override it and the
-`mvideo-audio-analysis` skill.
+`kaleidophone-audio-analysis` skill.
 
 ## 6. Why 1280x720 by default, not higher
 

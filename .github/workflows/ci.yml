@@ -1,4 +1,4 @@
-# CI for mvideo
+# CI for kaleidophone
 #
 # What this pipeline actually protects, in priority order:
 #
@@ -38,7 +38,7 @@ env:
   #
   # Honest status when this pipeline was written: 81 tests, all pure-logic
   # (schema, compose, autobrief, curation, effects, cover/promo/wavemap
-  # logic, plus one real librosa run) exercising src/mvideo at ~61%. The
+  # logic, plus one real librosa run) exercising src/kaleidophone at ~61%. The
   # render/ pipeline modules that shell out to ffmpeg (ffmpeg_pipeline.py,
   # variants.py, _ffmpeg_util.py) and cli.py are close to 0% -- proven by
   # the `demo` job actually running them instead, not by unit tests, per
@@ -109,7 +109,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install mvideo with dev/test dependencies
+      - name: Install kaleidophone with dev/test dependencies
         run: |
           python -m pip install --disable-pip-version-check --upgrade pip
           python -m pip install -e ".[dev]"
@@ -127,7 +127,7 @@ jobs:
             echo "This leg enforces the coverage floor of ${COVERAGE_FLOOR}%."
           fi
           python -m pytest tests/ \
-            --cov=src/mvideo \
+            --cov=src/kaleidophone \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             $extra \
@@ -191,7 +191,7 @@ jobs:
             echo
             echo "| Check | Why it exists |"
             echo "|---|---|"
-            echo "| no media / oversized files | mvideo exists to work on *your* real photos, video, and audio -- a repo that committed any would refute its own premise, and would carry real people's copyrighted work and likenesses. See docs/decisions/0003. |"
+            echo "| no media / oversized files | kaleidophone exists to work on *your* real photos, video, and audio -- a repo that committed any would refute its own premise, and would carry real people's copyrighted work and likenesses. See docs/decisions/0003. |"
             echo "| per-file + repo size ceiling | Catches a format nobody thought to blocklist. History size cannot be undone by a later delete. |"
             echo "| no absolute personal paths | A real CreativeBrief's \`media_dir\`/\`audio_path\` are local paths into someone's actual folders. Pasting one into a doc or issue leaks a username and folder structure. See AGENTS.md. |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -214,7 +214,7 @@ jobs:
           sudo apt-get install -y ffmpeg
           ffmpeg -version | head -1
 
-      - name: Install mvideo
+      - name: Install kaleidophone
         run: |
           python -m pip install --disable-pip-version-check --upgrade pip
           python -m pip install -e .

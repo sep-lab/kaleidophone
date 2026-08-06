@@ -4,7 +4,7 @@
 # repository -- not a photo, not a song, not "just one small sample".
 #
 # WHY
-#   mvideo's whole job is to operate on someone's real, private media. A repo
+#   kaleidophone's whole job is to operate on someone's real, private media. A repo
 #   full of committed media would be self-refuting (see docs/decisions/0003)
 #   and a real privacy/copyright problem: real photos and songs are other
 #   people's likenesses and other people's copyrighted work. See AGENTS.md,
@@ -46,7 +46,7 @@ $matches
 EOF
   cat <<'EOF'
 
-  mvideo never commits audio, video, or image files -- not as fixtures, not
+  kaleidophone never commits audio, video, or image files -- not as fixtures, not
   as "a small sample". Tests and the demo generate fully synthetic media at
   run time instead; see examples/demo/generate_fixtures.py for the pattern,
   and CONTRIBUTING.md ("Test fixtures") for what to contribute instead.

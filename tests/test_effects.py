@@ -1,7 +1,7 @@
 """render/effects.py: filter-string builders.
 
 Pure string logic, no ffmpeg subprocess call and no real media -- see the
-mvideo-render skill for the render pipeline this feeds into. A few of these
+kaleidophone-render skill for the render pipeline this feeds into. A few of these
 tests pin the specific bugs called out in the project history (see
 CHANGELOG.md / this session's fixes) so they can't silently come back.
 """
@@ -12,7 +12,7 @@ import typing
 
 from factories import make_station
 
-from mvideo.render.effects import (
+from kaleidophone.render.effects import (
     GRAPH_EFFECT_BUILDERS,
     LINEAR_EFFECT_BUILDERS,
     color_grade,
@@ -21,7 +21,7 @@ from mvideo.render.effects import (
     scanlines,
     strobe,
 )
-from mvideo.timeline.schema import EffectName
+from kaleidophone.timeline.schema import EffectName
 
 
 def test_every_schema_effect_name_has_exactly_one_builder():

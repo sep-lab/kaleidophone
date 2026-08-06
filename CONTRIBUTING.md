@@ -1,4 +1,4 @@
-# Contributing to mvideo
+# Contributing to kaleidophone
 
 Thanks for being here. This project turns a song and your own photos/clips
 into a music video, cover art, and a promo pack — see the README for the
@@ -24,12 +24,12 @@ whether you're a person or an agent; it applies to both).
 ## Set up and run something real
 
 ```bash
-git clone <this-repo> && cd mvideo
+git clone <this-repo> && cd kaleidophone
 pip install -e ".[dev]"
 ```
 
 Needs a system `ffmpeg` on PATH (`brew install ffmpeg` / `apt install
-ffmpeg`) — mvideo shells out to it rather than depending on a Python video
+ffmpeg`) — kaleidophone shells out to it rather than depending on a Python video
 library; see [ADR-0002](docs/decisions/0002-deterministic-edit-engine.md).
 
 **See the whole pipeline run, no real media required:**
@@ -48,9 +48,9 @@ is the fastest way to find out whether a change broke anything that touches
 `AGENTS.md`):
 
 ```bash
-mvideo auto ~/Music/your_song.mp3 ~/Pictures/some_folder -o /tmp/mvideo_out --preview-only
-open /tmp/mvideo_out/preview_contact_sheet.jpg   # sanity-check the edit
-mvideo run /tmp/mvideo_out/generated_brief.yaml -o /tmp/mvideo_out   # then render for real
+kaleidophone auto ~/Music/your_song.mp3 ~/Pictures/some_folder -o /tmp/kaleidophone_out --preview-only
+open /tmp/kaleidophone_out/preview_contact_sheet.jpg   # sanity-check the edit
+kaleidophone run /tmp/kaleidophone_out/generated_brief.yaml -o /tmp/kaleidophone_out   # then render for real
 ```
 
 ## Ways to contribute that we especially want

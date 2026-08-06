@@ -1,7 +1,7 @@
 # Roadmap
 
 The ordering principle: **be excellent for one person cutting one song
-before being mediocre for everyone.** mvideo already does the whole
+before being mediocre for everyone.** kaleidophone already does the whole
 pipeline end to end on synthetic fixtures (`examples/demo/`) — what follows
 is making it good on real, messy material, then making it easy for other
 people to pick up.
@@ -16,10 +16,10 @@ people to pick up.
       thumbnail variants, procedural cover art, promo-pack generation, CLI.
 - [x] The cheap/expensive split (`render_silent` / `mux_audio`) — see
       [ADR-0001](decisions/0001-version-the-brief-not-the-render.md).
-- [x] Zero-config default mode (`mvideo auto`) with a heuristic-curation bug
+- [x] Zero-config default mode (`kaleidophone auto`) with a heuristic-curation bug
       found and fixed against real (synthetic) fixtures — see
       [ADR-0004](decisions/0004-default-mode-and-auto-curation.md).
-- [x] A no-ffmpeg contact-sheet preview (`mvideo preview`) for the
+- [x] A no-ffmpeg contact-sheet preview (`kaleidophone preview`) for the
       confirm-before-you-render workflow.
 - [x] Five ADRs, `AGENTS.md`/`CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`,
       the CI privacy/size guardrails, and the reference case study
@@ -89,8 +89,9 @@ caption.
 
 ## Phase 4 — Ready to be someone else's tool
 
-- [ ] Decide [ADR-0005](decisions/0005-project-naming.md) and do the rename
-      pass (package dir, `pyproject.toml`, imports, docs) in one PR.
+- [x] Decide [ADR-0005](decisions/0005-project-naming.md) and do the rename
+      pass (package dir, `pyproject.toml`, imports, docs) — landed as
+      `kaleidophone`.
 - [ ] Publish: a public GitHub repo (mirroring
       [sep-lab/Wit](https://github.com/sep-lab/Wit)'s structure, which this
       scaffold already follows), then a PyPI release once the CLI surface
@@ -108,7 +109,7 @@ caption.
 
 ## Explicitly not planned
 
-- **Hosting or publishing videos.** mvideo produces files; where they go is
+- **Hosting or publishing videos.** kaleidophone produces files; where they go is
   yours — see `AGENTS.md`, "When to stop and ask".
 - **A GUI.** The CLI + editable-YAML-brief loop is the interface; a GUI
   would be a different, much larger project layered on top, not a near-term

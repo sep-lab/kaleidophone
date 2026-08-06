@@ -10,9 +10,9 @@ fraction of a second with only the package's own dependencies.
 
 from __future__ import annotations
 
-from mvideo.assets.curation import MediaAsset
-from mvideo.audio.analysis import AudioAnalysis, EnergyJump, QuietPassage
-from mvideo.timeline.schema import (
+from kaleidophone.assets.curation import MediaAsset
+from kaleidophone.audio.analysis import AudioAnalysis, EnergyJump, QuietPassage
+from kaleidophone.timeline.schema import (
     CreativeBrief,
     SectionConfig,
     SongConfig,

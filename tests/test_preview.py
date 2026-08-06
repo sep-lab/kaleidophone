@@ -1,13 +1,13 @@
 """render/preview.py: the no-ffmpeg contact sheet -- the 'confirm before you
-render' half of the workflow (see the mvideo-render skill)."""
+render' half of the workflow (see the kaleidophone-render skill)."""
 
 from __future__ import annotations
 
 import pytest
 from PIL import Image
 
-from mvideo.render.preview import generate_contact_sheet
-from mvideo.timeline.model import EDL, Cut
+from kaleidophone.render.preview import generate_contact_sheet
+from kaleidophone.timeline.model import EDL, Cut
 
 CELL = 160
 

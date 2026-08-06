@@ -7,17 +7,17 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Initial public scaffold: `src/mvideo` package (audio analysis, station
+- Initial public scaffold: `src/kaleidophone` package (audio analysis, station
   presets + curation, timeline/EDL compose, ffmpeg render pipeline,
   procedural cover art, promo-pack generation, CLI).
-- `mvideo auto` — zero-config default mode: one song + one media folder to a
+- `kaleidophone auto` — zero-config default mode: one song + one media folder to a
   full result, writing out the `CreativeBrief` it generated.
-- `mvideo preview` — no-ffmpeg contact-sheet sanity check before rendering.
-- `mvideo silent` / `mvideo remux` — split the expensive per-cut render from
+- `kaleidophone preview` — no-ffmpeg contact-sheet sanity check before rendering.
+- `kaleidophone silent` / `kaleidophone remux` — split the expensive per-cut render from
   the cheap audio-sync step (see ADR-0001).
 - `examples/demo/` — a fully synthetic, zero-personal-data end-to-end demo
   (`run_demo.sh`).
-- Five ADRs (`docs/decisions/`), five `skills/` briefs, and the governance
+- Five ADRs (`docs/decisions/`), six `skills/` briefs, and the governance
   docs (`AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`).
 - `docs/case-studies/love.md` — the reference case study this framework
   generalizes from.
@@ -26,6 +26,17 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   target-hue curation fix, effect filter-string builders). Synthetic
   fixtures only, built in `tests/factories/` directly from numbers — no
   audio decode, no ffmpeg, no real media, same rule as `examples/demo/`.
+
+### Changed
+
+- Renamed the project from `mvideo` to `kaleidophone` — package directory,
+  PyPI/CLI name, imports, and every doc, all lowercase throughout matching
+  the original style. `mvideo` undersold the scope (cover art and a promo
+  pack, not just a video); `kaleidophone` — Wheatstone's 1827 device that
+  made sound vibrations visible — says what the pipeline actually does.
+  See [ADR-0005](docs/decisions/0005-project-naming.md) for the full
+  naming search, including the first pick (Sideband) turning out to
+  already be taken.
 
 ### Fixed
 

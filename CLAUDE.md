@@ -6,7 +6,7 @@ in Cowork) as well.
 
 Quick orientation:
 
-- mvideo versions the **brief** (a YAML `CreativeBrief`), never the
+- kaleidophone versions the **brief** (a YAML `CreativeBrief`), never the
   **render**. The EDL, silent video, master, teasers, thumbnails, and cover
   art are all derived and rebuildable — see
   [docs/decisions/0001-version-the-brief-not-the-render.md](docs/decisions/0001-version-the-brief-not-the-render.md).

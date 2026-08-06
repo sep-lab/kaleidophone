@@ -1,6 +1,6 @@
 # Case study: the reference project
 
-This is the project mvideo was extracted from — the first proof that the
+This is the project kaleidophone was extracted from — the first proof that the
 approach in [ADR-0001](../decisions/0001-version-the-brief-not-the-render.md)
 and [ADR-0002](../decisions/0002-deterministic-edit-engine.md) works on a
 real song, not just in theory. It's referenced throughout the rest of the
@@ -20,7 +20,7 @@ hush, a hard switch into a louder second half, and a long descent back out.
 The creative concept — **"two rooms, one frequency"** — cast the two halves
 as two radio stations: Part I is an AM station (piano, a single voice, an
 intimate room), Part II hijacks the signal as an overdriven FM station. The
-mvideo project brief's own language ("fm/am minimal vibe") is a direct
+kaleidophone project brief's own language ("fm/am minimal vibe") is a direct
 descendant of this concept, generalized past one song.
 
 ## Asset curation
@@ -29,7 +29,7 @@ descendant of this concept, generalized past one song.
 selects and sorted into four "stations" — this is the direct ancestor of
 `assets/stations.py`'s presets:
 
-| Station (original) | mvideo preset | Look | Used for |
+| Station (original) | kaleidophone preset | Look | Used for |
 |---|---|---|---|
 | ROOM | `amber-room` | warm interiors, instruments, lamplight | Part I's piano sections and the outro |
 | CITY | `noir-crush` | B&W, crushed blacks, grain, scanlines | Part I's verse/vocal sections |
@@ -62,7 +62,7 @@ did, not the other way around.
 
 Cover art, a full video, three vertical (9:16) teasers, three thumbnails, a
 captions/promo pack, and a wave-map image — the direct ancestors of
-`mvideo run`'s `cover.jpg`, `master.mp4`, `teasers/`, `thumb_*.jpg`,
+`kaleidophone run`'s `cover.jpg`, `master.mp4`, `teasers/`, `thumb_*.jpg`,
 `promo_pack.md`, and `wavemap.png`. The promo plan used a staged teaser
 cadence (roughly T-7 / T-3 / T-1 before release) and chapter markers at each
 structural beat — the direct ancestor of `OutputConfig.teasers` and
@@ -72,7 +72,7 @@ structural beat — the direct ancestor of `OutputConfig.teasers` and
 
 This edit was hand-directed by a person, start to finish — the station
 choices, the exact switch timing, the strobe-archive texture, are all
-specific creative decisions, not something `mvideo auto` would currently
+specific creative decisions, not something `kaleidophone auto` would currently
 arrive at on its own (see
 [ADR-0004](../decisions/0004-default-mode-and-auto-curation.md)'s honest
 caveat on auto-mode's limits). `examples/love/brief.yaml` reconstructs this

@@ -1,4 +1,4 @@
-<h1 align="center">mvideo</h1>
+<h1 align="center">kaleidophone</h1>
 
 <p align="center">
   <strong>Compose the edit, not the pixels.</strong><br>
@@ -30,7 +30,7 @@
 You have a song and a folder of photos (and maybe some clips). You want a
 music video that cuts on the beat, looks like something — not a slideshow
 with a Ken Burns pan — and doesn't take an afternoon of manual editing or a
-GPU farm. mvideo turns that into three things from one source file:
+GPU farm. kaleidophone turns that into three things from one source file:
 
 - a **video**, cut on the beat, color-graded per section, in a deliberately
   vintage/psychedelic/loopish default look (not an option you have to
@@ -46,7 +46,7 @@ teasers, the thumbnails, the cover — is derived from it and rebuildable.
 That's not an implementation detail, it's the whole architecture; see
 [**the idea**](#the-idea) below.
 
-mvideo shells out to a real `ffmpeg` for every pixel; there is no
+kaleidophone shells out to a real `ffmpeg` for every pixel; there is no
 per-frame AI generation in the render path (why, below). It runs
 comfortably on a laptop, and the default output is 1280x720, not 4K —
 this project's whole premise is token/compute efficiency and a fast
@@ -57,7 +57,7 @@ iteration loop over maximum resolution.
 No real media required, nothing to connect, nothing to ask permission for:
 
 ```bash
-git clone <this-repo> && cd mvideo
+git clone <this-repo> && cd kaleidophone
 pip install -e ".[dev]"          # needs a system ffmpeg on PATH — see below
 bash examples/demo/run_demo.sh
 ```
@@ -70,7 +70,7 @@ analyze, curate, compose, preview, render, cover, promo — against them.
 25.7 seconds, end to end, for a 24-second/28-cut video at 640x360.
 
 Needs a system `ffmpeg` on `PATH` (`brew install ffmpeg` / `apt install
-ffmpeg`) — mvideo renders through the real binary rather than a Python
+ffmpeg`) — kaleidophone renders through the real binary rather than a Python
 video dependency; see
 [ADR-0002](docs/decisions/0002-deterministic-edit-engine.md).
 
@@ -78,19 +78,19 @@ video dependency; see
 [AGENTS.md](AGENTS.md)):
 
 ```bash
-mvideo auto ~/Music/your_song.mp3 ~/Pictures/some_folder -o /tmp/mvideo_out --preview-only
-open /tmp/mvideo_out/preview_contact_sheet.jpg      # sanity-check the edit, no render yet
-mvideo run /tmp/mvideo_out/generated_brief.yaml -o /tmp/mvideo_out   # render for real
+kaleidophone auto ~/Music/your_song.mp3 ~/Pictures/some_folder -o /tmp/kaleidophone_out --preview-only
+open /tmp/kaleidophone_out/preview_contact_sheet.jpg      # sanity-check the edit, no render yet
+kaleidophone run /tmp/kaleidophone_out/generated_brief.yaml -o /tmp/kaleidophone_out   # render for real
 ```
 
-Zero config required — `mvideo auto` writes out the brief it generated
+Zero config required — `kaleidophone auto` writes out the brief it generated
 (`generated_brief.yaml`) as a normal, fully-editable file, so "now
 customize it" is a text edit and a re-run, not a different tool. See
 [**two ways to start**](#two-ways-to-start) below.
 
 ## The idea
 
-**mvideo versions the creative brief, not the render.** A `CreativeBrief` —
+**kaleidophone versions the creative brief, not the render.** A `CreativeBrief` —
 song, stations (color-grade "looks"), sections (structure + effects),
 output settings — is the one file a person authors or edits by hand. The
 edit-decision-list, the silent video, the muxed master, the teasers, the
@@ -129,8 +129,8 @@ mp3, get a full video back, confirm the edit, then swap in the mastered
 wave — without re-rendering the video.**
 
 ```bash
-mvideo silent edl.json brief.yaml -o silent.mp4     # expensive: one+ ffmpeg call per cut
-mvideo remux   silent.mp4 mastered_song.wav -o master.mp4   # cheap: audio swap only, no re-render
+kaleidophone silent edl.json brief.yaml -o silent.mp4     # expensive: one+ ffmpeg call per cut
+kaleidophone remux   silent.mp4 mastered_song.wav -o master.mp4   # cheap: audio swap only, no re-render
 ```
 
 `render_silent()` is the only step that touches every cut's color grade and
@@ -149,15 +149,15 @@ the gap widens the higher you render. Either way: approve the edit once,
 then iterate on the audio (a rough mix -> a mastered file -> a radio edit)
 for well under a second each time. See
 [ADR-0001](docs/decisions/0001-version-the-brief-not-the-render.md) and the
-`mvideo-render` skill.
+`kaleidophone-render` skill.
 
-`mvideo render` (or `mvideo run`'s full pipeline) does both steps in one
+`kaleidophone render` (or `kaleidophone run`'s full pipeline) does both steps in one
 call and cleans up the intermediate — use that instead when you don't
 expect to touch the audio again.
 
 ## Two ways to start
 
-**Zero config.** Point `mvideo auto` at a song and a folder of mixed
+**Zero config.** Point `kaleidophone auto` at a song and a folder of mixed
 photos/clips; it analyzes the song, proposes section boundaries from real
 structural signals (a quiet passage, a sudden jump in energy), curates the
 folder against a small built-in station palette, and writes out a complete,
@@ -171,7 +171,7 @@ comes from). Use this when you can hear a structure the auto-sectioner
 won't reliably find, or want full control over which station gets which
 section.
 
-Both paths produce the exact same kind of file — `mvideo auto`'s output is
+Both paths produce the exact same kind of file — `kaleidophone auto`'s output is
 a completely normal brief the moment it's written. There's no separate
 "simple mode" format to graduate out of.
 
@@ -208,8 +208,8 @@ One data point, on one machine, from `examples/demo/`'s synthetic
 
 | | Resolution | Time | Size |
 |---|---|---|---|
-| Full `mvideo run` | 640x360 | 25.7s | 31.4 MB |
-| Full `mvideo auto` (42 photos, 5 sections) | 1280x720 | 1m27s | 185 MB |
+| Full `kaleidophone run` | 640x360 | 25.7s | 31.4 MB |
+| Full `kaleidophone auto` (42 photos, 5 sections) | 1280x720 | 1m27s | 185 MB |
 | `silent` render alone | 640x360 -> 1280x720 | 17.4s -> 55.4s | 31.4 MB -> 123.3 MB |
 | `remux` alone (either resolution) | — | 0.8s | — |
 
@@ -239,7 +239,7 @@ Real photos and clips, assembled deterministically — not a per-frame
 generative model. Three reasons, in order: cost (per-frame generation for a
 multi-minute video is expensive and slow; ffmpeg filter graphs on real
 media are neither), reproducibility (the same brief renders the same video
-every time — a property `mvideo silent`/`mvideo remux`'s whole cheap-resync
+every time — a property `kaleidophone silent`/`kaleidophone remux`'s whole cheap-resync
 workflow depends on), and creative control (a station's color grade is a
 handful of legible numbers, not a prompt you reverse-engineer until it
 looks right). AI-assisted *extensions* — cover art, captions — are a
@@ -250,7 +250,7 @@ pipeline rather than replacing it; see
 
 ## Your media stays yours
 
-mvideo is local-first and never transmits your photos, video, or audio
+kaleidophone is local-first and never transmits your photos, video, or audio
 anywhere — everything runs on your own machine through your own `ffmpeg`.
 This repository itself is built so that **no real media and no personal
 file path can be committed to it**, enforced in CI, not just by
@@ -271,14 +271,14 @@ See [ADR-0003](docs/decisions/0003-public-framework-private-assets.md),
 ## Repo map
 
 ```
-src/mvideo/
+src/kaleidophone/
   audio/        analyze a song -> BPM, beats, structure, wave map
   assets/       station presets + heuristic photo/clip curation
   timeline/     CreativeBrief schema, EDL, compose(), zero-config auto mode
   render/       ffmpeg pipeline (silent/remux split, effects, preview, teasers)
   cover/        procedural cover art from the song's own energy envelope
   promo/        chapters, caption draft, teaser cadence, pinned-comment suggestion
-  cli.py        the `mvideo` command
+  cli.py        the `kaleidophone` command
 skills/         one SKILL.md per pipeline stage — for agents and people alike
 examples/
   demo/         fully synthetic end-to-end demo (run_demo.sh)
@@ -323,10 +323,6 @@ fixed, not just documented as known issues). What's genuinely still open:
   A second, independently-run case study would do more to prove this
   generalizes than anything else on the roadmap; see
   [CONTRIBUTING.md](CONTRIBUTING.md).
-- **The project's final name isn't settled.** `mvideo` works and is the
-  safe default (see [ADR-0005](docs/decisions/0005-project-naming.md) for
-  the shortlist under consideration) — a rename later is one mechanical
-  pass, not a rewrite.
 - **AI-assisted cover art and captions are designed for, not built.** The
   deterministic pipeline is the whole default today; see
   [docs/ROADMAP.md](docs/ROADMAP.md), Phase 3.

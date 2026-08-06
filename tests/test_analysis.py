@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from factories import make_analysis
 
-from mvideo.audio.analysis import _find_energy_jumps, _find_quiet_passages, analyze
+from kaleidophone.audio.analysis import _find_energy_jumps, _find_quiet_passages, analyze
 
 # --- _find_quiet_passages ---------------------------------------------
 

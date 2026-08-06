@@ -1,11 +1,11 @@
-# AGENTS.md — instructions for AI coding agents working on mvideo
+# AGENTS.md — instructions for AI coding agents working on kaleidophone
 
 This file is the canonical brief for any AI agent contributing to this
 repository. `CLAUDE.md` points here. Read this before changing anything.
 
 ## What this project is
 
-mvideo turns a song plus your own photos/clips into a beat-synced,
+kaleidophone turns a song plus your own photos/clips into a beat-synced,
 station-graded, loopish music video — plus cover art and a promo/captions
 pack from the same brief. It is **a deterministic edit-and-render engine**,
 not a generative-video product and not a hosting/publishing platform. If a
@@ -16,7 +16,7 @@ for the visual/sonic design language this implements.
 
 ## The one thing you must not get wrong
 
-**mvideo versions the brief, not the render.** The `CreativeBrief` (a YAML
+**kaleidophone versions the brief, not the render.** The `CreativeBrief` (a YAML
 file a person can read and edit) is the source of truth. The EDL, the silent
 video, the muxed master, teasers, thumbnails, and cover art are all derived,
 rebuildable artifacts — see
@@ -62,7 +62,7 @@ number in `docs/` or an ADR:
   synthetic fixtures instead (see `examples/demo/generate_fixtures.py` for
   the pattern: real WAV/JPG files, entirely procedural content).
 - **Never write outside a run's own output directory** without being asked.
-  `mvideo`'s commands take an explicit `-o/--out`; don't add a code path
+  `kaleidophone`'s commands take an explicit `-o/--out`; don't add a code path
   that writes into a user's media folder.
 - Briefs and case studies may reference real people (collaborators, artist
   names, social handles). Keep those out of anything committed —
@@ -92,7 +92,7 @@ number in `docs/` or an ADR:
 | Version the brief, not the render | ADR-0001 |
 | Deterministic edit engine, not AI-generated video/frames | ADR-0002 |
 | Public framework, private assets, CI-enforced | ADR-0003 |
-| Default mode (`mvideo auto`) writes a normal editable brief, not a black box | ADR-0004 |
+| Default mode (`kaleidophone auto`) writes a normal editable brief, not a black box | ADR-0004 |
 
 Each ADR lists what evidence would overturn it. Bring that evidence, or
 leave them alone. ([ADR-0005](docs/decisions/0005-project-naming.md), the
@@ -115,7 +115,7 @@ only thing in this repo that actually calls `ffmpeg`.
 - The task would commit or require real media (photos/audio/video) to this
   repository.
 - The task pushes scope toward a hosting platform, an account system, or
-  publishing/distribution — mvideo produces files; what you do with them is
+  publishing/distribution — kaleidophone produces files; what you do with them is
   yours.
 - You're about to make a claim in docs you haven't actually measured.
 - The task wants AI-generated video frames or cover art added to the

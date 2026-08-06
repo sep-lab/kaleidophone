@@ -18,7 +18,7 @@ its own sake).
 
 ## Decision
 
-**mvideo versions the creative brief (`CreativeBrief`) and treats every
+**kaleidophone versions the creative brief (`CreativeBrief`) and treats every
 other artifact — the EDL, the silent cut, the muxed master, teasers,
 thumbnails, cover art — as a derived, rebuildable build artifact.**
 
@@ -34,7 +34,7 @@ Concretely, the pipeline has an explicit cheap/expensive split:
 
 That last row is the concrete answer to "we upload an mp3 draft, everyone
 confirms the edit, then we want the final wave on it without re-rendering
-the video": `mvideo silent` once, `mvideo remux` as many times as the audio
+the video": `kaleidophone silent` once, `kaleidophone remux` as many times as the audio
 changes. Measured on the bundled synthetic demo (`examples/demo/`, 28 cuts,
 24s @ 1280x720): the remux is **~68x** faster than the silent render it
 reuses, because it's one ffmpeg stream-copy on the video side, not a
@@ -42,8 +42,8 @@ re-run of every cut's effect chain. At 640x360 the same comparison is 17.4s
 vs 0.8s (**~22x**) — the gap widens at higher resolution because `remux`'s
 cost is dominated by a fixed stream-copy/audio-encode overhead that barely
 grows with pixel count, while `silent`'s cost scales with it. Re-measure
-with `bash examples/demo/run_demo.sh` plus `time mvideo silent`/`time
-mvideo remux` on its output — see CONTRIBUTING.md, "Ground rules for
+with `bash examples/demo/run_demo.sh` plus `time kaleidophone silent`/`time
+kaleidophone remux` on its output — see CONTRIBUTING.md, "Ground rules for
 claims".
 
 ## Consequences
@@ -55,7 +55,7 @@ claims".
 - The brief is small, diffable, and safe to put in git (see
   [ADR-0003](0003-public-framework-private-assets.md)) — the media it points
   at is not.
-- `mvideo auto` can write out the brief it generated
+- `kaleidophone auto` can write out the brief it generated
   (`generated_brief.yaml`) as a normal, editable artifact rather than a
   black box: the "recipe" is always inspectable.
 
@@ -63,10 +63,10 @@ claims".
 
 - Two extra pipeline stages (`silent`, `remux`) beyond the obvious
   brief-in/video-out shape, and two extra concepts a new user has to learn if
-  they go looking for them (though `mvideo run` still does the obvious thing
+  they go looking for them (though `kaleidophone run` still does the obvious thing
   by default — see [ADR-0004](0004-default-mode-and-auto-curation.md)).
 - The silent video is a real intermediate file someone has to manage
-  (`render()`'s convenience path deletes it; `mvideo silent` keeps it on
+  (`render()`'s convenience path deletes it; `kaleidophone silent` keeps it on
   purpose). It is not free disk space.
 
 ## What would overturn this
@@ -81,4 +81,4 @@ claims".
 
 ## Related
 
-[ADR-0002](0002-deterministic-edit-engine.md), `src/mvideo/render/ffmpeg_pipeline.py`.
+[ADR-0002](0002-deterministic-edit-engine.md), `src/kaleidophone/render/ffmpeg_pipeline.py`.

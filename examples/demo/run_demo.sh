@@ -6,7 +6,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 python3 "$HERE/generate_fixtures.py"
-mvideo run "$HERE/_fixtures/brief.yaml" -o "$HERE/_fixtures/out"
+kaleidophone run "$HERE/_fixtures/brief.yaml" -o "$HERE/_fixtures/out"
 
 echo
 echo "Done -- see $HERE/_fixtures/out/master.mp4"

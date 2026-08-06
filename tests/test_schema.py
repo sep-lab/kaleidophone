@@ -15,7 +15,7 @@ import yaml
 from factories import make_brief, make_section, make_station
 from pydantic import ValidationError
 
-from mvideo.timeline.schema import CreativeBrief
+from kaleidophone.timeline.schema import CreativeBrief
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

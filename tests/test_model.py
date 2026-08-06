@@ -2,15 +2,15 @@
 
 See docs/decisions/0001-version-the-brief-not-the-render.md -- the EDL is a
 derived build artifact (regenerate it, don't hand-edit it), but it does get
-written to and read back from edl.json between `mvideo compose` and
-`mvideo silent`, so the round trip has to be exact.
+written to and read back from edl.json between `kaleidophone compose` and
+`kaleidophone silent`, so the round trip has to be exact.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from mvideo.timeline.model import EDL, Cut
+from kaleidophone.timeline.model import EDL, Cut
 
 
 def _cut(index: int, start: float, end: float, **overrides) -> Cut:

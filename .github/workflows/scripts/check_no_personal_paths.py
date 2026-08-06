@@ -167,7 +167,7 @@ def main() -> int:
             "\n"
             "  If it is yours: replace it with a placeholder, e.g.\n"
             "      /path/to/your/photos/...\n"
-            "      ~/Music/mvideo/...\n"
+            "      ~/Music/kaleidophone/...\n"
             "  A documented command has to be runnable by the reader; a path with\n"
             "  your username in it is not.\n"
             "\n"

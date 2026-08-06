@@ -1,6 +1,6 @@
 """cover/generate.py: station-picking logic plus one end-to-end smoke test.
 
-See the mvideo-cover-art skill and docs/decisions/0002 for why this is a
+See the kaleidophone-cover-art skill and docs/decisions/0002 for why this is a
 procedural render (no AI call, no network) -- pick_cover_station() is pure
 logic and generate_cover() is cheap enough to run for real at a tiny size.
 """
@@ -10,8 +10,8 @@ from __future__ import annotations
 from factories import make_analysis, make_brief, make_section, make_station
 from PIL import Image
 
-from mvideo.cover.generate import generate_cover, pick_cover_station
-from mvideo.timeline.schema import OutputConfig
+from kaleidophone.cover.generate import generate_cover, pick_cover_station
+from kaleidophone.timeline.schema import OutputConfig
 
 
 def test_pick_cover_station_uses_the_section_containing_the_loudest_instant():
