@@ -24,7 +24,7 @@ whether you're a person or an agent; it applies to both).
 ## Set up and run something real
 
 ```bash
-git clone <this-repo> && cd kaleidophone
+git clone https://github.com/sep-lab/kaleidophone && cd kaleidophone
 pip install -e ".[dev]"
 ```
 
@@ -39,10 +39,12 @@ bash examples/demo/run_demo.sh
 ```
 
 Generates a synthetic song and synthetic placeholder photos, then runs
-`analyze -> compose -> preview -> render -> promo` for real. Measured on
-this repo's own CI runner (24s @ 640x360, 28 cuts): ~30-60s end to end. This
-is the fastest way to find out whether a change broke anything that touches
-`ffmpeg` — `pytest` alone never calls it.
+`analyze -> compose -> preview -> render -> promo` for real. **Measured**
+(24s @ 640x360, 37 cuts, Apple M1 Pro / macOS 15.7 / ffmpeg 7.1): 18.1s end
+to end; **inferred** for a CI runner: roughly 30-60s. Note which of those two
+is which -- the range is a guess, and this file's own rules say to say so.
+This is the fastest way to find out whether a change broke anything that
+touches `ffmpeg` -- `pytest` alone never calls it.
 
 **Try it on your own song and photos** (never commit either — see
 `AGENTS.md`):

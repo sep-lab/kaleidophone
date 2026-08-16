@@ -30,7 +30,11 @@ sections:
     station: amber-room        # must match a stations[].name
     cut_density: every_2_beats # every_beat | every_2_beats | every_4_beats |
                                 # every_bar | every_2_bars | every_4_bars | static
-    effects: [grain, vignette] # see docs/CREATIVE-GUIDE.md for what each does
+    effects: [grain, vignette] # kaleidoscope | strobe | invert_flash |
+                                # freeze_on_peak | grain | scanlines | halation |
+                                # vignette | zoom_breathe | static_noise
+                                # (duotone is a station property, not an effect)
+                                # see docs/CREATIVE-GUIDE.md for what each does
     seed: 0                    # asset-shuffle seed -- same seed, same edit, every re-render
 
 output:
@@ -61,6 +65,16 @@ promo:                          # optional -- omit to skip promo-pack generation
   whose station received zero curated assets — see
   [ADR-0004](decisions/0004-default-mode-and-auto-curation.md) for why
   that's the right place for this check to live.
+- Each `duotone` entry must be a 6-digit hex color (`#1a0f06`). These are
+  interpolated into an ffmpeg filter string, so the format is enforced rather
+  than trusted — see [SECURITY.md](../SECURITY.md).
+- Sections must **tile the song end to end**: the first starts at `0.0`, and
+  each subsequent `start` equals the previous `end`. The renderer
+  concatenates cuts, so a gap doesn't render as a gap — it slides every later
+  cut off the beat. `EDL` refuses such a timeline rather than rendering it.
+- Every cut boundary is snapped to the `1/fps` grid, so a section shorter
+  than one frame is refused too. See
+  [docs/ARCHITECTURE.md](ARCHITECTURE.md), "Frame-accurate cuts".
 
 ## Where a brief comes from
 

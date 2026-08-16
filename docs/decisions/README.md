@@ -9,11 +9,10 @@ importantly — **what evidence would overturn it.**
 | [0002](0002-deterministic-edit-engine.md) | A deterministic edit engine, not AI-generated pixels | Accepted |
 | [0003](0003-public-framework-private-assets.md) | Public framework, private assets, CI-enforced | Accepted |
 | [0004](0004-default-mode-and-auto-curation.md) | A default mode backed by heuristic curation, not a wizard | Accepted |
-| [0005](0005-project-naming.md) | Project naming | Proposed |
+| [0005](0005-project-naming.md) | Project naming | Accepted |
 
-These are settled except where marked otherwise. Reopening one is welcome, but
-bring the evidence its "What would overturn this" section asks for — that is
-what the section is for.
+All five are settled. Reopening one is welcome, but bring the evidence its
+"What would overturn this" section asks for — that is what the section is for.
 
 New ADRs: copy the structure of an existing one, take the next number, and
 link it here and from [AGENTS.md](../../AGENTS.md) if it constrains how

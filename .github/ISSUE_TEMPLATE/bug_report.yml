@@ -1,0 +1,78 @@
+name: Bug report
+description: Something in kaleidophone doesn't do what it says it does.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please don't attach real media.** No photos, no audio, no video — not
+        even "a small one". Describe the material instead, or build a minimal
+        synthetic reproduction using `examples/demo/generate_fixtures.py`'s
+        pattern. See [AGENTS.md](../blob/main/AGENTS.md), "Rules for handling
+        user data".
+
+        Watch for file paths too: a pasted command or traceback containing
+        `/Users/<your name>/...` publishes your username and folder structure.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: >
+        The commands you ran, with paths redacted. If a brief is involved,
+        paste it with `audio_path` / `media_dir` replaced by placeholders.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "macOS 15.7 (Intel) / Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: "`python3 -V`"
+      placeholder: "3.11.10"
+    validations:
+      required: true
+
+  - type: input
+    id: ffmpeg
+    attributes:
+      label: ffmpeg version
+      description: "`ffmpeg -version | head -1` — kaleidophone renders through the system binary."
+      placeholder: "ffmpeg version 7.1"
+    validations:
+      required: true
+
+  - type: input
+    id: kaleidophone-version
+    attributes:
+      label: kaleidophone version
+      description: "`kaleidophone --version`"
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Full error output
+      description: >
+        Re-run with `--traceback` for the full trace. Redact any personal paths
+        before pasting.
+      render: shell

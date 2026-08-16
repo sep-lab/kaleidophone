@@ -42,10 +42,11 @@ there the way it does to video.
 
 **Good**
 
-- Fast and cheap by construction: the bundled demo (24s, 28 cuts, 720p)
-  renders in ~2 minutes end to end on a single core, with no API key, no
-  network call, and no per-frame cost that scales with video length beyond
-  ffmpeg's own encode time.
+- Fast and cheap by construction: the bundled demo (24s, 37 cuts, 720p)
+  renders in well under a minute end to end (**measured**: 39.4s for a full
+  `kaleidophone auto` run at 720p — see docs/ARCHITECTURE.md §6 for the
+  machine), with no API key, no network call, and no per-frame cost that
+  scales with video length beyond ffmpeg's own encode time.
 - The output is always *your* media. Re-running with the same brief and
   assets produces the same edit (seeded shuffling — see
   `timeline/compose.py`), which is what makes the cheap re-render story in

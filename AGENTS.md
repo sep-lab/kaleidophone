@@ -93,10 +93,10 @@ number in `docs/` or an ADR:
 | Deterministic edit engine, not AI-generated video/frames | ADR-0002 |
 | Public framework, private assets, CI-enforced | ADR-0003 |
 | Default mode (`kaleidophone auto`) writes a normal editable brief, not a black box | ADR-0004 |
+| The project is named `kaleidophone`, lowercase throughout | ADR-0005 |
 
 Each ADR lists what evidence would overturn it. Bring that evidence, or
-leave them alone. ([ADR-0005](docs/decisions/0005-project-naming.md), the
-project name, is the one open decision — see its "Open question".)
+leave them alone.
 
 ## Testing
 

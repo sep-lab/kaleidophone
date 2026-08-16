@@ -1,44 +1,91 @@
 [build-system]
-requires = ["setuptools>=68"]
+# 77+ for PEP 639 (`license` as an SPDX string, `license-files`).
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "kaleidophone"
-version = "0.1.0"
+# Single-sourced from kaleidophone.__version__ so the package and the
+# distribution can't drift apart -- see [tool.setuptools.dynamic] below.
+dynamic = ["version"]
 description = "Compose the edit, not the pixels: a song + your photos -> a beat-synced, station-graded, loopish music video."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Sep" }]
 keywords = ["music-video", "ffmpeg", "librosa", "video-editing", "generative", "audio-analysis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    # POSIX only, said plainly rather than implied: the render path is
+    # exercised on Linux and macOS in CI and nowhere else. See README.
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Video :: Non-Linear Editor",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Typing :: Typed",
+]
 
-# Deliberately short. kaleidophone's whole pitch is "fast and minimal" (see
-# docs/CREATIVE-GUIDE.md) -- a heavy dependency tree would be a quiet
-# contradiction of that. ffmpeg itself is a system binary, not a pip
-# dependency; kaleidophone shells out to it (docs/decisions/0002-deterministic-edit-engine.md).
+# Kept as short as the job allows -- but honestly, not aspirationally:
+# librosa is the heavy one here, and it pulls in numba/llvmlite/scikit-learn
+# behind it. That is a real cost (a few hundred MB installed), accepted
+# because beat and onset tracking is the whole premise; see
+# docs/decisions/0002-deterministic-edit-engine.md.
+#
+# ffmpeg is a system binary, not a pip dependency -- kaleidophone shells out
+# to it. That is also why there's no OpenCV here: it was a ~90MB wheel used
+# only to average a 64x64 thumbnail and grab one video frame, both of which
+# Pillow and the ffmpeg we already require now handle (assets/curation.py).
 dependencies = [
     "librosa>=0.10",
     "soundfile>=0.12",
     "numpy>=1.26",
     "scipy>=1.11",
-    "opencv-python-headless>=4.9",
     "pillow>=10.0",
     "pydantic>=2.5",
     "pyyaml>=6.0",
+    # Not a direct import -- a constraint on librosa's own numba/llvmlite
+    # chain. llvmlite >= 0.46 ships arm64-only macOS wheels, so on an Intel
+    # Mac pip falls back to building LLVM from source and the install fails
+    # outright. numba < 0.63 pins llvmlite < 0.46, which still has the
+    # x86_64 wheel. Scoped by marker so no other platform is held back.
+    "numba<0.63; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/sep-lab/kaleidophone"
+Repository = "https://github.com/sep-lab/kaleidophone"
+Issues = "https://github.com/sep-lab/kaleidophone/issues"
+Changelog = "https://github.com/sep-lab/kaleidophone/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/sep-lab/kaleidophone/tree/main/docs"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.16",
+    "build>=1.2",
 ]
 
 [project.scripts]
 kaleidophone = "kaleidophone.cli:main"
 
+[tool.setuptools.dynamic]
+version = { attr = "kaleidophone.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# PEP 561: the public signatures are annotated, so let type checkers see them.
+kaleidophone = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

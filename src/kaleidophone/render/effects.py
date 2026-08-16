@@ -122,7 +122,8 @@ LINEAR_EFFECT_BUILDERS = {
     "vignette": lambda **kw: "vignette",
     "zoom_breathe": lambda **kw: zoom_breathe(kw["duration"], kw["fps"], kw["w"], kw["h"]),
     "static_noise": lambda **kw: static_noise(),
-    "duotone": lambda **kw: "",  # handled via station.duotone inside color_grade, not per-cut
+    # No "duotone" entry: it's a station property applied by color_grade(),
+    # not a per-cut effect. See timeline/schema.py's EffectName.
 }
 
 GRAPH_EFFECT_BUILDERS = {

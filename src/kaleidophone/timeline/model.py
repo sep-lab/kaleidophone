@@ -45,10 +45,30 @@ class EDL:
 
     def __post_init__(self) -> None:
         # A render is only as trustworthy as the ordering of what it renders.
+        #
+        # Contiguity is checked as strictly as overlap, and for the same
+        # reason: render_silent() concatenates cuts back to back, so a cut's
+        # real position on the timeline is the running total of the durations
+        # before it, NOT its own `start`. A gap between two cuts -- or a first
+        # cut that doesn't begin at 0.0 -- doesn't render as a gap, it silently
+        # slides every later cut off the beat it was composed for. Better to
+        # refuse the EDL than to render a whole video that's quietly wrong.
+        if self.cuts and self.cuts[0].start > 1e-6:
+            raise ValueError(
+                f"the first cut starts at {self.cuts[0].start:.3f}s, not 0.0 -- the render "
+                f"concatenates cuts from the top of the timeline, so a late start shifts the "
+                f"entire edit off the audio. Make the first section start at 0.0."
+            )
         for a, b in itertools.pairwise(self.cuts):
             if b.start < a.end - 1e-6:
                 raise ValueError(
                     f"cuts overlap: cut {a.index} ends {a.end:.3f}, cut {b.index} starts {b.start:.3f}"
+                )
+            if b.start > a.end + 1e-6:
+                raise ValueError(
+                    f"gap in the timeline: cut {a.index} ends {a.end:.3f}, cut {b.index} starts "
+                    f"{b.start:.3f}. Sections must tile the song end to end -- check that each "
+                    f"section's `start` equals the previous section's `end` in the brief."
                 )
 
     def to_dict(self) -> dict:

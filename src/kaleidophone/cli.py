@@ -16,16 +16,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
+from kaleidophone import __version__
 from kaleidophone.assets.curation import scan_media, suggest_stations
 from kaleidophone.audio.analysis import analyze
 from kaleidophone.audio.wavemap import render_wavemap
 from kaleidophone.cover.generate import generate_cover, pick_cover_station
 from kaleidophone.promo.plan import generate_promo_pack
+from kaleidophone.render._ffmpeg_util import FfmpegNotFound
 from kaleidophone.render.ffmpeg_pipeline import mux_audio, render_silent
 from kaleidophone.render.ffmpeg_pipeline import render as render_edl
 from kaleidophone.render.preview import generate_contact_sheet
@@ -35,19 +39,55 @@ from kaleidophone.timeline.compose import compose
 from kaleidophone.timeline.model import EDL
 from kaleidophone.timeline.schema import CreativeBrief
 
+EXIT_OK = 0
+EXIT_USAGE = 1
+EXIT_ERROR = 2
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "func", None):
         parser.print_help()
-        return 1
-    return args.func(args)
+        return EXIT_USAGE
+
+    # Every failure below is one a user can act on -- a missing ffmpeg, a
+    # brief that doesn't validate, a station with no media, a file that isn't
+    # there. The code already raises those with carefully written, actionable
+    # messages; printing a 30-line traceback on top of one buries it. Show the
+    # message, exit non-zero, and keep the traceback one flag away.
+    try:
+        return args.func(args)
+    except FfmpegNotFound as exc:
+        return _fail(exc, args)
+    except ValidationError as exc:
+        return _fail(f"{getattr(args, 'brief_path', 'the brief')} is not a valid brief:\n{exc}", args)
+    except FileNotFoundError as exc:
+        return _fail(f"{exc.filename}: no such file or directory", args)
+    except (ValueError, KeyError, OSError, RuntimeError) as exc:
+        return _fail(exc, args)
+    except KeyboardInterrupt:
+        print("\ninterrupted", file=sys.stderr)
+        return 130
+
+
+def _fail(message: object, args: argparse.Namespace) -> int:
+    if getattr(args, "traceback", False) or os.environ.get("KALEIDOPHONE_DEBUG"):
+        raise
+    print(f"kaleidophone: error: {message}", file=sys.stderr)
+    print("(re-run with --traceback, or KALEIDOPHONE_DEBUG=1, for the full trace)", file=sys.stderr)
+    return EXIT_ERROR
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kaleidophone", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--version", action="version", version=f"kaleidophone {__version__}")
+    parser.add_argument(
+        "--traceback",
+        action="store_true",
+        help="Show the full Python traceback on error instead of a single message.",
     )
     sub = parser.add_subparsers(dest="command")
 
@@ -206,7 +246,7 @@ def _cmd_render(args: argparse.Namespace) -> int:
             if teaser.source_start is not None
             else max(0.0, edl.duration / 2 - teaser.duration / 2)
         )
-        path = extract_teaser(master_path, teaser, start, str(out / "teasers"))
+        path = extract_teaser(master_path, teaser, start, str(out / "teasers"), edl.resolution)
         print(f"wrote {path}")
 
     for i in range(brief.output.thumbnail_count):
@@ -269,7 +309,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             if teaser.source_start is not None
             else max(0.0, edl.duration / 2 - teaser.duration / 2)
         )
-        extract_teaser(master_path, teaser, start, str(out / "teasers"))
+        extract_teaser(master_path, teaser, start, str(out / "teasers"), edl.resolution)
     for i in range(brief.output.thumbnail_count):
         t = edl.duration * (i + 1) / (brief.output.thumbnail_count + 1)
         extract_thumbnail(master_path, t, str(out / f"thumb_{i + 1}.jpg"))
@@ -331,9 +371,24 @@ def _write_yaml_brief(brief: CreativeBrief, path) -> None:
 
 
 def _curate(brief: CreativeBrief) -> dict[str, list]:
+    """Scan each station's media_dir.
+
+    Cached by resolved path, because sharing one folder across stations is the
+    common case rather than the exotic one -- `kaleidophone auto` writes exactly
+    that brief, and the README's own next step is to re-run it through
+    `kaleidophone run`. Without the cache that decodes every photo in the folder
+    once per station.
+    """
+    scans: dict[str, list] = {}
     station_assets = {}
     for station in brief.stations:
-        station_assets[station.name] = scan_media(station.media_dir) if station.media_dir else []
+        if not station.media_dir:
+            station_assets[station.name] = []
+            continue
+        key = os.path.realpath(station.media_dir)
+        if key not in scans:
+            scans[key] = scan_media(station.media_dir)
+        station_assets[station.name] = scans[key]
     return station_assets
 
 

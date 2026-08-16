@@ -49,7 +49,7 @@ single case study; it hasn't yet been run against a second one.
 
 ## Phase 2 — Quality and cost tuning
 
-- [ ] **Grain/file-size tradeoff.** The 720p demo run is ~185MB for 24
+- [ ] **Grain/file-size tradeoff.** The 720p demo run is ~182MB for 24
       seconds with grain on most cuts (measured, `docs/ARCHITECTURE.md`).
       Worth a documented set of "look" presets (e.g. `grain: 0.1` vs. `0.3`)
       with their real measured size/quality tradeoff, rather than one
@@ -115,7 +115,7 @@ caption.
       (`analyze`/`curate`/`compose`/`preview`/`silent`/`remux`/`render`/
       `cover`/`promo`/`run`/`auto`) has had a real second project run
       through it (Phase 1).
-- [ ] `docs/PRIOR-ART.md` — a fair look at existing "photo slideshow to
+- [x] `docs/PRIOR-ART.md` — a fair look at existing "photo slideshow to
       music" and AI-music-video tools, what they actually do differently,
       and what risk (if any) remains unanswered here. Wit's own
       `docs/PRIOR-ART.md` is the template.

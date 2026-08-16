@@ -103,34 +103,87 @@ stage's output. N graph effects on one cut means N+1 total ffmpeg calls for
 that segment — rare in practice, since most sections use zero or one graph
 effect.
 
-## 5. Cost, measured
+## 5. Frame-accurate cuts
 
-From `examples/demo/` (24s synthetic song, 28 cuts, hand-authored 3-section
+`compose()` snaps every cut boundary onto the `1/fps` grid
+(`timeline/compose.py::snap_to_frame`) before it ever reaches the renderer,
+and `render_silent()` bounds each segment with `-frames:v N` rather than a
+duration in seconds. Both halves are load-bearing for audio sync, and the
+reason is worth stating plainly because it is not obvious:
+
+**`render_silent()` concatenates segments back to back, so a cut's real
+position on the timeline is the running total of the durations before it —
+not its own `start`.** ffmpeg can only emit whole frames, so it truncates
+any fractional one. An un-snapped beat grid therefore loses part of a frame
+on *every* cut, always in the same direction, and the error accumulates.
+
+**Measured** on a 300s/129 BPM synthetic track (the tempo of the reference
+case study), rendering 640 cuts at 320x180, before and after the snapping:
+
+| | Cuts on the frame grid | Final drift | Rendered length vs. 300s audio |
+|---|---|---|---|
+| Before | 0 / 640 | **-3.25s** (78 frames) | 296.75s |
+| After | 640 / 640 | **0.00s** | 300.00s |
+
+A cut of 0.464399s is 11.1456 frames; ffmpeg emitted 11 and dropped the
+rest, 640 times over. At the ~11-minute length of the reference case study
+that is roughly 7 seconds of drift — **inferred** by linear extrapolation
+from the measurement above, not measured directly. The regression tests in
+`tests/test_compose.py` pin the grid property directly rather than the
+symptom.
+
+Two related guards live alongside it: `EDL.__post_init__` refuses a timeline
+with gaps or a first cut that doesn't start at 0.0 (under concatenation those
+don't render as gaps, they slide the whole edit off the audio), and
+`mux_audio()` warns before `-shortest` silently truncates a stream.
+
+### When the beat tracker returns nothing
+
+librosa locks onto the strongest rhythmic region of a track and can return
+*no* beats for a quiet passage — on this repo's own demo song it finds none
+in the first 11 of 24 seconds. A section with no beats inside it falls back
+to a grid synthesized from the detected BPM
+(`timeline/compose.py::_tempo_grid`) and prints a note to stderr. The
+alternative, which is what this used to do, was to silently emit one cut
+spanning the whole section: a brief asking for `every_2_beats` got a single
+8-second still and no explanation.
+
+## 6. Cost, measured
+
+From `examples/demo/` (24s synthetic song, 37 cuts, hand-authored 3-section
 brief unless noted). Not a benchmark suite — one data point, on one
 machine, cited here as **measured**, not a general performance claim; see
 CONTRIBUTING.md, "Ground rules for claims" for how to reproduce these.
 
+**Measured on:** Apple M1 Pro (10 cores), macOS 15.7, ffmpeg 7.1, CPython
+3.11.10 — an *x86_64* interpreter under Rosetta 2 rather than a native
+arm64 build, so a native run should be faster. Named because "one machine"
+only means something if you know which one.
+
 | Stage | Resolution | Time |
 |---|---|---|
-| Full `kaleidophone run` (analyze -> render -> promo) | 640x360 | 25.7s |
-| Full `kaleidophone auto` (default 720p, 42 photos, 5 sections) | 1280x720 | 1m27s |
-| `render_silent` alone | 640x360 | 17.4s |
-| `mux_audio` alone (re-sync audio, no re-render) | 640x360 | 0.8s |
-| `render_silent` alone | 1280x720 | 55.4s |
-| `mux_audio` alone (re-sync audio, no re-render) | 1280x720 | 0.8s |
+| Full `kaleidophone run` (analyze -> render -> promo) | 640x360 | 18.1s |
+| Full `kaleidophone auto` (default 720p, 42 photos, 5 sections) | 1280x720 | 39.4s |
+| `render_silent` alone | 640x360 | 10.7s |
+| `mux_audio` alone (re-sync audio, no re-render) | 640x360 | 1.0s |
+| `render_silent` alone | 1280x720 | 22.6s |
+| `mux_audio` alone (re-sync audio, no re-render) | 1280x720 | 1.1s |
 
-`mux_audio` is a near-fixed cost (a stream-copy plus one audio re-encode)
-that barely moves with resolution; `render_silent` scales with pixel count.
-That's why the remux speedup itself isn't a single constant — it's ~22x at
-640x360 and ~68x at 1280x720 on this same demo, and grows further at higher
-resolutions still. See [ADR-0001](decisions/0001-version-the-brief-not-the-render.md).
+Both `mux_audio` figures are dominated by ~0.8s of Python interpreter and
+librosa import startup; the ffmpeg work itself is a fraction of a second.
+That is worth knowing before optimizing the wrong half. `mux_audio` is
+otherwise a near-fixed cost (a stream-copy plus one audio re-encode) that
+barely moves with resolution, while `render_silent` scales with pixel
+count — which is why the remux speedup isn't a single constant: ~11x at
+640x360 and ~21x at 1280x720 end-to-end here, and wider at higher
+resolutions. See [ADR-0001](decisions/0001-version-the-brief-not-the-render.md).
 
 Grain/noise-heavy effects measurably inflate output size, and that scales
-with resolution too: the same 28-cut EDL rendered at 640x360 is 31.4MB;
+with resolution too: the same 37-cut EDL rendered at 640x360 is 26.7MB;
 rendered at 1280x720 (identical cuts and effects, resolution changed only)
-it's 123.3MB — a 3.9x size increase for a 4x pixel-count increase, since
+it's 104.9MB — a 3.9x size increase for a 4x pixel-count increase, since
 noise resists h264 compression almost regardless of scale. The 720p `auto`
-run above (more sections, more cuts, more photos) is 185MB for the same 24
+run above (more sections, more cuts, more photos) is 182.3MB for the same 24
 seconds. This is a real tradeoff between the "vintage, grainy" look this
 project's whole aesthetic calls for and output file size, not a bug. If
 size matters more than grain for a given project, turn down
@@ -143,7 +196,7 @@ heuristic first pass even on a clean signal, not just on a real
 performance; see `SongConfig.bpm` to override it and the
 `kaleidophone-audio-analysis` skill.
 
-## 6. Why 1280x720 by default, not higher
+## 7. Why 1280x720 by default, not higher
 
 The project this framework generalizes from was delivered at 1280x720 —
 see `docs/case-studies/love.md`. Combined with the measured cost above and

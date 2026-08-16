@@ -1,0 +1,10 @@
+# Default owner for everything.
+*       @sep-lab
+
+# The decisions and guardrails that the rest of the repo depends on. A change
+# to one of these is a change to the project's contract, not just its code --
+# see AGENTS.md, "Things that are settled".
+/docs/decisions/                @sep-lab
+/.github/workflows/scripts/     @sep-lab
+/AGENTS.md                      @sep-lab
+/SECURITY.md                    @sep-lab

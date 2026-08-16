@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose something kaleidophone should do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: a few directions are deliberate, documented boundaries
+        rather than gaps — AI-generated video frames, hosting/publishing, and a
+        GUI. See [ROADMAP.md](../blob/main/docs/ROADMAP.md), "Explicitly not
+        planned", and [ADR-0002](../blob/main/docs/decisions/0002-deterministic-edit-engine.md).
+        Each ADR lists what evidence would overturn it — that's the useful
+        thing to bring if you want to reopen one.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The creative or practical goal, not the implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should kaleidophone do instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the pipeline?
+      options:
+        - audio analysis (BPM, beats, structure)
+        - asset curation / stations
+        - brief schema / timeline compose
+        - render / effects
+        - cover art
+        - promo pack
+        - CLI / packaging
+        - docs
+        - not sure
+    validations:
+      required: true

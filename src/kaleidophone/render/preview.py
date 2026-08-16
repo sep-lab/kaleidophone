@@ -10,10 +10,12 @@ already-approved render without redoing it.
 
 from __future__ import annotations
 
+import io
 import os
 
 from PIL import Image, ImageDraw
 
+from kaleidophone.render._ffmpeg_util import first_frame_png
 from kaleidophone.timeline.model import EDL
 
 CELL = 160
@@ -57,11 +59,7 @@ def _load_thumb(source_path: str) -> Image.Image:
 
 
 def _video_first_frame(path: str) -> Image.Image:
-    import cv2
-
-    cap = cv2.VideoCapture(path)
-    ok, frame = cap.read()
-    cap.release()
-    if not ok:
+    png = first_frame_png(path)
+    if png is None:
         return Image.new("RGB", (CELL, CELL), (60, 20, 20))
-    return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    return Image.open(io.BytesIO(png)).convert("RGB")

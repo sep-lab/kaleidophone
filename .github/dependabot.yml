@@ -1,0 +1,32 @@
+# Dependabot keeps the SHA-pinned actions and the Python dependency floors
+# current.
+#
+# The actions in .github/workflows/ are pinned to full commit SHAs rather than
+# tags, because a tag can be moved to point at different code after review. A
+# SHA can't -- but it also means nothing updates on its own, which is exactly
+# the maintenance burden this file exists to carry. Each PR keeps the
+# `# v4`-style trailing comment readable.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "ci"
+    labels: ["dependencies", "ci"]
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "deps"
+    labels: ["dependencies"]
+    # Floors in pyproject are deliberately loose (">=") so a bump is only
+    # needed when something actually breaks or a minimum genuinely rises.
+    # Grouping keeps that from becoming a stream of one-line PRs.
+    groups:
+      python-dependencies:
+        patterns: ["*"]

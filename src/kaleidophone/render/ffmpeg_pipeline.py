@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import tempfile
 
 from kaleidophone.assets.curation import VIDEO_EXTS
 from kaleidophone.render import effects as fx
-from kaleidophone.render._ffmpeg_util import require_ffmpeg, run
+from kaleidophone.render._ffmpeg_util import probe_duration, require_ffmpeg, run
 from kaleidophone.timeline.model import EDL, Cut
 from kaleidophone.timeline.schema import CreativeBrief, StationConfig
 
@@ -48,7 +49,7 @@ def render_silent(
         concat_list = os.path.join(tmp, "concat.txt")
         with open(concat_list, "w", encoding="utf-8") as fh:
             for p in segment_paths:
-                fh.write(f"file '{os.path.abspath(p)}'\n")
+                fh.write(f"file {_concat_quote(os.path.abspath(p))}\n")
 
         run(
             ffmpeg,
@@ -75,12 +76,56 @@ def render_silent(
     return silent_output_path
 
 
+def _concat_quote(path: str) -> str:
+    """Quote a path for ffmpeg's concat demuxer.
+
+    The demuxer's own escaping rules, not the shell's: inside a single-quoted
+    token a literal ' is written by closing the quote, emitting an escaped
+    quote, and reopening.
+
+    What passes through here is the *segment* paths, so the apostrophe that
+    breaks a render comes from the work directory -- an explicit work_dir, or
+    a TMPDIR under something like "/Users/me/Dad's scratch" -- not from the
+    user's media filenames, which reach ffmpeg as argv elements and never get
+    re-parsed. Narrow trigger, one-line fix, and it is what the concat format
+    actually specifies.
+    """
+    return "'" + path.replace("'", "'\\''") + "'"
+
+
+def _warn_if_streams_disagree(silent_video_path: str, audio_path: str, tolerance: float = 0.5) -> None:
+    """`-shortest` truncates whichever stream is longer, without comment.
+
+    That is the right default -- but a silent truncation is exactly the failure
+    the reference project's iteration 2 hit, where a replacement master moved
+    the landmarks and the edit desynced with nothing on screen to say so (see
+    docs/case-studies/love.md, and ROADMAP's "remux landmark-drift guard",
+    which this is the first half of). Say something.
+    """
+    video = probe_duration(silent_video_path)
+    audio = probe_duration(audio_path)
+    if video is None or audio is None:
+        return
+    delta = audio - video
+    if abs(delta) <= tolerance:
+        return
+    longer, amount = ("audio", delta) if delta > 0 else ("video", -delta)
+    print(
+        f"warning: {longer} is {amount:.2f}s longer than the other stream "
+        f"(video {video:.2f}s, audio {audio:.2f}s). -shortest will cut the longer one. "
+        f"If this audio isn't the track the edit was composed against, re-run "
+        f"`kaleidophone compose` before remuxing -- the cuts are placed for the old one.",
+        file=sys.stderr,
+    )
+
+
 def mux_audio(silent_video_path: str, audio_path: str, output_path: str) -> str:
     """Stitch a (possibly new) audio track onto an already-rendered silent
     video: a fast stream-copy on the video side. This is the operation for
     'we uploaded a draft mp3, everyone signed off on the edit, now put the
     mastered wave on it' -- it never re-runs a single effect."""
     ffmpeg = require_ffmpeg()
+    _warn_if_streams_disagree(silent_video_path, audio_path)
     run(
         ffmpeg,
         [
@@ -147,10 +192,25 @@ def _render_segment(
         if built:
             linear_chain.append(built)
 
+    # Drive the segment by an exact frame count, never by a duration in
+    # seconds. `-t 0.464` asks for 11.1456 frames and ffmpeg truncates to 11,
+    # losing a fraction of a frame on every cut, always downward -- 3.25s of
+    # accumulated drift over a 640-cut render before this was fixed. compose()
+    # already snaps every boundary onto the frame grid (see
+    # timeline/compose.py's snap_to_frame), so this round() is exact rather
+    # than a second guess at the same number.
+    frames = max(1, round(duration * fps))
+
+    # Absolute, so a file whose name begins with "-" can't be read as a flag.
+    source = os.path.abspath(cut.source_path)
+
+    # A video source shorter than its cut used to just end early, silently
+    # shortening the segment; -stream_loop -1 fills the cut instead, and
+    # -frames:v is what actually bounds it.
     src_args = (
-        ["-i", cut.source_path, "-t", f"{duration:.3f}"]
+        ["-stream_loop", "-1", "-i", source, "-frames:v", str(frames)]
         if is_video
-        else ["-loop", "1", "-i", cut.source_path, "-t", f"{duration:.3f}"]
+        else ["-loop", "1", "-i", source, "-frames:v", str(frames)]
     )
 
     # N graph effects need N+1 stage files: the linear pass, then one hop per

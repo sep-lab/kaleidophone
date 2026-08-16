@@ -5,6 +5,77 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] — 2026-08-16
+
+First public release.
+
+### Fixed — correctness
+
+- **Cuts now land on whole frames, and the render no longer drifts against
+  its own audio.** `compose()` snaps every boundary onto the `1/fps` grid
+  and `render_silent()` bounds each segment with `-frames:v N` instead of a
+  duration in seconds. Because segments are concatenated, ffmpeg's
+  truncation of a fractional frame accumulated on every cut, always in the
+  same direction. Measured on a 300s/129 BPM synthetic track: 640 cuts, none
+  on the frame grid, the render finishing **3.25s (78 frames) short** of the
+  audio. After: 640/640 on the grid, 0.00s drift. See
+  `docs/ARCHITECTURE.md`, "Frame-accurate cuts".
+- **`_cut_boundaries()` used a hardcoded `1/24`** as its minimum cut length
+  regardless of the brief's own `output.fps`.
+- **A section with no detected beats silently became one static shot.**
+  librosa returns no beats at all for a quiet passage — none in the first 11
+  of 24 seconds on this repo's own demo song — so a section asking for
+  `every_2_beats` got a single 8-second still with nothing said about it. It
+  now falls back to a grid derived from the detected BPM and prints a note.
+  The bundled demo goes from 28 cuts to 37 as a result.
+- **`EDL` now refuses gaps and a non-zero start.** Under concatenation those
+  don't render as gaps; they slide the entire edit off the audio.
+- **`mux_audio()` warns before `-shortest` truncates** a longer stream —
+  the first half of ROADMAP's remux landmark-drift guard.
+- **16:9 teasers no longer hardcode 1280x720**, which silently downscaled
+  the teaser of any brief rendering at 1080p or above.
+- **ffmpeg's concat list now escapes apostrophes** in the work-directory
+  path (e.g. a TMPDIR under `/Users/me/Dad's scratch`).
+
+### Fixed — interface
+
+- **The CLI reports errors as one actionable line and exits 2**, instead of
+  a raw traceback that buried the carefully written message underneath. Add
+  `--traceback` (or `KALEIDOPHONE_DEBUG=1`) for the full trace.
+- **`kaleidophone --version`.**
+- **Stations sharing one `media_dir` are scanned once**, not once per
+  station — `kaleidophone auto` writes exactly that brief, so the documented
+  next step used to decode every photo four times.
+
+### Changed
+
+- **OpenCV is no longer a dependency.** It was a ~90MB wheel used only to
+  average a 64x64 thumbnail and read one video frame; Pillow and the ffmpeg
+  already required now do both. Asset hue stays on the 0..180 scale the
+  station presets and ADR-0004 are written against.
+- **`StationConfig.duotone` is validated as `#RRGGBB`.** Those values are
+  interpolated into an ffmpeg `curves=` filter string, and SECURITY.md names
+  filter-graph injection as in scope.
+- **Packaging is release-ready:** PyPI classifiers and project URLs, PEP 639
+  license metadata, a `py.typed` marker, and a single-sourced version read
+  from `kaleidophone.__version__`.
+- **`numba<0.63` is pinned on x86_64 macOS only.** llvmlite ≥0.46 ships
+  arm64-only macOS wheels, so on an x86_64 interpreter (a genuine Intel Mac,
+  or an x86_64 Python under Rosetta) pip fell back to building LLVM from
+  source and `pip install kaleidophone` failed outright.
+- **Test suite: 81 → 143 tests, coverage 61% → 89%**, with the CI floor
+  raised from 55 to 80. `cli.py`, `ffmpeg_pipeline.py`, `variants.py`, and
+  `_ffmpeg_util.py` were all near 0%; they are now covered by asserting on
+  the argv they build. pytest still never invokes ffmpeg.
+- **CI actually runs.** It triggered on `main` while the only branch was
+  `master`. Also adds Python 3.13 and a macOS leg for the render path.
+- **GitHub Actions are pinned to commit SHAs**, with Dependabot to update
+  them, plus issue/PR templates and CODEOWNERS.
+- Documentation: every measured number re-measured after these changes and
+  reported with the machine it was measured on; `docs/PRIOR-ART.md` added.
+
 ### Added
 
 - `docs/case-studies/love.md` — "Iteration 2" section documenting the real

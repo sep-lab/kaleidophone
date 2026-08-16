@@ -11,10 +11,18 @@ the change in the brief instead and re-render.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+# A station's duotone colors are interpolated straight into an ffmpeg
+# `curves=` filter string (render/effects.py::_duotone_filter). SECURITY.md
+# names filter-graph injection as in-scope, so the brief -- which is the
+# untrusted input here, since briefs are meant to be shared and reused -- is
+# where the shape gets enforced, not somewhere downstream.
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 CutDensity = Literal[
     "every_beat",
@@ -37,7 +45,12 @@ EffectName = Literal[
     "vignette",
     "zoom_breathe",
     "static_noise",
-    "duotone",
+    # NB: there is deliberately no "duotone" effect. Duotone is a property of
+    # a *station* (StationConfig.duotone), applied by color_grade() to every
+    # cut in that station. It was briefly listed here too, where it built an
+    # empty filter string -- so putting it in a section's `effects` did
+    # nothing at all, silently. Better to reject the name than to accept it
+    # and ignore it.
 ]
 
 
@@ -76,6 +89,20 @@ class StationConfig(BaseModel):
         default=None,
         description="Optional (shadow_hex, highlight_hex), e.g. the reference case study's amber room.",
     )
+
+    @field_validator("duotone")
+    @classmethod
+    def _duotone_is_a_pair_of_hex_colors(cls, v: tuple[str, str] | None) -> tuple[str, str] | None:
+        if v is None:
+            return v
+        for color in v:
+            if not _HEX_COLOR_RE.match(color):
+                raise ValueError(
+                    f"duotone color {color!r} must be a 6-digit hex color like '#1a0f06'. "
+                    f"These are interpolated into an ffmpeg filter string, so the format is "
+                    f"enforced here rather than trusted -- see SECURITY.md."
+                )
+        return v
 
 
 class SectionConfig(BaseModel):

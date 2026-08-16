@@ -15,7 +15,13 @@ from kaleidophone.render._ffmpeg_util import require_ffmpeg, run
 from kaleidophone.timeline.schema import TeaserConfig
 
 
-def extract_teaser(master_path: str, teaser: TeaserConfig, start: float, out_dir: str) -> str:
+def extract_teaser(
+    master_path: str,
+    teaser: TeaserConfig,
+    start: float,
+    out_dir: str,
+    resolution: tuple[int, int] = (1280, 720),
+) -> str:
     ffmpeg = require_ffmpeg()
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{teaser.name}.mp4")
@@ -31,7 +37,7 @@ def extract_teaser(master_path: str, teaser: TeaserConfig, start: float, out_dir
             "-t",
             f"{teaser.duration:.3f}",
             "-vf",
-            _aspect_crop_filter(teaser.aspect),
+            _aspect_crop_filter(teaser.aspect, resolution),
             "-c:v",
             "libx264",
             "-preset",
@@ -54,9 +60,13 @@ def extract_thumbnail(master_path: str, timestamp: float, out_path: str) -> str:
     return out_path
 
 
-def _aspect_crop_filter(aspect: str) -> str:
+def _aspect_crop_filter(aspect: str, resolution: tuple[int, int] = (1280, 720)) -> str:
     if aspect == "9:16":
         return "crop=ih*9/16:ih,scale=1080:1920"
     if aspect == "1:1":
         return "crop=ih:ih,scale=1080:1080"
-    return "scale=1280:720"  # 16:9 -- already the default brief's master aspect
+    # 16:9 -- already the master's aspect, so this is a pass-through at the
+    # master's own resolution. It used to hardcode 1280x720, which silently
+    # downscaled the teaser of any brief rendering at 1080p or above.
+    w, h = resolution
+    return f"scale={w}:{h}"

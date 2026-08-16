@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import itertools
 import random
+import sys
 
 from kaleidophone.assets.curation import MediaAsset
 from kaleidophone.audio.analysis import AudioAnalysis
@@ -33,10 +34,13 @@ def compose(
     analysis: AudioAnalysis,
     station_assets: dict[str, list[MediaAsset]],
 ) -> EDL:
+    fps = brief.output.fps
     cuts: list[Cut] = []
     index = 0
     for section in brief.sections:
-        section_cuts = _compose_section(section, analysis, station_assets.get(section.station, []), index)
+        section_cuts = _compose_section(
+            section, analysis, station_assets.get(section.station, []), index, fps
+        )
         cuts.extend(section_cuts)
         index += len(section_cuts)
 
@@ -55,6 +59,7 @@ def _compose_section(
     analysis: AudioAnalysis,
     assets: list[MediaAsset],
     start_index: int,
+    fps: int,
 ) -> list[Cut]:
     if not assets:
         raise ValueError(
@@ -62,7 +67,7 @@ def _compose_section(
             f"but no assets were curated for it -- point that station's media_dir at some photos/clips."
         )
 
-    boundaries = _cut_boundaries(section, analysis)
+    boundaries = _cut_boundaries(section, analysis, fps)
     rng = random.Random(section.seed)
     pool = assets.copy()
     rng.shuffle(pool)
@@ -86,12 +91,76 @@ def _compose_section(
     return cuts
 
 
-def _cut_boundaries(section: SectionConfig, analysis: AudioAnalysis) -> list[float]:
+def _tempo_grid(section: SectionConfig, analysis: AudioAnalysis) -> list[float]:
+    """A beat grid synthesized from the detected BPM, for a section the beat
+    tracker returned nothing inside.
+
+    librosa's beat tracker locks onto the strongest rhythmic region of a track
+    and can return *no* beats at all for a quiet intro or a near-silent hush --
+    on this repo's own demo song it finds none before 11s of 24. The old
+    behaviour there was to silently produce a single cut spanning the entire
+    section: a brief that asked for `every_2_beats` got one 8-second still, with
+    nothing said about it. That contradicts the documented meaning of
+    cut_density, so fall back to the tempo grid, which is exactly what
+    "every 2 beats" means when you know the tempo.
+
+    Still a fallback, not a fix for tempo tracking: set SongConfig.bpm when the
+    detected tempo is wrong, and section boundaries by hand when it matters.
+    """
+    if analysis.bpm <= 0:
+        return []
+    interval = 60.0 / analysis.bpm
+    grid, t = [], section.start
+    while t < section.end:
+        grid.append(t)
+        t += interval
+    print(
+        f"note: no beats detected inside section {section.name!r} "
+        f"({section.start:.2f}s-{section.end:.2f}s) -- falling back to a {analysis.bpm:.1f} BPM grid "
+        f"({len(grid)} beats). Beat tracking often finds nothing in a quiet passage; set "
+        f"song.bpm in the brief if that tempo is wrong.",
+        file=sys.stderr,
+    )
+    return grid
+
+
+def snap_to_frame(t: float, fps: int) -> float:
+    """The nearest whole-frame instant at `fps`. See _cut_boundaries()."""
+    return round(t * fps) / fps
+
+
+def _cut_boundaries(section: SectionConfig, analysis: AudioAnalysis, fps: int) -> list[float]:
+    """Every boundary lands on a whole frame at `fps`.
+
+    This is load-bearing for audio sync, not a tidiness preference.
+    render_silent() renders each cut as its own clip and concatenates them, so
+    a cut's real position on the timeline is the cumulative sum of *rendered*
+    durations -- and ffmpeg can only emit whole frames, so it truncates any
+    fractional one. An un-snapped beat grid loses a fraction of a frame on
+    every single cut, always in the same direction, and the video drifts
+    steadily ahead of the audio.
+
+    Measured on a 300s/129 BPM synthetic track before this snapping existed:
+    640 cuts, every one off the grid, the render finishing 3.25s (78 frames)
+    short of the audio -- see docs/ARCHITECTURE.md, "Frame-accurate cuts".
+    Snapping first makes every cut an exact integer frame count, so the
+    concatenated total is exact by construction.
+    """
+    start = snap_to_frame(section.start, fps)
+    end = snap_to_frame(section.end, fps)
+    if end <= start:
+        raise ValueError(
+            f"section {section.name!r} ({section.start}s..{section.end}s) is shorter than one "
+            f"frame at {fps}fps and would render to nothing -- widen it, or raise output.fps."
+        )
+
     divisor = _BEAT_DIVISORS[section.cut_density]
     if divisor is None:
-        return [section.start, section.end]
+        return [start, end]
 
     beats = [t for t in analysis.beat_times if section.start <= t <= section.end]
+    if not beats:
+        beats = _tempo_grid(section, analysis)
     if not beats or beats[0] > section.start:
         beats = [section.start, *beats]
     if beats[-1] < section.end:
@@ -101,19 +170,25 @@ def _cut_boundaries(section: SectionConfig, analysis: AudioAnalysis) -> list[flo
     if boundaries[-1] != section.end:
         boundaries.append(section.end)
 
-    # Beat-tracking can occasionally place two boundaries within a hair of each
-    # other; collapse anything shorter than one video frame at 24fps.
-    cleaned = [boundaries[0]]
+    # Snap first, then de-duplicate. Two beats closer together than one frame
+    # snap onto the same instant, so this subsumes the old explicit
+    # "collapse anything shorter than one frame" pass -- any two *distinct*
+    # points on the frame grid are at least one frame apart by construction.
+    cleaned = [snap_to_frame(boundaries[0], fps)]
     for b in boundaries[1:]:
-        if b - cleaned[-1] >= (1 / 24):
-            cleaned.append(b)
+        snapped = snap_to_frame(b, fps)
+        if snapped > cleaned[-1]:
+            cleaned.append(snapped)
 
-    # The collapse above can eat the section's true end if the last real beat
-    # lands within one frame of it (found via tests/test_compose.py, not a
-    # real-world render -- see CHANGELOG.md). Snap back onto it rather than
-    # silently truncating the section by a fraction of a frame.
-    if cleaned[-1] != boundaries[-1]:
-        cleaned[-1] = boundaries[-1]
+    # The de-duplication above can eat the section's true end if the last real
+    # beat snaps onto the same frame as the previous boundary (found via
+    # tests/test_compose.py, not a real-world render -- see CHANGELOG.md).
+    # Snap back onto it rather than silently truncating the section.
+    if cleaned[-1] != end:
+        if len(cleaned) == 1:
+            cleaned.append(end)
+        else:
+            cleaned[-1] = end
     return cleaned
 
 

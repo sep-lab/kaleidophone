@@ -1,0 +1,86 @@
+# Publish kaleidophone to PyPI on a version tag.
+#
+# Uses PyPI Trusted Publishing (OIDC): the runner exchanges a short-lived
+# GitHub identity token for a PyPI upload token at publish time. There is no
+# long-lived API token in repository secrets to leak or rotate.
+#
+# ONE-TIME SETUP, on PyPI, before the first tag:
+#   pypi.org -> your project -> Publishing -> Add a new pending publisher
+#     Owner:            sep-lab
+#     Repository:       kaleidophone
+#     Workflow name:    release.yml
+#     Environment name: pypi
+# Without that, the publish step fails with an authentication error and
+# nothing is uploaded -- a safe failure, but a confusing one if unexpected.
+#
+# TO RELEASE
+#   1. bump __version__ in src/kaleidophone/__init__.py (the single source --
+#      pyproject reads it dynamically)
+#   2. move CHANGELOG's [Unreleased] entries under the new version heading
+#   3. git tag v0.1.0 && git push origin v0.1.0
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sdist and wheel
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+
+      - name: Build
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip build
+          python -m build
+
+      - name: The tag must match the package version
+        # A tag that disagrees with __version__ publishes a surprise. Catch it
+        # here rather than after it is on PyPI and immutable.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(python -c 'import re,pathlib; print(re.search(r"__version__ = \"([^\"]+)\"", pathlib.Path("src/kaleidophone/__init__.py").read_text()).group(1))')"
+          echo "tag=$tag  package=$pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v${tag} does not match __version__ ${pkg}. Fix one of them; a release cannot be un-published."
+            exit 1
+          fi
+
+      - name: Check the built metadata renders on PyPI
+        run: |
+          python -m pip install --disable-pip-version-check twine
+          twine check dist/*
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      id-token: write   # the whole point: OIDC instead of a stored token
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1

@@ -7,9 +7,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/sep-lab/kaleidophone/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sep-lab/kaleidophone/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://pypi.org/project/kaleidophone/"><img alt="PyPI" src="https://img.shields.io/pypi/v/kaleidophone.svg"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg">
-  <img alt="Status: v0.1, working end to end" src="https://img.shields.io/badge/status-v0.1%2C%20working%20end%20to%20end-brightgreen.svg">
   <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-blueviolet.svg"></a>
 </p>
 
@@ -57,8 +58,14 @@ iteration loop over maximum resolution.
 No real media required, nothing to connect, nothing to ask permission for:
 
 ```bash
-git clone <this-repo> && cd kaleidophone
-pip install -e ".[dev]"          # needs a system ffmpeg on PATH — see below
+pip install kaleidophone            # needs a system ffmpeg on PATH — see below
+```
+
+or from a checkout:
+
+```bash
+git clone https://github.com/sep-lab/kaleidophone && cd kaleidophone
+pip install -e ".[dev]"
 bash examples/demo/run_demo.sh
 ```
 
@@ -66,8 +73,8 @@ This generates a synthetic song and synthetic placeholder photos (procedural
 gradients — nothing real, nothing personal, see
 `examples/demo/generate_fixtures.py`), then runs the real pipeline —
 analyze, curate, compose, preview, render, cover, promo — against them.
-**Measured just now, on this repo, one data point, not a benchmark suite:**
-25.7 seconds, end to end, for a 24-second/28-cut video at 640x360.
+**Measured, one data point, not a benchmark suite** (machine below):
+18.1 seconds, end to end, for a 24-second/37-cut video at 640x360.
 
 Needs a system `ffmpeg` on `PATH` (`brew install ffmpeg` / `apt install
 ffmpeg`) — kaleidophone renders through the real binary rather than a Python
@@ -135,19 +142,23 @@ kaleidophone remux   silent.mp4 mastered_song.wav -o master.mp4   # cheap: audio
 
 `render_silent()` is the only step that touches every cut's color grade and
 effects; `mux_audio()` is one ffmpeg stream-copy on the video side plus one
-audio re-encode. **Measured just now, on this repo's own demo (28 cuts,
-24s):**
+audio re-encode. **Measured on this repo's own demo (37 cuts, 24s):**
 
 | Resolution | `silent` | `remux` | speedup |
 |---|---|---|---|
-| 640x360 | 17.4s | 0.8s | ~22x |
-| 1280x720 | 55.4s | 0.8s | ~68x |
+| 640x360 | 10.7s | 1.0s | ~11x |
+| 1280x720 | 22.6s | 1.1s | ~21x |
+
+(Both `remux` figures include ~0.8s of Python interpreter and librosa import
+startup, which is most of what they measure — the ffmpeg work itself is a
+fraction of a second. That startup cost is why the speedup here looks smaller
+than the underlying ffmpeg ratio.)
 
 The speedup isn't a fixed constant — `remux` barely moves with resolution
 (it's not re-encoding video), while `silent` scales with pixel count, so
 the gap widens the higher you render. Either way: approve the edit once,
 then iterate on the audio (a rough mix -> a mastered file -> a radio edit)
-for well under a second each time. See
+in about a second each time, near-independent of resolution. See
 [ADR-0001](docs/decisions/0001-version-the-brief-not-the-render.md) and the
 `kaleidophone-render` skill.
 
@@ -203,15 +214,20 @@ structure, timestamps, and station design are real).
 ## Cost, measured
 
 One data point, on one machine, from `examples/demo/`'s synthetic
-24s/28-cut fixture — not a benchmark suite. Reproduce these yourself: see
+24s/37-cut fixture — not a benchmark suite. Reproduce these yourself: see
 [CONTRIBUTING.md](CONTRIBUTING.md), "Ground rules for claims".
+
+**Measured on:** Apple M1 Pro (10 cores), macOS 15.7, ffmpeg 7.1, CPython
+3.11.10 — note that this is an *x86_64* Python running under Rosetta 2, not a
+native arm64 build, so a native run should be faster. Stated because "one
+machine" is only useful if you know which.
 
 | | Resolution | Time | Size |
 |---|---|---|---|
-| Full `kaleidophone run` | 640x360 | 25.7s | 31.4 MB |
-| Full `kaleidophone auto` (42 photos, 5 sections) | 1280x720 | 1m27s | 185 MB |
-| `silent` render alone | 640x360 -> 1280x720 | 17.4s -> 55.4s | 31.4 MB -> 123.3 MB |
-| `remux` alone (either resolution) | — | 0.8s | — |
+| Full `kaleidophone run` | 640x360 | 18.1s | 27.0 MB |
+| Full `kaleidophone auto` (42 photos, 5 sections) | 1280x720 | 39.4s | 182.3 MB |
+| `silent` render alone | 640x360 -> 1280x720 | 10.7s -> 22.6s | 26.7 MB -> 104.9 MB |
+| `remux` alone (either resolution) | — | ~1.0s | — |
 
 Grain and noise-heavy effects resist h264 compression, which is a real
 tradeoff between the vintage look this project defaults to and output file
@@ -224,14 +240,26 @@ Also measured: beat detection on the demo's synthetic click track
 (programmed at exactly 120.0 BPM) comes back **117.5** — a real reminder
 that tempo tracking is a heuristic first pass, overridable via
 `SongConfig.bpm`, not a promise of exact detection even on a clean signal.
+On that same track librosa returns **no beats at all** for the first 11
+seconds (a quiet intro and a near-silent hush); sections with no detected
+beats fall back to the tempo grid and say so on stderr, rather than
+silently collapsing into one long static shot. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), "Frame-accurate cuts".
 
 ## Demos
 
-Real rendered output from this pipeline — not the synthetic fixtures above
-— is coming soon. Everything in this README up to here you can verify
-yourself in ten seconds with `bash examples/demo/run_demo.sh`; this section
-is the one claim in this document that isn't backed by something in the
-repo yet.
+Every push builds the demo on real ffmpeg and uploads the actual output —
+`master.mp4`, `cover.jpg`, the contact sheet, the promo pack — as a CI
+artifact you can download:
+[latest CI runs](https://github.com/sep-lab/kaleidophone/actions/workflows/ci.yml)
+→ any green run → **Artifacts** → `demo-output-ubuntu-latest`.
+
+That output is entirely synthetic (procedural gradients and a generated
+click track), because no real photo, video, or audio is ever committed here
+— see [ADR-0003](docs/decisions/0003-public-framework-private-assets.md). A
+hosted demo built from a real project is on
+[the roadmap](docs/ROADMAP.md), Phase 4, and will be linked here when there
+is one worth showing.
 
 ## Why ffmpeg, not AI video generation
 
@@ -286,8 +314,10 @@ examples/
 docs/
   decisions/    ADRs — the design, and what would overturn each one
   case-studies/ the real project this framework generalizes from
-tests/          pure-logic unit tests; tests/factories/ builds every fixture
-                from numbers -- no real media, no audio decode, no ffmpeg
+tests/          unit tests; tests/factories/ builds every fixture from
+                numbers -- no real media, no audio decode, no ffmpeg call.
+                The ffmpeg-facing modules are covered by asserting on the
+                argv they build, not by running it.
 .github/workflows/  CI: lint, tests, the privacy guardrails, and a real
                      ffmpeg run of the demo on every push
 ```
@@ -298,7 +328,7 @@ tests/          pure-logic unit tests; tests/factories/ builds every fixture
   agent) working on this repo. Start here if you're contributing code.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the pipeline in
   detail, the measured cost table, and the render-design tradeoffs.
-- **[docs/decisions/](docs/decisions/)** — five ADRs. Read
+- **[docs/decisions/](docs/decisions/)** — five ADRs, all accepted. Read
   [0001](docs/decisions/0001-version-the-brief-not-the-render.md) and
   [0002](docs/decisions/0002-deterministic-edit-engine.md) first.
 - **[docs/CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md)** — the visual/sonic
@@ -307,15 +337,18 @@ tests/          pure-logic unit tests; tests/factories/ builds every fixture
   field reference.
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** — what's next, including the
   opt-in AI-assisted cover-art/caption extension points.
+- **[docs/PRIOR-ART.md](docs/PRIOR-ART.md)** — what else already does this,
+  what those tools do better, and the risks to this one's premise.
 - **[docs/case-studies/love.md](docs/case-studies/love.md)** — the real
   project this framework was extracted from.
 
 ## Status
 
 **v0.1, working end to end** — not a design sketch. Every claim above was
-measured by actually running the pipeline (see [CHANGELOG.md](CHANGELOG.md)
-for what's built, including two real bugs found by the test suite and
-fixed, not just documented as known issues). What's genuinely still open:
+measured by actually running the pipeline on the machine named in
+[Cost, measured](#cost-measured) (see [CHANGELOG.md](CHANGELOG.md) for
+what's built, including the real bugs found and fixed rather than documented
+as known issues). What's genuinely still open:
 
 - **Proven on one real project so far.** `docs/case-studies/love.md` is a
   scrubbed reconstruction of the project this framework generalizes from —

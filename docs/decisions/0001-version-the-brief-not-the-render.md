@@ -24,25 +24,30 @@ thumbnails, cover art — as a derived, rebuildable build artifact.**
 
 Concretely, the pipeline has an explicit cheap/expensive split:
 
-| Stage | Cost (measured, 24s demo, 28 cuts, 1280x720) | Rebuild trigger |
+| Stage | Cost (measured, 24s demo, 37 cuts, 1280x720) | Rebuild trigger |
 |---|---|---|
 | `analyze` | a few seconds | never — deterministic on the same file |
 | `compose` (brief -> EDL) | < 1s, pure logic | edit the brief, re-run |
 | `preview` (EDL -> contact sheet) | < 1s, no ffmpeg | after every compose, before rendering |
-| `silent` (EDL -> silent video) | **55.4s** | change a cut, effect, or color grade |
-| `remux` (silent + audio -> master) | **0.8s** | swap the audio file — draft mp3 -> mastered wave |
+| `silent` (EDL -> silent video) | **22.6s** | change a cut, effect, or color grade |
+| `remux` (silent + audio -> master) | **1.1s** | swap the audio file — draft mp3 -> mastered wave |
 
 That last row is the concrete answer to "we upload an mp3 draft, everyone
 confirms the edit, then we want the final wave on it without re-rendering
 the video": `kaleidophone silent` once, `kaleidophone remux` as many times as the audio
-changes. Measured on the bundled synthetic demo (`examples/demo/`, 28 cuts,
-24s @ 1280x720): the remux is **~68x** faster than the silent render it
-reuses, because it's one ffmpeg stream-copy on the video side, not a
-re-run of every cut's effect chain. At 640x360 the same comparison is 17.4s
-vs 0.8s (**~22x**) — the gap widens at higher resolution because `remux`'s
-cost is dominated by a fixed stream-copy/audio-encode overhead that barely
-grows with pixel count, while `silent`'s cost scales with it. Re-measure
-with `bash examples/demo/run_demo.sh` plus `time kaleidophone silent`/`time
+changes. Measured on the bundled synthetic demo (`examples/demo/`, 37 cuts,
+24s @ 1280x720, on the machine named in docs/ARCHITECTURE.md §6): the remux
+is **~21x** faster end to end than the silent render it reuses, because it's
+one ffmpeg stream-copy on the video side, not a re-run of every cut's effect
+chain. At 640x360 the same comparison is 10.7s vs 1.0s (**~11x**).
+
+Two honest caveats on those ratios. First, roughly 0.8s of each `remux`
+figure is Python interpreter and librosa import startup rather than ffmpeg
+work, so the underlying ffmpeg ratio is considerably larger than the
+end-to-end one. Second, the gap widens at higher resolution because
+`remux`'s cost is near-fixed while `silent`'s scales with pixel count — so
+treat these as two data points on a curve, not a constant. Re-measure with
+`bash examples/demo/run_demo.sh` plus `time kaleidophone silent`/`time
 kaleidophone remux` on its output — see CONTRIBUTING.md, "Ground rules for
 claims".
 

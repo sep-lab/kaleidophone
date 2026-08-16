@@ -9,13 +9,22 @@ corrects. See docs/decisions/0002-deterministic-edit-engine.md for why.
 from __future__ import annotations
 
 import colorsys
+import io
 import os
 from dataclasses import dataclass
 
-import cv2
 import numpy as np
+from PIL import Image
 
+from kaleidophone.render._ffmpeg_util import first_frame_png
 from kaleidophone.timeline.schema import StationConfig
+
+# Hue is kept on OpenCV's old 0..180 scale even though the decode is now
+# Pillow's (which reports 0..255), because that scale is baked into
+# _target_hue(), every station preset's tuning, and ADR-0004's write-up of the
+# starved-station bug. Converting at the edge keeps one convention in one
+# place; changing it would silently re-tune every station in every brief.
+_PIL_HUE_TO_OPENCV = 180.0 / 255.0
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
@@ -45,29 +54,42 @@ def scan_media(directory: str) -> list[MediaAsset]:
     return sorted(assets, key=lambda a: a.path)
 
 
+def _unreadable(path: str, kind: str) -> MediaAsset:
+    """A neutral, all-zero score. A file that won't decode still belongs in the
+    list -- it sorts to one end and is visible in the contact sheet -- rather
+    than vanishing silently from a scan the user thinks covered the folder."""
+    return MediaAsset(path=path, kind=kind, mean_hue=0.0, mean_saturation=0.0, mean_brightness=0.0)
+
+
 def _score_image(path: str) -> MediaAsset:
-    img = cv2.imread(path)
-    if img is None:
-        return MediaAsset(path=path, kind="image", mean_hue=0.0, mean_saturation=0.0, mean_brightness=0.0)
-    return _score_bgr(path, "image", img)
+    try:
+        with Image.open(path) as img:
+            return _score_pil(path, "image", img)
+    except (OSError, ValueError):
+        return _unreadable(path, "image")
 
 
 def _score_video_first_frame(path: str) -> MediaAsset:
-    cap = cv2.VideoCapture(path)
-    ok, frame = cap.read()
-    cap.release()
-    if not ok:
-        return MediaAsset(path=path, kind="video", mean_hue=0.0, mean_saturation=0.0, mean_brightness=0.0)
-    return _score_bgr(path, "video", frame)
+    png = first_frame_png(path)
+    if png is None:
+        return _unreadable(path, "video")
+    try:
+        with Image.open(io.BytesIO(png)) as img:
+            return _score_pil(path, "video", img)
+    except (OSError, ValueError):
+        return _unreadable(path, "video")
 
 
-def _score_bgr(path: str, kind: str, img: np.ndarray) -> MediaAsset:
-    small = cv2.resize(img, (64, 64), interpolation=cv2.INTER_AREA)
-    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV).astype(np.float32)
+def _score_pil(path: str, kind: str, img: Image.Image) -> MediaAsset:
+    # BOX resampling is the area-averaging downscale (what cv2.INTER_AREA did):
+    # for a 64x64 summary of a whole photo we want every pixel to contribute,
+    # not a subsample.
+    small = img.convert("RGB").resize((64, 64), Image.Resampling.BOX)
+    hsv = np.asarray(small.convert("HSV"), dtype=np.float32)
     return MediaAsset(
         path=path,
         kind=kind,
-        mean_hue=float(hsv[..., 0].mean()),
+        mean_hue=float(hsv[..., 0].mean()) * _PIL_HUE_TO_OPENCV,
         mean_saturation=float(hsv[..., 1].mean() / 255.0),
         mean_brightness=float(hsv[..., 2].mean() / 255.0),
     )

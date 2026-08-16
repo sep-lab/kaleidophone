@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/sep-lab/kaleidophone/security/advisories/new
+    about: >-
+      Please report security issues privately, not as a public issue.
+      See SECURITY.md for what's in scope.
+  - name: Contributing guide
+    url: https://github.com/sep-lab/kaleidophone/blob/main/CONTRIBUTING.md
+    about: How to set up, what we especially want, and the ground rules for claims.
