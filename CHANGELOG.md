@@ -7,6 +7,13 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `docs/case-studies/love.md` — "Iteration 2" section documenting the real
+  second production round on the reference project: a replacement master
+  whose landmarks drifted ~5s (why `remux` alone is unsafe there), the
+  data-overlay-reads-as-kitsch lesson, three field-proven effect
+  candidates (`scope_overlay`, `feedback_echo`, `punch_zoom`), and
+  measured grain/denoise/CRF file-size numbers at 720p. With matching
+  ROADMAP Phase 2 items and a CREATIVE-GUIDE "Learned in the field" rule.
 - Initial public scaffold: `src/kaleidophone` package (audio analysis, station
   presets + curation, timeline/EDL compose, ffmpeg render pipeline,
   procedural cover art, promo-pack generation, CLI).

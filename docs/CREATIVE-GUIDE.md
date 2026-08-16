@@ -86,6 +86,18 @@ if every cut has it.
 | `kaleidoscope` | psychedelic, disorienting | rare, structural punctuation, not a texture |
 | `duotone` | a station's whole color identity | set on the station, not per-cut |
 
+## Learned in the field: label nothing, react to everything
+
+Iteration 2 of the reference case study (`docs/case-studies/love.md`)
+removed every on-screen *data* element from the edit — station labels,
+timers, dials, frame counters — after the artist called them what they
+were: cheesy. The replacement was an oscilloscope of the actual waveform,
+its color and amplitude following the section. The rule this distilled to:
+an overlay should be **driven by the song** (a scope, a pulse, a punch-in
+on the beat), never a **label on top of** the song. A quick test: if a
+planned overlay would still make sense over a different track, it's a
+label — cut it.
+
 ## Default mode vs. authored briefs
 
 `kaleidophone auto` exists so nobody has to learn this vocabulary before seeing a

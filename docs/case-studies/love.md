@@ -80,3 +80,63 @@ project's *structure* as a runnable brief — real timestamps, real station
 design — so it's a genuine worked example of hand-authoring at this level of
 detail, not a claim that the automated defaults would produce the same
 result unassisted.
+
+## Iteration 2: the polish pass (what a real second round looks like)
+
+The artist came back after living with the first full render: the mix got a
+new master, and the notes were "more hypnotic, more synced to the waves,
+more story — and the on-screen data looks cheesy." That round produced
+three lessons this framework should carry.
+
+**1. A new master can silently invalidate `remux`.** The replacement master
+was +4.7s longer and its structural landmarks moved — the switch landed
+~5s earlier on the clock (3:28.3 → 3:23.4). The cheap `mux_audio` path
+assumes the timing still matches; here it didn't, and a stream-copy remux
+would have desynced every cut after the first section without raising any
+error. The fix was re-running analysis on the new audio and re-rendering
+(the re-render also re-derived section boundaries from the new analysis —
+the first station change moved from 1:01 to 0:46.8). The generalizable
+feature is tracked in `docs/ROADMAP.md` Phase 2: re-detect landmarks on
+replacement audio and warn loudly (or refuse without a force flag) when
+they drift beyond a cut's tolerance.
+
+**2. Data overlays read as kitsch; diegetic overlays don't.** The first
+render carried the radio concept as literal UI — station labels, a tuning
+dial, timers, frame counters. The artist's reaction was immediate
+("cheesy"). The replacement kept the concept but made it diegetic: a live
+oscilloscope of the actual waveform, a thin line whose color and amplitude
+follow the section — warm and small in the quiet half, gold in the hush,
+red in the loud half, flatlining as the song dies. Same signal, no text.
+The distilled rule now lives in `docs/CREATIVE-GUIDE.md` ("Learned in the
+field").
+
+**3. Three effects earned a place in the vocabulary** (candidates — not
+yet in `render/effects.py`; tracked in `docs/ROADMAP.md` Phase 2):
+
+- `scope_overlay` — the oscilloscope above; per-section color/amplitude.
+- `feedback_echo` — blend a slightly-zoomed copy of the previous *output*
+  frame into the current one (analog video feedback). Cuts become morphs;
+  at higher strength this was the single cheapest "hypnosis" dial the
+  project found. Strength varied per section: strong in the quiet half and
+  the descent, low during strobe sections so hits stay sharp.
+- `punch_zoom` — a decaying zoom kick (scale += a·e^(−k·Δt)) triggered on
+  every beat in quiet sections and on strong onsets in loud ones. This is
+  what "react to the waves" turned out to mean in practice.
+
+Also proven again from the story side: a recurring hero object — the same
+image opening the film, flashing inverted for a single beat right before
+the switch, and closing the film — gives an abstract edit a narrative
+spine for nearly zero render cost, as does bringing Part I's subjects back
+as brief inverted "ghosts" on Part II's strongest hits.
+
+**Measured on this project** (660s, 1280×720@24fps, x264 `veryfast`; real
+project, not `examples/demo/`): per-frame gaussian grain at σ≈0.05 is
+nearly incompressible — CRF 24 produced a ~2.0GB file, and a re-encode
+with temporal denoise (`hqdn3d=3:2:9:6`) at CRF 30 brought it to ~225MB
+with the grain texture intact. The second-iteration render applied denoise
+in-loop (per chunk, CRF 28) and concatenated to ~754MB; a final CRF 30
+pass landed at ~512MB — the feedback-echo trails and the moving scope
+line roughly double the achievable file size versus the first render's
+harder cuts. Grain belongs at the end of the chain, and temporal denoise
+before x264 is what makes it affordable.
+

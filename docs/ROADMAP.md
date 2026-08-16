@@ -53,7 +53,24 @@ single case study; it hasn't yet been run against a second one.
       seconds with grain on most cuts (measured, `docs/ARCHITECTURE.md`).
       Worth a documented set of "look" presets (e.g. `grain: 0.1` vs. `0.3`)
       with their real measured size/quality tradeoff, rather than one
-      unexamined default.
+      unexamined default. Iteration 2 of the reference project added
+      real-project data points (raw grain vs. temporal-denoise-then-encode
+      at 720p) — see the measured numbers at the end of
+      `docs/case-studies/love.md`.
+- [ ] **Remux landmark-drift guard.** Learned in the reference project's
+      iteration 2 (`docs/case-studies/love.md`): a replacement master moved
+      the switch ~5s earlier, and `remux` would have silently desynced the
+      whole edit. Run `analyze` on the new audio, compare landmark times
+      (quiet passages, energy jumps, duration) against the brief's
+      sections, and warn loudly — or refuse without a force flag — beyond
+      a per-cut tolerance.
+- [ ] **Three field-proven effect candidates** from the same iteration:
+      `scope_overlay` (a waveform oscilloscope with per-section
+      color/amplitude), `feedback_echo` (previous-frame zoom-blend — cuts
+      become morphs; the cheapest hypnosis dial found so far), and
+      `punch_zoom` (beat/onset-triggered decaying zoom kick). Parameters
+      and when-to-use notes are in the case study; `scope_overlay` and
+      `feedback_echo` are graph effects, `punch_zoom` is linear.
 - [ ] **Smarter auto-sectioning.** `timeline/autobrief.py` currently
       discards *all* detected quiet-passage/energy-jump boundaries and
       falls back to even slicing when there are too many candidates (see
