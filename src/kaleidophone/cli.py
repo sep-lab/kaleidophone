@@ -1,12 +1,18 @@
 """
 kaleidophone's command-line entry point.
 
-    kaleidophone analyze <audio>                    -> AudioAnalysis JSON + a wave map PNG
-    kaleidophone curate  <media_dir> <brief.yaml>    -> suggested station sort for an unsorted folder
-    kaleidophone compose <brief.yaml>                -> EDL JSON
-    kaleidophone render  <edl.json> <brief.yaml>     -> MP4 (+ teasers + thumbnails)
-    kaleidophone promo   <brief.yaml>                -> promo pack markdown
-    kaleidophone run     <brief.yaml>                -> all of the above, end to end
+    kaleidophone auto    <audio> <media_dir>      -> zero-config: brief + the whole pipeline
+    kaleidophone run     <brief.yaml>             -> the whole pipeline from a brief
+
+    kaleidophone analyze <audio>                  -> AudioAnalysis JSON + a wave map PNG
+    kaleidophone curate  <media_dir> <brief.yaml> -> suggested station sort for an unsorted folder
+    kaleidophone compose <brief.yaml>             -> EDL JSON
+    kaleidophone preview <edl.json>               -> contact sheet, no ffmpeg
+    kaleidophone silent  <edl.json> <brief.yaml>  -> the visual cut only (expensive, reusable)
+    kaleidophone remux   <silent.mp4> <audio>     -> swap the audio in, no re-render (cheap)
+    kaleidophone render  <edl.json> <brief.yaml>  -> silent + remux + teasers + thumbnails
+    kaleidophone cover   <brief.yaml>             -> procedural cover art
+    kaleidophone promo   <brief.yaml>             -> promo pack markdown
 
 See docs/CONFIG-SCHEMA.md for the brief format and skills/ for the full
 per-stage methodology.

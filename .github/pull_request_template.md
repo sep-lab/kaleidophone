@@ -4,7 +4,7 @@
 
 ## Checklist
 
-From [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md):
+From [CONTRIBUTING.md](https://github.com/sep-lab/kaleidophone/blob/main/CONTRIBUTING.md):
 
 - [ ] The relevant doc is updated in this same PR — undocumented behavior is a bug here.
 - [ ] If this touches the render pipeline, I ran `bash examples/demo/run_demo.sh`

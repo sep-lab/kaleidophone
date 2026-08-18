@@ -263,7 +263,8 @@ def _render_segment(
 
 class _WorkDirectory:
     """A directory for intermediate render artifacts. An explicit `work_dir`
-    is kept (useful for `--keep` debugging); otherwise a temp dir is created
+    is kept (pass `keep_work_dir=True` to inspect the per-cut segments);
+    otherwise a temp dir is created
     and removed on exit -- which is also why the `.stageN.mp4` intermediates
     from _render_segment never need manual cleanup."""
 

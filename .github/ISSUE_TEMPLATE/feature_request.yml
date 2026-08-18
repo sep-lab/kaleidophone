@@ -7,8 +7,8 @@ body:
       value: |
         Before writing: a few directions are deliberate, documented boundaries
         rather than gaps — AI-generated video frames, hosting/publishing, and a
-        GUI. See [ROADMAP.md](../blob/main/docs/ROADMAP.md), "Explicitly not
-        planned", and [ADR-0002](../blob/main/docs/decisions/0002-deterministic-edit-engine.md).
+        GUI. See [ROADMAP.md](https://github.com/sep-lab/kaleidophone/blob/main/docs/ROADMAP.md), "Explicitly not
+        planned", and [ADR-0002](https://github.com/sep-lab/kaleidophone/blob/main/docs/decisions/0002-deterministic-edit-engine.md).
         Each ADR lists what evidence would overturn it — that's the useful
         thing to bring if you want to reopen one.
 

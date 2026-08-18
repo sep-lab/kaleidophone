@@ -8,7 +8,7 @@ body:
         **Please don't attach real media.** No photos, no audio, no video — not
         even "a small one". Describe the material instead, or build a minimal
         synthetic reproduction using `examples/demo/generate_fixtures.py`'s
-        pattern. See [AGENTS.md](../blob/main/AGENTS.md), "Rules for handling
+        pattern. See [AGENTS.md](https://github.com/sep-lab/kaleidophone/blob/main/AGENTS.md), "Rules for handling
         user data".
 
         Watch for file paths too: a pasted command or traceback containing

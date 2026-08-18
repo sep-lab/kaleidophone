@@ -22,8 +22,8 @@ attack surface that matters:
 - **Path traversal on output.** Every command takes an explicit
   `-o/--out`; nothing should let a crafted brief write outside the
   directory the user asked for.
-- **Untrusted media.** kaleidophone decodes photos/video/audio with OpenCV,
-  Pillow, and librosa/soundfile, and calls `ffmpeg` on them. A malformed
+- **Untrusted media.** kaleidophone decodes photos/video/audio with Pillow
+  and librosa/soundfile, and calls `ffmpeg` on them. A malformed
   file causing a crash or hang in any of those is a real bug — kaleidophone is
   meant to run on your own media, but "your own" doesn't mean "never
   malformed."
