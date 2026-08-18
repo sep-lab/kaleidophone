@@ -13,6 +13,8 @@ from __future__ import annotations
 import itertools
 from dataclasses import dataclass
 
+from kaleidophone.timeline.schema import FramingConfig
+
 
 @dataclass(frozen=True)
 class Cut:
@@ -26,6 +28,14 @@ class Cut:
     section: str
     effects: tuple[str, ...] = ()
     is_beat_aligned: bool = True
+    framing: FramingConfig | None = None
+    """How this cut's source is fitted into the output frame.
+
+    Resolved into the EDL rather than looked up from the brief at render time,
+    so an EDL stays a complete description of the edit -- `kaleidophone preview`
+    is handed only this file, and a framing decision is part of what a person
+    is previewing.
+    """
 
     @property
     def duration(self) -> float:
@@ -88,6 +98,10 @@ class EDL:
                     "section": c.section,
                     "effects": list(c.effects),
                     "is_beat_aligned": c.is_beat_aligned,
+                    # Omitted entirely when it is the default, so an EDL from a
+                    # brief that never mentions framing round-trips byte-identical
+                    # to one produced before framing existed.
+                    **({"framing": c.framing.model_dump(exclude_none=True)} if c.framing else {}),
                 }
                 for c in self.cuts
             ],
@@ -105,6 +119,7 @@ class EDL:
                 section=c["section"],
                 effects=tuple(c.get("effects", ())),
                 is_beat_aligned=c.get("is_beat_aligned", True),
+                framing=FramingConfig(**c["framing"]) if c.get("framing") else None,
             )
             for c in data["cuts"]
         )

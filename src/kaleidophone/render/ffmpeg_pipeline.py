@@ -19,7 +19,69 @@ from kaleidophone.assets.curation import VIDEO_EXTS
 from kaleidophone.render import effects as fx
 from kaleidophone.render._ffmpeg_util import probe_duration, require_ffmpeg, run
 from kaleidophone.timeline.model import EDL, Cut
-from kaleidophone.timeline.schema import CreativeBrief, StationConfig
+from kaleidophone.timeline.schema import (
+    CreativeBrief,
+    EncodeConfig,
+    FramingConfig,
+    StationConfig,
+)
+
+
+def _video_encode_args(enc: EncodeConfig) -> list[str]:
+    """The x264 half of an output spec, shared by every pass.
+
+    Kept in one place because a segment, the concat pass and each graph-effect
+    hop all have to agree: re-encoding a segment at CRF 20 and then the concat
+    at CRF 28 would quietly throw away the quality the expensive pass just paid
+    for.
+    """
+    args = [
+        "-c:v", "libx264",
+        "-preset", enc.preset,
+        "-crf", str(enc.crf),
+        "-pix_fmt", "yuv420p",
+    ]
+    if enc.maxrate and enc.bufsize:
+        args += ["-maxrate", enc.maxrate, "-bufsize", enc.bufsize]
+    if enc.color:
+        # All three, always. Tagging only one of them is worse than tagging
+        # none: players that read primaries but not trc get a half-described
+        # stream and guess the rest.
+        args += [
+            "-colorspace", enc.color,
+            "-color_primaries", enc.color,
+            "-color_trc", enc.color,
+        ]
+    return args
+
+
+def _framing_filter(framing: FramingConfig, w: int, h: int, fps: int) -> str:
+    """Fit a source frame into a `w`x`h` output frame.
+
+    `fill` is scale-to-cover plus a centre crop: correct when the source and
+    the output share an aspect, and a blunt instrument when they don't --
+    which is exactly why the other two modes exist. See FramingConfig.
+    """
+    if framing.mode == "crop":
+        # A full-height slice at `x`, in *source* pixels. `ih*w/h` is evaluated
+        # by ffmpeg against the real input, so one brief works across sources of
+        # different heights -- which the eyeballed pixel widths in a hand-written
+        # script never do.
+        return (
+            f"crop=ih*{w}/{h}:ih:{framing.x}:0,"
+            f"scale={w}:{h}:flags=lanczos,fps={fps}"
+        )
+    if framing.mode == "window":
+        ww = framing.width
+        # -2 keeps the source's aspect and guarantees an even height (h.264
+        # chroma subsampling needs it). Inside pad, iw/ih are the *scaled*
+        # dimensions, so this stays correct without knowing the source size.
+        y = f"{framing.y_center}-ih/2" if framing.y_center is not None else "(oh-ih)/2"
+        return (
+            f"scale={ww}:-2:flags=lanczos,"
+            f"pad={w}:{h}:(ow-iw)/2:{y}:color=black,fps={fps}"
+        )
+    return f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={fps}"
 
 
 def render_silent(
@@ -36,6 +98,7 @@ def render_silent(
     is `mux_audio()`, a single fast stream-copy pass, not this."""
     ffmpeg = require_ffmpeg()
     stations = {s.name: s for s in brief.stations}
+    enc = brief.output.encode
     w, h = edl.resolution
 
     with _WorkDirectory(work_dir, keep_work_dir) as tmp:
@@ -43,7 +106,7 @@ def render_silent(
         for cut in edl.cuts:
             station = stations[cut.station]
             seg_path = os.path.join(tmp, f"seg_{cut.index:05d}.mp4")
-            _render_segment(ffmpeg, cut, station, w, h, edl.fps, seg_path)
+            _render_segment(ffmpeg, cut, station, w, h, edl.fps, seg_path, enc)
             segment_paths.append(seg_path)
 
         concat_list = os.path.join(tmp, "concat.txt")
@@ -61,14 +124,7 @@ def render_silent(
                 "0",
                 "-i",
                 concat_list,
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "20",
-                "-pix_fmt",
-                "yuv420p",
+                *_video_encode_args(enc),
                 silent_output_path,
             ],
         )
@@ -93,7 +149,13 @@ def _concat_quote(path: str) -> str:
     return "'" + path.replace("'", "'\\''") + "'"
 
 
-def _warn_if_streams_disagree(silent_video_path: str, audio_path: str, tolerance: float = 0.5) -> None:
+def _warn_if_streams_disagree(
+    silent_video_path: str,
+    audio_path: str,
+    tolerance: float = 0.5,
+    *,
+    audio_start: float = 0.0,
+) -> None:
     """`-shortest` truncates whichever stream is longer, without comment.
 
     That is the right default -- but a silent truncation is exactly the failure
@@ -106,6 +168,8 @@ def _warn_if_streams_disagree(silent_video_path: str, audio_path: str, tolerance
     audio = probe_duration(audio_path)
     if video is None or audio is None:
         return
+    # Only the part of the audio this render will actually use is comparable.
+    audio = max(0.0, audio - audio_start)
     delta = audio - video
     if abs(delta) <= tolerance:
         return
@@ -119,31 +183,45 @@ def _warn_if_streams_disagree(silent_video_path: str, audio_path: str, tolerance
     )
 
 
-def mux_audio(silent_video_path: str, audio_path: str, output_path: str) -> str:
+def mux_audio(
+    silent_video_path: str,
+    audio_path: str,
+    output_path: str,
+    encode: EncodeConfig | None = None,
+    audio_start: float = 0.0,
+) -> str:
     """Stitch a (possibly new) audio track onto an already-rendered silent
     video: a fast stream-copy on the video side. This is the operation for
     'we uploaded a draft mp3, everyone signed off on the edit, now put the
     mastered wave on it' -- it never re-runs a single effect."""
     ffmpeg = require_ffmpeg()
-    _warn_if_streams_disagree(silent_video_path, audio_path)
+    enc = encode or EncodeConfig()
+    _warn_if_streams_disagree(silent_video_path, audio_path, audio_start=audio_start)
+    # Seek before -i so ffmpeg jumps rather than decoding and discarding. For a
+    # windowed edit (output.window) this is what puts the audio under the right
+    # part of the song; for a full render it is 0.0 and emits nothing.
+    seek = ["-ss", f"{audio_start:.3f}"] if audio_start > 0 else []
+    audio_args = ["-c:a", "aac", "-b:a", enc.audio_bitrate]
+    if enc.audio_rate:
+        audio_args += ["-ar", str(enc.audio_rate)]
     run(
         ffmpeg,
         [
             "-y",
             "-i",
             silent_video_path,
+            *seek,
             "-i",
             audio_path,
             "-map",
             "0:v:0",
             "-map",
             "1:a:0",
+            # Video is stream-copied: this is the cheap half of the split, and
+            # re-encoding here would defeat the entire point of render_silent.
             "-c:v",
             "copy",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "192k",
+            *audio_args,
             "-shortest",
             output_path,
         ],
@@ -166,7 +244,14 @@ def render(
     silent_path = output_path + ".silent.mp4"
     render_silent(edl, brief, silent_path, work_dir=work_dir, keep_work_dir=keep_work_dir)
     try:
-        mux_audio(silent_path, edl.audio_path, output_path)
+        window = brief.output.window
+        mux_audio(
+            silent_path,
+            edl.audio_path,
+            output_path,
+            brief.output.encode,
+            audio_start=window[0] if window else 0.0,
+        )
     finally:
         if not keep_work_dir and os.path.exists(silent_path):
             os.remove(silent_path)
@@ -174,13 +259,21 @@ def render(
 
 
 def _render_segment(
-    ffmpeg: str, cut: Cut, station: StationConfig, w: int, h: int, fps: int, out_path: str
+    ffmpeg: str,
+    cut: Cut,
+    station: StationConfig,
+    w: int,
+    h: int,
+    fps: int,
+    out_path: str,
+    enc: EncodeConfig | None = None,
 ) -> None:
+    enc = enc or EncodeConfig()
     duration = cut.duration
     is_video = os.path.splitext(cut.source_path)[1].lower() in VIDEO_EXTS
 
-    scale_crop = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={fps}"
-    linear_chain = [scale_crop, fx.color_grade(station)]
+    framing = cut.framing or FramingConfig()
+    linear_chain = [_framing_filter(framing, w, h, fps), fx.color_grade(station)]
     graph_effects = [e for e in cut.effects if e in fx.GRAPH_EFFECT_BUILDERS]
     for effect in cut.effects:
         if effect in fx.GRAPH_EFFECT_BUILDERS:
@@ -225,14 +318,7 @@ def _render_segment(
             *src_args,
             "-vf",
             ",".join(linear_chain),
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "20",
-            "-pix_fmt",
-            "yuv420p",
+            *_video_encode_args(enc),
             "-an",
             stages[0],
         ],
@@ -247,14 +333,7 @@ def _render_segment(
                 src,
                 "-filter_complex",
                 builder(),
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "20",
-                "-pix_fmt",
-                "yuv420p",
+                *_video_encode_args(enc),
                 "-an",
                 dst,
             ],

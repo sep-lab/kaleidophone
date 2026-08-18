@@ -5,6 +5,35 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`output.aspect`** — compose natively at `16:9`, `9:16`, `1:1` or `4:5`
+  instead of centre-cropping an already-rendered 16:9 master. Setting it alone
+  picks the canonical resolution for that shape.
+- **`sections[].framing`** — how a source frame is fitted into a
+  differently-shaped output frame: `fill` (the previous behaviour), `crop` at a
+  chosen `x` in source pixels, or `window`, which shrinks the frame and pads it
+  onto black. Which slice of a wide frame survives a vertical crop is a
+  creative decision, and until now there was nowhere to put it.
+- **`output.window`** — render only a stretch of the song, rebased to start at
+  zero, so one brief produces both the full master and a cutdown instead of two
+  briefs that drift apart. `mux_audio()` seeks the audio to match.
+- **`output.encode`** — CRF, preset, a bitrate ceiling (`maxrate`/`bufsize`),
+  colour tagging (`bt709`/`bt601`/`bt2020`), and audio bitrate/sample rate.
+  Every default reproduces the previously-hardcoded settings exactly, so adding
+  the block is opt-in and omitting it changes nothing.
+
+### Fixed
+
+- `SECURITY.md` named OpenCV as a decode path; it was removed as a dependency
+  in 0.1.0.
+- Four issue/PR-template links used `../blob/main/...`, which resolves outside
+  the repository once GitHub inlines a template into an issue body.
+- `cli.py`'s module docstring — what `kaleidophone --help` prints — listed 6 of
+  the 11 subcommands.
+- `_WorkDirectory`'s docstring cited a `--keep` CLI flag that has never
+  existed; the real control is the `keep_work_dir=` keyword argument.
+
 Nothing yet.
 
 ## [0.1.0] — 2026-08-16

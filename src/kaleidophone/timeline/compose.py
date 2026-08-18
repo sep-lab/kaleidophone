@@ -12,11 +12,14 @@ from __future__ import annotations
 import itertools
 import random
 import sys
+from dataclasses import replace
 
 from kaleidophone.assets.curation import MediaAsset
 from kaleidophone.audio.analysis import AudioAnalysis
 from kaleidophone.timeline.model import EDL, Cut
-from kaleidophone.timeline.schema import CreativeBrief, SectionConfig
+from kaleidophone.timeline.schema import CreativeBrief, FramingConfig, SectionConfig
+
+_DEFAULT_FRAMING = FramingConfig()
 
 _BEAT_DIVISORS: dict[str, int | None] = {
     "every_beat": 1,
@@ -44,14 +47,58 @@ def compose(
         cuts.extend(section_cuts)
         index += len(section_cuts)
 
+    duration = analysis.duration
+    if brief.output.window is not None:
+        cuts, duration = _apply_window(cuts, brief.output.window, fps)
+
     return EDL(
         song_title=brief.song.title,
         audio_path=brief.song.audio_path,
-        duration=analysis.duration,
+        duration=duration,
         fps=brief.output.fps,
         resolution=brief.output.resolution,
         cuts=tuple(cuts),
     )
+
+
+def _apply_window(
+    cuts: list[Cut], window: tuple[float, float], fps: int
+) -> tuple[list[Cut], float]:
+    """Keep only the part of the timeline inside `window`, rebased to start at 0.
+
+    This is what lets one brief produce both the full master and a cutdown --
+    the reel is the same stations, the same effects and the same cut rhythm,
+    just a different stretch of the song. Two briefs would drift the moment
+    either was edited.
+
+    The window is snapped to the frame grid *first*, so rebasing subtracts a
+    whole number of frames: every boundary compose() already placed on the grid
+    (see snap_to_frame) is still on it afterwards. Doing it the other way round
+    reintroduces exactly the sub-frame drift the frame-count render was built to
+    eliminate -- see docs/ARCHITECTURE.md, "Frame-accurate cuts".
+    """
+    start = snap_to_frame(window[0], fps)
+    end = snap_to_frame(window[1], fps)
+    frame = 1.0 / fps
+
+    kept: list[Cut] = []
+    for cut in cuts:
+        lo, hi = max(cut.start, start), min(cut.end, end)
+        if hi - lo < frame - 1e-9:
+            # Entirely outside the window, or clipped to less than one frame --
+            # a zero-frame segment is one ffmpeg can't render.
+            continue
+        kept.append(
+            replace(cut, index=len(kept), start=lo - start, end=hi - start)
+        )
+
+    if not kept:
+        raise ValueError(
+            f"output.window [{window[0]}, {window[1]}] contains no cuts. "
+            f"The composed timeline runs 0.00s to {cuts[-1].end:.2f}s if there are cuts at all; "
+            f"check the window is in seconds and inside the song."
+        )
+    return kept, kept[-1].end
 
 
 def _compose_section(
@@ -86,6 +133,9 @@ def _compose_section(
                 section=section.name,
                 effects=tuple(effects),
                 is_beat_aligned=section.cut_density != "static",
+                # Left as None when the section never asked for framing, so an
+                # EDL from a brief that predates this field is unchanged.
+                framing=section.framing if section.framing != _DEFAULT_FRAMING else None,
             )
         )
     return cuts

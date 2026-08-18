@@ -36,10 +36,25 @@ sections:
                                 # (duotone is a station property, not an effect)
                                 # see docs/CREATIVE-GUIDE.md for what each does
     seed: 0                    # asset-shuffle seed -- same seed, same edit, every re-render
+    framing:                   # optional -- only matters when output.aspect differs
+      mode: crop               #   from the source material's shape
+      x: 700                   # fill (default) | crop (needs x) | window (needs width)
 
 output:
   resolution: [1280, 720]      # see docs/ARCHITECTURE.md, "Why 1280x720 by default"
   fps: 24
+  aspect: "9:16"               # optional -- 16:9 | 9:16 | 1:1 | 4:5. Setting this alone
+                                # picks the canonical size (9:16 -> 1080x1920)
+  window: [161.0, 219.7]       # optional -- render only this stretch of the song,
+                                # rebased to start at 0. One brief -> master AND cutdown
+  encode:                      # optional -- every default reproduces the previous
+    crf: 22                    #   hardcoded behaviour, so omitting this changes nothing
+    preset: medium             # ultrafast .. veryslow
+    maxrate: "4500k"           # bitrate ceiling; must be set together with bufsize
+    bufsize: "9M"
+    color: bt709               # optional -- tags colourspace/primaries/trc together
+    audio_bitrate: "192k"
+    audio_rate: 48000          # optional -- output sample rate
   thumbnail_count: 3
   cover_size: 3000              # cover art is square, cover_size x cover_size
   cover_station: null           # optional -- defaults to the station of the section
@@ -75,6 +90,35 @@ promo:                          # optional -- omit to skip promo-pack generation
 - Every cut boundary is snapped to the `1/fps` grid, so a section shorter
   than one frame is refused too. See
   [docs/ARCHITECTURE.md](ARCHITECTURE.md), "Frame-accurate cuts".
+- `output.aspect` and `output.resolution` must agree. Setting `aspect` alone
+  picks the canonical resolution; setting both at the *same shape* (a 4K
+  vertical master, say) is fine; setting both at different shapes is refused
+  rather than silently picking a winner.
+- `output.window` must be ordered and non-negative, and must contain at least
+  one cut. It is snapped to the frame grid *before* the timeline is rebased,
+  so a windowed edit stays exactly as frame-accurate as a full one.
+- `encode.maxrate` and `encode.bufsize` must be set together — x264 ignores a
+  ceiling with no buffer to rate-control against, which looks like the setting
+  silently not working.
+- Bitrate fields must look like bitrates (`4500k`, `9M`, `192k`). Like
+  `duotone`, these are interpolated into an ffmpeg argv.
+- `framing.mode: crop` requires `x`; `framing.mode: window` requires `width`.
+
+## Framing: fitting a source frame into a different-shaped output
+
+Only relevant when `output.aspect` differs from the source material's shape.
+Pulling a 9:16 frame out of 16:9 footage discards two thirds of the width, and
+*which* two thirds is a creative decision — the subject is rarely centred.
+There is no computation that gets this right, which is why it's a field.
+
+| mode | What it does | Needs |
+|---|---|---|
+| `fill` | Scale to cover, centre-crop. The default, and what kaleidophone did before framing existed. | — |
+| `crop` | A full-height slice of the source starting at `x` source pixels. | `x` |
+| `window` | Shrink the whole frame to `width` output pixels and pad it onto black at `y_center`. Reads completely differently from a full-bleed crop. | `width` |
+
+`crop`'s width is computed by ffmpeg from the real input height, so one brief
+works across sources of different resolutions.
 
 ## Where a brief comes from
 
