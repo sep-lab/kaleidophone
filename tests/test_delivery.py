@@ -277,3 +277,60 @@ def test_a_full_render_emits_no_seek(monkeypatch):
     monkeypatch.setattr(fp, "_warn_if_streams_disagree", lambda *a, **k: None)
     fp.mux_audio("s.mp4", "a.wav", "o.mp4")
     assert "-ss" not in calls[0]
+
+
+# --------------------------------------------------------------------------
+# colour tagging (regression: the flags alone don't reach the H.264 SPS)
+# --------------------------------------------------------------------------
+def test_colour_tags_are_also_passed_to_x264(monkeypatch):
+    """Measured on ffmpeg 7.1: -color_primaries/-color_trc alone set the
+    container's colr box but leave the SPS VUI empty, so ffprobe reports
+    primaries and transfer as "unknown". x264 needs them too."""
+    calls = render_one_cut(monkeypatch, encode=EncodeConfig(color="bt709"))
+    params = flag(calls[0], "-x264-params")
+    assert params == "colorprim=bt709:transfer=bt709:colormatrix=bt709"
+
+
+@pytest.mark.parametrize(
+    "standard,expected",
+    [
+        ("bt709", "colorprim=bt709:transfer=bt709:colormatrix=bt709"),
+        ("bt601", "colorprim=smpte170m:transfer=smpte170m:colormatrix=smpte170m"),
+        ("bt2020", "colorprim=bt2020:transfer=bt2020-10:colormatrix=bt2020nc"),
+    ],
+)
+def test_each_standard_uses_x264s_own_names(monkeypatch, standard, expected):
+    """x264's names are not always ffmpeg's -- bt601's primaries are
+    "smpte170m" and bt2020's matrix is non-constant-luminance. A wrong name
+    writes a tag that is confidently incorrect, which beats having none."""
+    calls = render_one_cut(monkeypatch, encode=EncodeConfig(color=standard))
+    assert flag(calls[0], "-x264-params") == expected
+
+
+def test_no_colour_setting_emits_no_tags_at_all(monkeypatch):
+    calls = render_one_cut(monkeypatch)
+    assert "-x264-params" not in calls[0] and "-colorspace" not in calls[0]
+
+
+# --------------------------------------------------------------------------
+# the windowed-render warning
+# --------------------------------------------------------------------------
+def test_a_windowed_render_does_not_warn_about_leftover_song(monkeypatch, capsys):
+    """output.window deliberately renders a slice, so there is meant to be song
+    left over and -shortest trimming it is the feature working, not a fault."""
+    monkeypatch.setattr(fp, "probe_duration", lambda p: 8.0 if p.endswith(".mp4") else 20.0)
+    fp._warn_if_streams_disagree("s.mp4", "a.wav", audio_start=6.0, windowed=True)
+    assert capsys.readouterr().err == ""
+
+
+def test_a_windowed_render_still_warns_when_the_audio_runs_out(monkeypatch, capsys):
+    """The other direction is a real problem: the picture outlasts the song."""
+    monkeypatch.setattr(fp, "probe_duration", lambda p: 30.0 if p.endswith(".mp4") else 20.0)
+    fp._warn_if_streams_disagree("s.mp4", "a.wav", audio_start=6.0, windowed=True)
+    assert "longer" in capsys.readouterr().err
+
+
+def test_an_unwindowed_render_warns_in_both_directions(monkeypatch, capsys):
+    monkeypatch.setattr(fp, "probe_duration", lambda p: 8.0 if p.endswith(".mp4") else 20.0)
+    fp._warn_if_streams_disagree("s.mp4", "a.wav")
+    assert "audio is 12.00s longer" in capsys.readouterr().err

@@ -86,17 +86,43 @@ if every cut has it.
 | `kaleidoscope` | psychedelic, disorienting | rare, structural punctuation, not a texture |
 | `duotone` | a station's whole color identity | set on the station, not per-cut |
 
-## Learned in the field: label nothing, react to everything
+Text is not in this table. It lives in `overlays` — see
+[docs/CONFIG-SCHEMA.md](CONFIG-SCHEMA.md). Cards are for the diegetic
+machine fiction described below, for lyric or poem lines, and for credits.
+They are not for labelling what the viewer is already hearing.
+
+## Learned in the field: describe nothing, inhabit something
 
 Iteration 2 of the reference case study (`docs/case-studies/love.md`)
 removed every on-screen *data* element from the edit — station labels,
 timers, dials, frame counters — after the artist called them what they
 were: cheesy. The replacement was an oscilloscope of the actual waveform,
 its color and amplitude following the section. The rule this distilled to:
-an overlay should be **driven by the song** (a scope, a pulse, a punch-in
-on the beat), never a **label on top of** the song. A quick test: if a
-planned overlay would still make sense over a different track, it's a
-label — cut it.
+an overlay should never be a **readout of data about the song**. A dial
+showing a frequency, a counter counting frames, a label naming the section:
+these describe the track from outside it, and they read as decoration
+because that is what they are.
+
+Two things pass that test, though, not one.
+
+**Overlays driven by the song** — a scope of the actual waveform, a pulse,
+a punch-in on the beat. These are the song, drawn.
+
+**Diegetic machine fiction** — a VHS transport readout reading `PLAY ▶` and
+later `REW ◀`, a DVD scene-selection menu, a radio dial sweeping `AM 549`
+through static to `FM 108.0`, film-edge codes running down the side of a
+frame. These are not data about the song, and they are not neutral either:
+they assert that the song is playing inside some machine, and that machine
+is a character. A DVD menu is a world, not a label.
+
+The distinction that matters is **describing versus inhabiting**. `BPM 129`
+describes. `TITLE 01   CHAPTER --` inhabits. The first is a caption on a
+song; the second is a fiction the song is happening inside.
+
+A sharper test than the original one: *would this element exist if the song
+were playing and nobody had analysed it?* A frame counter would not —
+something had to measure the video to draw it. A tape readout would; tapes
+have them whether or not anyone is watching.
 
 ## Default mode vs. authored briefs
 

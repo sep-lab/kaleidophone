@@ -331,6 +331,83 @@ class PromoConfig(BaseModel):
     )
 
 
+class OverlayLine(BaseModel):
+    """One line of text on a card.
+
+    `size` and `tracking` are fractions of the output frame *height*, not
+    pixels, so a card designed against a 1080x1920 delivery is still right when
+    the same brief renders at 2160x3840. A pixel size would come out half as
+    large and nothing would say so.
+    """
+
+    text: str
+    font: str = Field(
+        default="mono",
+        description="A bundled role (mono, mono-bold, typewriter, display, "
+        "display-medium, persian, persian-bold) or 'path:/abs/font.ttf'.",
+    )
+    size: float = Field(default=0.03, gt=0.0, le=1.0, description="Fraction of frame height.")
+    color: str = "#eeeeea"
+    opacity: float = Field(default=1.0, ge=0.0, le=1.0)
+    tracking: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Letter-spacing as a fraction of frame height. Pillow has no "
+        "tracking parameter, so this is drawn glyph by glyph -- which is why it "
+        "cannot be combined with right-to-left text.",
+    )
+    rtl: bool | None = Field(
+        default=None,
+        description="Leave unset: direction is detected from the text's own script. "
+        "Set it only to override that detection.",
+    )
+
+    @field_validator("color")
+    @classmethod
+    def _is_a_hex_color(cls, v: str) -> str:
+        if not _HEX_COLOR_RE.match(v):
+            raise ValueError(f"colour {v!r} must be a 6-digit hex colour like '#eeeeea'")
+        return v
+
+
+class OverlayConfig(BaseModel):
+    """A timed text card burned into the render.
+
+    Times are on the *output* timeline, so they line up with what you watch --
+    if `output.window` is set, an overlay at 0.25 is a quarter-second into the
+    cutdown, not into the song.
+    """
+
+    id: str = Field(description="Unique within a brief; also names the rendered PNG.")
+    at: tuple[float, float] = Field(description="[start, end] in seconds, on the output timeline.")
+    lines: list[OverlayLine] = Field(min_length=1)
+    align: Literal["left", "center", "right"] = "center"
+    y: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Vertical centre of the text block, as a fraction of frame height.",
+    )
+    line_gap: float = Field(
+        default=0.012, ge=0.0, description="Space between lines, as a fraction of frame height."
+    )
+    shadow: bool = Field(
+        default=True,
+        description="Blurred black copy behind the text. On by default because text "
+        "over moving footage vanishes the moment a light frame passes under it.",
+    )
+
+    @field_validator("at")
+    @classmethod
+    def _times_are_ordered(cls, v: tuple[float, float]) -> tuple[float, float]:
+        start, end = v
+        if start < 0:
+            raise ValueError(f"overlay start ({start}) cannot be negative")
+        if end <= start:
+            raise ValueError(f"overlay end ({end}) must be after start ({start})")
+        return v
+
+
 class CreativeBrief(BaseModel):
     """Top-level document -- what `kaleidophone compose brief.yaml` reads."""
 
@@ -338,6 +415,7 @@ class CreativeBrief(BaseModel):
     stations: list[StationConfig]
     sections: list[SectionConfig]
     output: OutputConfig = Field(default_factory=OutputConfig)
+    overlays: list[OverlayConfig] = Field(default_factory=list)
     promo: PromoConfig | None = None
 
     @field_validator("sections")
@@ -351,6 +429,22 @@ class CreativeBrief(BaseModel):
                     f"section {sec.name!r} references station {sec.station!r}, "
                     f"which is not in stations ({sorted(names)})"
                 )
+        return v
+
+    @field_validator("overlays")
+    @classmethod
+    def _overlay_ids_are_unique(cls, v: list[OverlayConfig]) -> list[OverlayConfig]:
+        """Two overlays sharing an id would render to the same PNG path, and the
+        second would silently overwrite the first -- the render would succeed
+        and one card would simply never appear."""
+        seen: set[str] = set()
+        for ov in v:
+            if ov.id in seen:
+                raise ValueError(
+                    f"duplicate overlay id {ov.id!r}. Ids name the rendered card "
+                    f"file, so a repeat would silently overwrite the earlier one."
+                )
+            seen.add(ov.id)
         return v
 
     @classmethod

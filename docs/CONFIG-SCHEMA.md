@@ -65,6 +65,24 @@ output:
       aspect: "9:16"             # 9:16 | 1:1 | 16:9
       source_start: 205.0        # optional -- defaults to the middle of the track
 
+overlays:                       # optional -- timed text cards burned into the render
+  - id: title                   # unique within the brief; also names the rendered PNG
+    at: [0.25, 1.55]            # [start, end] in seconds, on the OUTPUT timeline
+    y: 0.845                    # vertical centre of the block, fraction of frame height
+    align: center               # left | center | right
+    line_gap: 0.012             # fraction of frame height
+    shadow: true                # blurred black copy behind the text (default on)
+    lines:
+      - text: "[the night track talks]"
+        font: typewriter        # mono | mono-bold | typewriter | display |
+                                 # display-medium | persian | persian-bold |
+                                 # path:/abs/font.ttf
+        size: 0.028             # FRACTION OF FRAME HEIGHT, not pixels
+        color: "#eeeeea"
+        opacity: 1.0
+        tracking: 0.0           # letter-spacing, fraction of frame height
+        rtl: null               # leave unset -- direction is detected from the script
+
 promo:                          # optional -- omit to skip promo-pack generation content that needs it
   handles: ["@collaborator1", "@collaborator2"]   # scrub before committing any brief, see AGENTS.md
   teaser_cadence_days: [-7, -3, -1]   # T-7 / T-3 / T-1, relative to release
@@ -103,6 +121,14 @@ promo:                          # optional -- omit to skip promo-pack generation
 - Bitrate fields must look like bitrates (`4500k`, `9M`, `192k`). Like
   `duotone`, these are interpolated into an ffmpeg argv.
 - `framing.mode: crop` requires `x`; `framing.mode: window` requires `width`.
+- Overlay ids must be unique. They name the rendered card file, so a repeat
+  would silently overwrite the earlier one — the render would succeed and one
+  card would simply never appear.
+- Every `overlays[].at` must be ordered and non-negative, and each overlay
+  needs at least one line.
+- Overlay colours must be 6-digit hex, same as `duotone`.
+- `tracking` cannot be combined with right-to-left text: drawing a shaped run
+  glyph by glyph breaks the joins between letters.
 
 ## Framing: fitting a source frame into a different-shaped output
 
@@ -119,6 +145,31 @@ There is no computation that gets this right, which is why it's a field.
 
 `crop`'s width is computed by ffmpeg from the real input height, so one brief
 works across sources of different resolutions.
+
+## Overlays: text burned into the picture
+
+Two things about this are deliberate and worth knowing before you write a card.
+
+**Sizes are fractions of the frame height, never pixels.** A card designed
+against a 1080×1920 delivery has to still be right when the same brief renders
+at 2160×3840. A pixel size would come out half as large and nothing would say
+so. `size: 0.028` is ~54px at 1920 tall.
+
+**Right-to-left text is shaped, not reversed.** Direction is detected from the
+text's own script, so a Persian line needs no flag. Under the hood Pillow
+delegates to libraqm/HarfBuzz. If you are tempted to reach for
+`arabic-reshaper` or `python-bidi`: don't. They reorder characters rather than
+shaping them, which produces broken letterforms that look fine to anyone who
+cannot read the script and are obviously wrong to anyone who can. kaleidophone
+refuses to render RTL text without real shaping rather than emitting that
+quietly.
+
+Fonts ship with the package (`src/kaleidophone/overlay/fonts/`, all SIL OFL) for
+the same reason: a font resolved from a system path renders differently on
+every machine, which breaks the promise that a brief reproduces.
+
+A line wider than the frame prints a warning naming a `size` that would fit —
+cards are drawn blind, so otherwise you find it by watching the finished render.
 
 ## Where a brief comes from
 

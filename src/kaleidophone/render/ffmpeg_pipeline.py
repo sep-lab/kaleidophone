@@ -16,6 +16,7 @@ import sys
 import tempfile
 
 from kaleidophone.assets.curation import VIDEO_EXTS
+from kaleidophone.overlay.card import render_overlay_cards
 from kaleidophone.render import effects as fx
 from kaleidophone.render._ffmpeg_util import probe_duration, require_ffmpeg, run
 from kaleidophone.timeline.model import EDL, Cut
@@ -23,8 +24,47 @@ from kaleidophone.timeline.schema import (
     CreativeBrief,
     EncodeConfig,
     FramingConfig,
+    OverlayConfig,
     StationConfig,
 )
+
+
+def _overlay_graph(overlays: list[OverlayConfig]) -> tuple[str, str]:
+    """A filter_complex chaining one `overlay` per card, and the label to map.
+
+    Each card is a full-frame RGBA PNG composited at 0:0, gated by
+    `enable='between(t,start,end)'`. Chaining rather than one multi-input
+    filter is what makes the cards stack predictably: a later overlay in the
+    brief draws on top of an earlier one wherever their time ranges intersect.
+
+    `t` here is the concatenated video's own timeline, which is the output
+    timeline -- so an overlay at 0.25s appears a quarter-second into what you
+    watch, whether or not output.window shifted which part of the song that is.
+    """
+    steps = []
+    current = "0:v"
+    for i, ov in enumerate(overlays):
+        nxt = f"v{i + 1}"
+        start, end = ov.at
+        steps.append(
+            f"[{current}][{i + 1}:v]"
+            f"overlay=0:0:enable='between(t,{start:.3f},{end:.3f})'"
+            f"[{nxt}]"
+        )
+        current = nxt
+    return ";".join(steps), current
+
+
+# x264's names for each colour standard, which are not always ffmpeg's --
+# bt601's primaries are "smpte170m", and bt2020's matrix is non-constant
+# luminance ("bt2020nc"). Getting these wrong writes a tag that is confidently
+# incorrect, which is worse than none.
+_X264_COLOR: dict[str, tuple[str, str, str]] = {
+    #          primaries    transfer      matrix
+    "bt709": ("bt709", "bt709", "bt709"),
+    "bt601": ("smpte170m", "smpte170m", "smpte170m"),
+    "bt2020": ("bt2020", "bt2020-10", "bt2020nc"),
+}
 
 
 def _video_encode_args(enc: EncodeConfig) -> list[str]:
@@ -44,13 +84,22 @@ def _video_encode_args(enc: EncodeConfig) -> list[str]:
     if enc.maxrate and enc.bufsize:
         args += ["-maxrate", enc.maxrate, "-bufsize", enc.bufsize]
     if enc.color:
-        # All three, always. Tagging only one of them is worse than tagging
-        # none: players that read primaries but not trc get a half-described
-        # stream and guess the rest.
+        prim, trc, matrix = _X264_COLOR[enc.color]
+        # All three, always. Tagging only one is worse than tagging none: a
+        # player that reads primaries but not transfer gets a half-described
+        # stream and guesses the rest.
+        #
+        # The -color_* flags alone are not enough. Measured on ffmpeg 7.1:
+        # they set the container's colr box but leave the H.264 SPS VUI empty,
+        # so ffprobe reports color_space=bt709 with primaries and transfer
+        # "unknown", and so does anything else reading the bitstream. Passing
+        # them to x264 as well writes the VUI, and both survive the stream-copy
+        # in mux_audio().
         args += [
-            "-colorspace", enc.color,
-            "-color_primaries", enc.color,
-            "-color_trc", enc.color,
+            "-colorspace", matrix,
+            "-color_primaries", prim,
+            "-color_trc", trc,
+            "-x264-params", f"colorprim={prim}:transfer={trc}:colormatrix={matrix}",
         ]
     return args
 
@@ -114,6 +163,19 @@ def render_silent(
             for p in segment_paths:
                 fh.write(f"file {_concat_quote(os.path.abspath(p))}\n")
 
+        # Overlay cards are rendered once, at the output resolution, and
+        # composited in this single finishing pass -- not baked into each
+        # segment. A card that spans a cut would otherwise have to be split
+        # across segments and would visibly restart at the boundary.
+        cards = render_overlay_cards(brief.overlays, w, h, tmp) if brief.overlays else []
+
+        overlay_args: list[str] = []
+        for _, png in cards:
+            overlay_args += ["-i", png]
+        if cards:
+            graph, last = _overlay_graph([ov for ov, _ in cards])
+            overlay_args += ["-filter_complex", graph, "-map", f"[{last}]"]
+
         run(
             ffmpeg,
             [
@@ -124,6 +186,7 @@ def render_silent(
                 "0",
                 "-i",
                 concat_list,
+                *overlay_args,
                 *_video_encode_args(enc),
                 silent_output_path,
             ],
@@ -155,6 +218,7 @@ def _warn_if_streams_disagree(
     tolerance: float = 0.5,
     *,
     audio_start: float = 0.0,
+    windowed: bool = False,
 ) -> None:
     """`-shortest` truncates whichever stream is longer, without comment.
 
@@ -173,6 +237,12 @@ def _warn_if_streams_disagree(
     delta = audio - video
     if abs(delta) <= tolerance:
         return
+    if windowed and delta > 0:
+        # output.window deliberately renders a slice, so there is meant to be
+        # song left over on either side and -shortest trimming it is the
+        # feature working. Only the other direction -- the audio running out
+        # before the picture does -- is worth saying anything about.
+        return
     longer, amount = ("audio", delta) if delta > 0 else ("video", -delta)
     print(
         f"warning: {longer} is {amount:.2f}s longer than the other stream "
@@ -189,6 +259,7 @@ def mux_audio(
     output_path: str,
     encode: EncodeConfig | None = None,
     audio_start: float = 0.0,
+    windowed: bool = False,
 ) -> str:
     """Stitch a (possibly new) audio track onto an already-rendered silent
     video: a fast stream-copy on the video side. This is the operation for
@@ -196,7 +267,9 @@ def mux_audio(
     mastered wave on it' -- it never re-runs a single effect."""
     ffmpeg = require_ffmpeg()
     enc = encode or EncodeConfig()
-    _warn_if_streams_disagree(silent_video_path, audio_path, audio_start=audio_start)
+    _warn_if_streams_disagree(
+        silent_video_path, audio_path, audio_start=audio_start, windowed=windowed
+    )
     # Seek before -i so ffmpeg jumps rather than decoding and discarding. For a
     # windowed edit (output.window) this is what puts the audio under the right
     # part of the song; for a full render it is 0.0 and emits nothing.
@@ -251,6 +324,7 @@ def render(
             output_path,
             brief.output.encode,
             audio_start=window[0] if window else 0.0,
+            windowed=window is not None,
         )
     finally:
         if not keep_work_dir and os.path.exists(silent_path):
