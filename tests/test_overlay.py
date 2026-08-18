@@ -252,3 +252,58 @@ def test_no_overlays_means_no_filter_complex_at_all(monkeypatch, tmp_path):
     concat = calls[-1]
     assert "-filter_complex" not in concat
     assert "-map" not in concat
+
+
+# --------------------------------------------------------------------------
+# the overlay proof sheet
+# --------------------------------------------------------------------------
+def _edl_for_proof():
+    from kaleidophone.timeline.model import EDL, Cut
+    return EDL("t", "a.wav", 6.0, 24, (1080, 1920), tuple(
+        Cut(i, i * 2.0, (i + 1) * 2.0, "missing.jpg", "s", "sec") for i in range(3)
+    ))
+
+
+def test_the_proof_sheet_uses_the_output_aspect_not_the_sources(tmp_path):
+    """A card proofed at the wrong aspect tells you nothing about placement."""
+    from kaleidophone.render.preview import PROOF_H, generate_overlay_proof
+    out = generate_overlay_proof([card(id="a")], _edl_for_proof(),
+                                 str(tmp_path / "p.jpg"), (1080, 1920))
+    w, h = Image.open(out).size
+    panel_w = round(PROOF_H * 1080 / 1920)
+    assert w == panel_w * 4, "one row of four columns"
+    assert h == PROOF_H + 22, "panel plus its label strip"
+
+
+def test_the_proof_sheet_has_one_panel_per_overlay(tmp_path):
+    from kaleidophone.render.preview import PROOF_H, generate_overlay_proof
+    out = generate_overlay_proof(
+        [card(id=f"c{i}") for i in range(6)], _edl_for_proof(),
+        str(tmp_path / "p.jpg"), (1080, 1920),
+    )
+    assert Image.open(out).size[1] == 2 * (PROOF_H + 22), "six cards wrap to two rows"
+
+
+def test_a_missing_source_falls_back_to_a_flat_backdrop_rather_than_crashing(tmp_path):
+    """Same posture as the contact sheet's unreadable-tile fallback: a preview
+    that crashes on one bad file is worse than one that shows the card."""
+    from kaleidophone.render.preview import generate_overlay_proof
+    out = generate_overlay_proof([card(id="a")], _edl_for_proof(),
+                                 str(tmp_path / "p.jpg"), (1080, 1920))
+    assert Image.open(out).size[0] > 0
+
+
+def test_proofing_no_overlays_is_refused_rather_than_writing_an_empty_sheet(tmp_path):
+    from kaleidophone.render.preview import generate_overlay_proof
+    with pytest.raises(ValueError, match="no overlays"):
+        generate_overlay_proof([], _edl_for_proof(), str(tmp_path / "p.jpg"), (1080, 1920))
+
+
+def test_the_backdrop_comes_from_a_cut_the_overlay_actually_covers(tmp_path):
+    """Proofing a 5s card against the frame at 0s would show the wrong picture."""
+    from kaleidophone.render.preview import _backdrop_for
+    edl = _edl_for_proof()
+    ov = card(id="late", at=(4.5, 5.5))
+    covered = [c for c in edl.cuts if c.start < 5.5 and c.end > 4.5]
+    assert [c.index for c in covered] == [2]
+    assert _backdrop_for(ov, edl, 100, 200).size == (100, 200)

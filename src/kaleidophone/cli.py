@@ -38,12 +38,12 @@ from kaleidophone.promo.plan import generate_promo_pack
 from kaleidophone.render._ffmpeg_util import FfmpegNotFound
 from kaleidophone.render.ffmpeg_pipeline import mux_audio, render_silent
 from kaleidophone.render.ffmpeg_pipeline import render as render_edl
-from kaleidophone.render.preview import generate_contact_sheet
+from kaleidophone.render.preview import generate_contact_sheet, generate_overlay_proof
 from kaleidophone.render.variants import extract_teaser, extract_thumbnail
 from kaleidophone.timeline.autobrief import build_default_brief
 from kaleidophone.timeline.compose import compose
 from kaleidophone.timeline.model import EDL
-from kaleidophone.timeline.schema import CreativeBrief
+from kaleidophone.timeline.schema import ASPECT_RESOLUTIONS, CreativeBrief
 
 EXIT_OK = 0
 EXIT_USAGE = 1
@@ -118,6 +118,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("edl_path")
     p.add_argument("-o", "--out", default="preview_contact_sheet.jpg")
+    p.add_argument(
+        "--brief",
+        help="Also proof this brief's overlays -- text placement can't be judged from "
+        "the contact sheet's thumbnails.",
+    )
     p.set_defaults(func=_cmd_preview)
 
     p = sub.add_parser(
@@ -171,6 +176,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--title")
     p.add_argument("--artist")
     p.add_argument(
+        "--aspect",
+        choices=sorted(ASPECT_RESOLUTIONS),
+        help="Frame shape for the delivery, e.g. 9:16 for a reel. Picks the canonical "
+        "resolution and writes it into the generated brief.",
+    )
+    p.add_argument(
         "--preview-only", action="store_true", help="Stop after the contact sheet -- skip the render."
     )
     p.set_defaults(func=_cmd_auto)
@@ -219,7 +230,26 @@ def _cmd_preview(args: argparse.Namespace) -> int:
     edl = EDL.from_dict(json.loads(Path(args.edl_path).read_text()))
     path = generate_contact_sheet(edl, args.out)
     print(f"wrote {path} ({len(edl.cuts)} cuts) -- sanity-check the edit before rendering")
+    if args.brief:
+        brief = CreativeBrief.from_yaml(args.brief)
+        _proof_overlays(brief, edl, Path(args.out).parent)
     return 0
+
+
+def _proof_overlays(brief: CreativeBrief, edl: EDL, out_dir) -> None:
+    """Write the overlay proof sheet, if the brief has any cards.
+
+    Split out because `preview`, `run` and `auto` all want it and all three
+    would otherwise repeat the same emptiness check.
+    """
+    if not brief.overlays:
+        return
+    path = Path(out_dir) / "preview_overlays.jpg"
+    generate_overlay_proof(brief.overlays, edl, str(path), brief.output.resolution)
+    print(
+        f"wrote {path} ({len(brief.overlays)} card(s)) -- check size, placement and overflow. "
+        f"Frames are ungraded, so contrast against the final look still needs a render."
+    )
 
 
 def _cmd_silent(args: argparse.Namespace) -> int:
@@ -300,6 +330,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     generate_contact_sheet(edl, str(out / "preview_contact_sheet.jpg"))
     print(f"wrote {out / 'preview_contact_sheet.jpg'} -- sanity-check the edit before the render")
+    _proof_overlays(brief, edl, out)
     if args.preview_only:
         print(
             "--preview-only: stopping here. Re-run without it (or `kaleidophone silent`) once the edit looks right."
@@ -333,6 +364,9 @@ def _cmd_auto(args: argparse.Namespace) -> int:
     brief, station_assets = build_default_brief(
         args.audio_path, args.media_dir, title=args.title, artist=args.artist
     )
+    if args.aspect:
+        brief.output.aspect = args.aspect
+        brief.output.resolution = ASPECT_RESOLUTIONS[args.aspect]
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -353,6 +387,7 @@ def _cmd_auto(args: argparse.Namespace) -> int:
 
     generate_contact_sheet(edl, str(out / "preview_contact_sheet.jpg"))
     print(f"wrote {out / 'preview_contact_sheet.jpg'} -- sanity-check the edit before the render")
+    _proof_overlays(brief, edl, out)
     if args.preview_only:
         print("--preview-only: stopping here. Re-run without it once the edit looks right.")
         return 0
