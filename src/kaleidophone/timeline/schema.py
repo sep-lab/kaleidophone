@@ -408,6 +408,55 @@ class OverlayConfig(BaseModel):
         return v
 
 
+class Credit(BaseModel):
+    """One person and what they did.
+
+    `handle` is deliberately separate from `name`: a credit line reads better
+    with a name, but a tag needs the handle, and conflating them produces
+    captions that either tag nobody or read like a database dump.
+    """
+
+    role: str = Field(description="What they did, in your own words: 'mpc & chops', 'mix'.")
+    name: str
+    handle: str | None = Field(default=None, description="Platform handle, with the @.")
+
+
+class ReleaseConfig(BaseModel):
+    """Everything the copy needs that the audio cannot tell you.
+
+    kaleidophone generates release *files*, never posts. There is no account, no
+    OAuth, no scheduler, and nothing here reaches a platform API -- see
+    ADR-0006. What comes out is markdown you paste.
+    """
+
+    concept: str | None = Field(
+        default=None,
+        description="One line: the central image of the record. 'the flower that "
+        "grows where nothing should.' This is the spine every caption is written "
+        "around, and it is the one thing the tool cannot derive -- an energy "
+        "envelope does not know what a song is about.",
+    )
+    primary_language: str = Field(default="en", description="ISO-ish code, e.g. 'en'.")
+    secondary_language: str | None = Field(
+        default=None,
+        description="Set to emit a second-language block alongside every caption. "
+        "Written as a mirror -- the same image in another language -- not a "
+        "translation of the first.",
+    )
+    credits: list[Credit] = Field(default_factory=list)
+    label: str | None = None
+    links: dict[str, str] = Field(
+        default_factory=dict,
+        description="Platform -> URL. Referenced by the copy ('link in bio') and "
+        "by the posting order, which needs to know what exists.",
+    )
+    tags: list[str] = Field(default_factory=list)
+    date: str | None = Field(default=None, description="Release date, YYYY-MM-DD.")
+    platforms: list[Literal["soundcloud", "youtube", "instagram", "story"]] = Field(
+        default_factory=lambda: ["soundcloud", "youtube", "instagram", "story"],
+    )
+
+
 class CreativeBrief(BaseModel):
     """Top-level document -- what `kaleidophone compose brief.yaml` reads."""
 
@@ -417,6 +466,7 @@ class CreativeBrief(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
     overlays: list[OverlayConfig] = Field(default_factory=list)
     promo: PromoConfig | None = None
+    release: ReleaseConfig | None = None
 
     @field_validator("sections")
     @classmethod

@@ -94,6 +94,7 @@ number in `docs/` or an ADR:
 | Public framework, private assets, CI-enforced | ADR-0003 |
 | Default mode (`kaleidophone auto`) writes a normal editable brief, not a black box | ADR-0004 |
 | The project is named `kaleidophone`, lowercase throughout | ADR-0005 |
+| The release pack is in scope; posting to a platform is not | ADR-0006 |
 
 Each ADR lists what evidence would overturn it. Bring that evidence, or
 leave them alone.
@@ -114,9 +115,12 @@ only thing in this repo that actually calls `ffmpeg`.
 
 - The task would commit or require real media (photos/audio/video) to this
   repository.
-- The task pushes scope toward a hosting platform, an account system, or
-  publishing/distribution — kaleidophone produces files; what you do with them is
-  yours.
+- The task pushes scope toward **posting**: an account system, an OAuth
+  flow, a scheduler, or any API client for a social/streaming platform.
+  kaleidophone generates release *files* — captions, packs, deliverables — and
+  stops there. See [ADR-0006](docs/decisions/0006-the-release-pack.md); the
+  no-network rule is what makes that boundary checkable rather than a matter
+  of restraint.
 - You're about to make a claim in docs you haven't actually measured.
 - The task wants AI-generated video frames or cover art added to the
   *default* path rather than as an opt-in extension — see ADR-0002's "What

@@ -10,8 +10,9 @@ importantly — **what evidence would overturn it.**
 | [0003](0003-public-framework-private-assets.md) | Public framework, private assets, CI-enforced | Accepted |
 | [0004](0004-default-mode-and-auto-curation.md) | A default mode backed by heuristic curation, not a wizard | Accepted |
 | [0005](0005-project-naming.md) | Project naming | Accepted |
+| [0006](0006-the-release-pack.md) | The release pack — one brief, the whole release | Accepted |
 
-All five are settled. Reopening one is welcome, but bring the evidence its
+All six are settled. Reopening one is welcome, but bring the evidence its
 "What would overturn this" section asks for — that is what the section is for.
 
 New ADRs: copy the structure of an existing one, take the next number, and

@@ -13,6 +13,7 @@ kaleidophone's command-line entry point.
     kaleidophone render  <edl.json> <brief.yaml>  -> silent + remux + teasers + thumbnails
     kaleidophone cover   <brief.yaml>             -> procedural cover art
     kaleidophone promo   <brief.yaml>             -> promo pack markdown
+    kaleidophone kit     <brief.yaml>             -> per-platform release copy pack
 
 See docs/CONFIG-SCHEMA.md for the brief format and skills/ for the full
 per-stage methodology.
@@ -35,6 +36,7 @@ from kaleidophone.audio.analysis import analyze
 from kaleidophone.audio.wavemap import render_wavemap
 from kaleidophone.cover.generate import generate_cover, pick_cover_station
 from kaleidophone.promo.plan import generate_promo_pack
+from kaleidophone.release import generate_release_pack
 from kaleidophone.render._ffmpeg_util import FfmpegNotFound
 from kaleidophone.render.ffmpeg_pipeline import mux_audio, render_silent
 from kaleidophone.render.ffmpeg_pipeline import render as render_edl
@@ -157,6 +159,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("brief_path")
     p.add_argument("-o", "--out", default="promo_pack.md")
     p.set_defaults(func=_cmd_promo)
+
+    p = sub.add_parser(
+        "kit",
+        help="Generate the per-platform release copy pack (captions, chapters, "
+        "timed comments, posting order).",
+    )
+    p.add_argument("brief_path")
+    p.add_argument("-o", "--out", default="release_pack.md")
+    p.set_defaults(func=_cmd_kit)
 
     p = sub.add_parser("run", help="analyze + compose + render + promo, end to end.")
     p.add_argument("brief_path")
@@ -311,6 +322,14 @@ def _cmd_promo(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_kit(args: argparse.Namespace) -> int:
+    brief = CreativeBrief.from_yaml(args.brief_path)
+    analysis = analyze(brief.song.audio_path, bpm_override=brief.song.bpm)
+    Path(args.out).write_text(generate_release_pack(brief, analysis))
+    print(f"wrote {args.out} -- facts are derived, the voice is yours. Read the notes at the end.")
+    return 0
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     brief = CreativeBrief.from_yaml(args.brief_path)
     out = Path(args.out)
@@ -351,8 +370,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
         t = edl.duration * (i + 1) / (brief.output.thumbnail_count + 1)
         extract_thumbnail(master_path, t, str(out / f"thumb_{i + 1}.jpg"))
 
-    pack = generate_promo_pack(brief, analysis)
-    (out / "promo_pack.md").write_text(pack)
+    (out / "promo_pack.md").write_text(generate_promo_pack(brief, analysis))
+    (out / "release_pack.md").write_text(generate_release_pack(brief, analysis))
 
     print(
         f"done -> {out}/  (master.mp4, cover.jpg, wavemap.png, edl.json, promo_pack.md, teasers/, thumb_*.jpg)"
@@ -399,8 +418,8 @@ def _cmd_auto(args: argparse.Namespace) -> int:
         t = edl.duration * (i + 1) / (brief.output.thumbnail_count + 1)
         extract_thumbnail(master_path, t, str(out / f"thumb_{i + 1}.jpg"))
 
-    pack = generate_promo_pack(brief, analysis)
-    (out / "promo_pack.md").write_text(pack)
+    (out / "promo_pack.md").write_text(generate_promo_pack(brief, analysis))
+    (out / "release_pack.md").write_text(generate_release_pack(brief, analysis))
 
     print(f"done -> {out}/")
     return 0
