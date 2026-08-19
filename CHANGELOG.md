@@ -5,6 +5,81 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-19
+
+**Deliverables, not just a render.** 0.1 produced a 16:9 video. 0.2 produces
+the things a release actually needs: vertical cutdowns framed on purpose,
+burned-in bilingual text, and the per-platform copy — all from the same brief.
+
+### Added — the plugin
+
+- **kaleidophone installs as a Claude Code plugin.** `/plugin marketplace add
+  sep-lab/kaleidophone`, then talk to it. Five commands — `/kaleido:direct`,
+  `/kaleido:release`, `/kaleido:caption`, `/kaleido:cover`, `/kaleido:brief` —
+  plus a new `kaleidophone-creative-direction` skill carrying the taste the
+  per-stage skills don't. `docs/PRIOR-ART.md` named "is comfortable in a
+  terminal" as a real limit on who this can serve; this is the answer to it.
+
+### Added — text
+
+- **`overlays`** — timed cards burned into the render: titles, lyric lines,
+  credits, end cards. Composited in the single finishing pass rather than baked
+  into each segment, so a card spanning a cut doesn't restart at the boundary.
+- **Right-to-left shaping via libraqm.** Direction is detected from the text's
+  own script. Rendering RTL without raqm raises rather than quietly emitting
+  disconnected letterforms — output that looks like text to anyone who can't
+  read the script and is plainly broken to anyone who can.
+- **Five bundled SIL OFL fonts** (676 KB): Vazirmatn, Space Grotesk, Space
+  Mono, Courier Prime. Addressed by role, not filename. A font resolved from a
+  system path renders differently on every machine.
+- **An overlay proof sheet** in `preview`, because cards are otherwise drawn
+  blind and a line that overflows is found by watching the finished render.
+
+### Added — delivery
+
+- **`output.aspect`** — compose natively at `9:16`/`1:1`/`4:5` instead of
+  centre-cropping a finished master.
+- **`sections[].framing`** — `fill`, `crop` at an `x` in source pixels, or
+  `window` (shrink and pad onto black). Which slice of a wide frame survives a
+  vertical crop is a creative decision, and there was nowhere to put it.
+- **`output.window`** — render a stretch of the song, rebased to zero, so one
+  brief produces the master *and* the cutdown instead of two that drift.
+- **`output.encode`** — CRF, preset, bitrate ceiling, colour tagging, audio
+  bitrate and sample rate.
+- **`kaleidophone kit`** and a `release` block — per-platform captions,
+  chapters, timed comments, a pinned comment, a posting order. Facts derived,
+  voice deliberately left open. See
+  [ADR-0006](docs/decisions/0006-the-release-pack.md).
+- `kaleidophone auto --aspect`.
+
+### Fixed
+
+- **Colour tags never reached the H.264 SPS.** Measured on ffmpeg 7.1, the
+  `-color_primaries`/`-color_trc` flags set the container's `colr` box and
+  leave the VUI empty, so `ffprobe` reported primaries and transfer as
+  `unknown`. Now also passed via `-x264-params`, with x264's own names per
+  standard.
+- **A windowed render warned that the audio was longer than the video**, which
+  is exactly what a window is for. Only the picture outlasting the song is
+  reported now.
+- **The release pack suggested pinning "the switch is at 0:00"** from a jump at
+  0.53s. That's the track starting, not a moment.
+- `SECURITY.md` named OpenCV as a decode path; it was removed in 0.1.0.
+- Four issue/PR-template links used `../blob/main/...`, which resolves outside
+  the repository.
+- `cli.py`'s module docstring — what `--help` prints — listed 6 of 11
+  subcommands.
+- `_WorkDirectory`'s docstring cited a `--keep` flag that never existed.
+
+### Changed
+
+- `docs/CREATIVE-GUIDE.md`'s "label nothing" rule is now **describe nothing,
+  inhabit something**. The original was learned from cutting genuinely cheesy
+  data overlays and is right about those, but taken literally it forbids a
+  tape readout or a DVD menu — which are not data about the song but a fiction
+  the song plays inside.
+- Test suite 143 → 281; coverage 89% → 90%.
+
 ### Added
 
 - **`output.aspect`** — compose natively at `16:9`, `9:16`, `1:1` or `4:5`

@@ -2,8 +2,13 @@
 
 <p align="center">
   <strong>Compose the edit, not the pixels.</strong><br>
-  A song + your photos -> a beat-synced, station-graded, loopish music video.
-  Plus the cover art and the promo pack, from the same source of truth.
+  A song + your own photos and clips -> a beat-synced, station-graded music
+  video, vertical cutdowns, cover art, and the per-platform release copy —
+  all derived from one small YAML file you can read.
+</p>
+
+<p align="center">
+  <em>Claude directs. ffmpeg draws every pixel. Nothing is generated into a frame.</em>
 </p>
 
 <p align="center">
@@ -15,10 +20,11 @@
 </p>
 
 <p align="center">
-  <a href="#see-it-in-ten-seconds">Quick start</a> ·
+  <a href="#two-front-doors">Start here</a> ·
   <a href="#the-idea">The idea</a> ·
   <a href="#the-workflow-this-is-built-around">Draft -> confirm -> final</a> ·
   <a href="#the-vibe">The vibe</a> ·
+  <a href="#made-with-this">Made with this</a> ·
   <a href="#cost-measured">Cost, measured</a> ·
   <a href="#documentation">Docs</a> ·
   <a href="#where-to-start-contributing">Contribute</a>
@@ -28,72 +34,89 @@
 
 ## What this is
 
-You have a song and a folder of photos (and maybe some clips). You want a
-music video that cuts on the beat, looks like something — not a slideshow
-with a Ken Burns pan — and doesn't take an afternoon of manual editing or a
-GPU farm. kaleidophone turns that into three things from one source file:
+You have a song and a folder of photos and clips. You want a music video that
+cuts on the beat and looks like something — not a slideshow with a Ken Burns
+pan — plus the vertical cutdown, the cover, and the caption you have to write
+before you can post any of it.
 
-- a **video**, cut on the beat, color-graded per section, in a deliberately
-  vintage/psychedelic/loopish default look (not an option you have to
-  discover — the starting point);
-- **cover art**, generated straight from the song's own energy envelope,
-  in the same station's palette as the video;
-- a **promo pack** — chapters, a caption draft, a teaser cadence, a
-  suggested pinned comment — as markdown, ready to paste into a release.
+kaleidophone turns that into a release from one source file:
+
+- a **video**, cut on the beat, colour-graded per section, in a deliberately
+  vintage/psychedelic/loopish default look — at 16:9, or composed **natively
+  vertical** for a reel, with per-shot framing so the crop lands where the
+  subject actually is;
+- **timed text cards** burned into the picture — titles, lyric lines, credits —
+  with real right-to-left shaping, so a bilingual card is not a workaround;
+- **cover art**, generated from the song's own energy envelope, in the same
+  station's palette as the video;
+- a **release pack** — per-platform captions, chapters, timed comments, a
+  pinned comment, a posting order — as markdown, with every timestamp derived
+  from the edit rather than retyped.
 
 The source file is a `CreativeBrief`: one small, readable, diffable YAML
 document. Everything else — the edit-decision-list, the rendered video, the
-teasers, the thumbnails, the cover — is derived from it and rebuildable.
-That's not an implementation detail, it's the whole architecture; see
-[**the idea**](#the-idea) below.
+teasers, the thumbnails, the cover, the copy — is derived from it and
+rebuildable. That's not an implementation detail, it's the whole architecture;
+see [**the idea**](#the-idea) below.
 
 kaleidophone shells out to a real `ffmpeg` for every pixel; there is no
-per-frame AI generation in the render path (why, below). It runs
-comfortably on a laptop, and the default output is 1280x720, not 4K —
-this project's whole premise is token/compute efficiency and a fast
-iteration loop over maximum resolution.
+per-frame AI generation in the render path (why, below). It runs comfortably
+on a laptop.
 
-## See it in ten seconds
+## Two front doors
 
-No real media required, nothing to connect, nothing to ask permission for:
+### I make music
 
-```bash
-pip install kaleidophone            # needs a system ffmpeg on PATH — see below
+Install it as a Claude Code plugin and talk to it:
+
+```
+/plugin marketplace add sep-lab/kaleidophone
+/plugin install kaleidophone@kaleidophone
 ```
 
-or from a checkout:
+Then, in the folder with your song and your photos:
+
+```
+/kaleido:direct song.wav ./photos
+```
+
+Claude analyses the track, tells you where the quiet passages and the energy
+jumps actually are, asks you the two or three things the audio can't answer,
+writes the brief, and shows you a contact sheet before anything expensive
+happens. It is directing, not generating — every frame is your own material.
+
+Other commands: `/kaleido:release` (the whole arc), `/kaleido:caption`,
+`/kaleido:cover`, `/kaleido:brief`.
+
+### I write code
+
+```bash
+pip install kaleidophone            # needs a system ffmpeg on PATH
+```
+
+```bash
+kaleidophone auto song.wav ./photos -o out/ --aspect 9:16 --preview-only
+```
+
+That writes `out/generated_brief.yaml` — a completely normal, fully editable
+brief — plus a contact sheet. Edit it, then `kaleidophone run` it for real.
+`docs/CONFIG-SCHEMA.md` is the full field reference.
+
+Or from a checkout, with nothing of your own required:
 
 ```bash
 git clone https://github.com/sep-lab/kaleidophone && cd kaleidophone
-pip install -e ".[dev]"
-bash examples/demo/run_demo.sh
+pip install -e ".[dev]" && bash examples/demo/run_demo.sh
 ```
 
-This generates a synthetic song and synthetic placeholder photos (procedural
-gradients — nothing real, nothing personal, see
-`examples/demo/generate_fixtures.py`), then runs the real pipeline —
-analyze, curate, compose, preview, render, cover, promo — against them.
-**Measured, one data point, not a benchmark suite** (machine below):
-18.1 seconds, end to end, for a 24-second/37-cut video at 640x360.
+That generates a synthetic song and procedural placeholder images — nothing
+real, nothing personal — then runs the real pipeline end to end.
+**Measured, one data point, not a benchmark suite:** 18.1 seconds for a
+24-second/37-cut video at 640x360, on the machine named in
+[Cost, measured](#cost-measured).
 
-Needs a system `ffmpeg` on `PATH` (`brew install ffmpeg` / `apt install
-ffmpeg`) — kaleidophone renders through the real binary rather than a Python
-video dependency; see
+Needs a system `ffmpeg` (`brew install ffmpeg` / `apt install ffmpeg`) — see
 [ADR-0002](docs/decisions/0002-deterministic-edit-engine.md).
-
-**Then try it on your own song and photos** (never commit either — see
-[AGENTS.md](AGENTS.md)):
-
-```bash
-kaleidophone auto ~/Music/your_song.mp3 ~/Pictures/some_folder -o /tmp/kaleidophone_out --preview-only
-open /tmp/kaleidophone_out/preview_contact_sheet.jpg      # sanity-check the edit, no render yet
-kaleidophone run /tmp/kaleidophone_out/generated_brief.yaml -o /tmp/kaleidophone_out   # render for real
-```
-
-Zero config required — `kaleidophone auto` writes out the brief it generated
-(`generated_brief.yaml`) as a normal, fully-editable file, so "now
-customize it" is a text edit and a re-run, not a different tool. See
-[**two ways to start**](#two-ways-to-start) below.
 
 ## The idea
 
@@ -166,26 +189,6 @@ in about a second each time, near-independent of resolution. See
 call and cleans up the intermediate — use that instead when you don't
 expect to touch the audio again.
 
-## Two ways to start
-
-**Zero config.** Point `kaleidophone auto` at a song and a folder of mixed
-photos/clips; it analyzes the song, proposes section boundaries from real
-structural signals (a quiet passage, a sudden jump in energy), curates the
-folder against a small built-in station palette, and writes out a complete,
-editable brief plus a contact-sheet preview — no manual authoring required.
-See [ADR-0004](docs/decisions/0004-default-mode-and-auto-curation.md).
-
-**Hand-authored.** Write the YAML directly — `docs/CONFIG-SCHEMA.md` is the
-full field reference, `examples/love/brief.yaml` is a fully-worked
-structural template (see [the case study](docs/case-studies/love.md) it
-comes from). Use this when you can hear a structure the auto-sectioner
-won't reliably find, or want full control over which station gets which
-section.
-
-Both paths produce the exact same kind of file — `kaleidophone auto`'s output is
-a completely normal brief the moment it's written. There's no separate
-"simple mode" format to graduate out of.
-
 ## The vibe
 
 The look isn't a preset you opt into — it's the default, because that's
@@ -204,12 +207,53 @@ media:
 Effects layer on top per section — `strobe`, `kaleidoscope`, `halation`,
 `freeze_on_peak`, `zoom_breathe`, `grain`, `scanlines`, and more — several
 of them conditional on the song's own structure (`strobe` only fires on
-cuts containing a real onset, not every cut in a section). Full vocabulary
-and the "two rooms, one frequency" AM/FM concept these presets generalize
-from: [docs/CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md) and
+cuts containing a real onset, not every cut in a section).
+
+**Framing** is a creative field, not a computation. Pulling a 9:16 frame out
+of 16:9 footage throws away two thirds of the width, and which two thirds is a
+decision — the subject is rarely centred. Each section can take
+`framing: {mode: crop, x: 700}`, or `mode: window` to shrink the whole frame
+and float it on black, which reads completely differently.
+
+**Text** is `overlays`: timed cards with real shaping, so
+`من از نهایت شب حرف می‌زنم` renders as connected Persian letterforms rather
+than reversed characters that look like text to anyone who can't read it.
+Sizes are fractions of frame height, so a card designed at 1080x1920 survives
+being re-rendered at 4K. Fonts ship with the package — a font resolved from a
+system path renders differently on every machine.
+
+What text is *for* is the opinionated part, and it's in the creative guide:
+**describe nothing, inhabit something.** No dials, no frame counters, no
+labels naming the section — those describe the song from outside it. A tape
+readout, a DVD menu, a radio dial sweeping AM to FM: those assert the song is
+playing inside a machine, and that machine is a character.
+
+Full vocabulary and the "two rooms, one frequency" AM/FM concept these presets
+generalize from: [docs/CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md) and
 [docs/case-studies/love.md](docs/case-studies/love.md) — a real ~11-minute
 project this framework was extracted from (identifying details scrubbed;
 structure, timestamps, and station design are real).
+
+## Made with this
+
+This isn't a framework looking for a user. It was extracted from a working
+practice — the releases came first, the tool second, and each new song still
+finds something it gets wrong.
+
+The music and visuals it generalizes from:
+
+- **[septheconcept on SoundCloud](https://soundcloud.com/septheconcept)** — the tracks
+- **[The Analog Guys in Digital Worlds on YouTube](https://www.youtube.com/@theanalogguysindigitalworlds)** — the videos and covers
+
+That channel name is more or less this project's thesis: analog material —
+35mm film scans, phone footage shot at 3am, photographs taken over years —
+put through a digital process that is deterministic and inspectable rather
+than generative. The frames are real. What the code decides is *where the cuts
+land and what the grade is*, not what the picture contains.
+
+None of that material is in this repository, and none of it can be:
+`check_no_media.sh` refuses it at commit time. See
+[Your media stays yours](#your-media-stays-yours).
 
 ## Cost, measured
 
@@ -344,21 +388,31 @@ tests/          unit tests; tests/factories/ builds every fixture from
 
 ## Status
 
-**v0.1, working end to end** — not a design sketch. Every claim above was
-measured by actually running the pipeline on the machine named in
-[Cost, measured](#cost-measured) (see [CHANGELOG.md](CHANGELOG.md) for
-what's built, including the real bugs found and fixed rather than documented
-as known issues). What's genuinely still open:
+**v0.2, working end to end.** Every claim above was measured by running the
+pipeline on the machine named in [Cost, measured](#cost-measured). See
+[CHANGELOG.md](CHANGELOG.md) for what's built, including the real bugs found
+and fixed rather than documented as known issues.
 
-- **Proven on one real project so far.** `docs/case-studies/love.md` is a
-  scrubbed reconstruction of the project this framework generalizes from —
-  real structure, real timestamps, real station design, but one project.
-  A second, independently-run case study would do more to prove this
-  generalizes than anything else on the roadmap; see
+What's genuinely still open, in the order it hurts:
+
+- **Cover art is procedural, not designed.** `cover/generate.py` draws a
+  frequency stack from the song's energy envelope. It is honestly derived and
+  it is *not* a typographic, photograph-based cover. The templates for those —
+  a burned-in subtitle, a two-ink screen print, a negative, type set so a light
+  in the photograph becomes the full stop — are
+  [designed and not built](https://github.com/sep-lab/kaleidophone/issues/21).
+- **The release pack is a scaffold, not copy.** Every timestamp, chapter and
+  credit in it is derived, so the facts are right. The voice is not, and the
+  pack says so in its own header. Rewriting it is what
+  `/kaleido:caption` is for.
+- **Proven on a narrow set of material.** The framework generalizes from one
+  artist's projects. A case study run by someone else would do more to prove
+  it travels than anything else on the roadmap — see
   [CONTRIBUTING.md](CONTRIBUTING.md).
-- **AI-assisted cover art and captions are designed for, not built.** The
-  deterministic pipeline is the whole default today; see
-  [docs/ROADMAP.md](docs/ROADMAP.md), Phase 3.
+- **`kaleidophone auto` lags the hand-authored path.** It won't propose
+  framing or overlays, and its auto-sectioning falls back to even slicing more
+  often than it should
+  ([#45](https://github.com/sep-lab/kaleidophone/issues/45)).
 
 ## Where to start contributing
 
