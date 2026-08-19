@@ -85,7 +85,14 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 # PEP 561: the public signatures are annotated, so let type checkers see them.
-kaleidophone = ["py.typed"]
+#
+# The fonts are not optional extras -- overlay/typography.py resolves every
+# bundled role to a file inside the package, so a wheel without them installs
+# an overlay engine that raises on first use. They ship for the same reason
+# they are vendored at all: a font resolved from the host renders differently
+# on every machine, and this project's premise is that a brief reproduces.
+# tests/test_packaging.py asserts they are in the built wheel.
+kaleidophone = ["py.typed", "overlay/fonts/*.ttf", "overlay/fonts/licenses/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
