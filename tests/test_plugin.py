@@ -1,0 +1,147 @@
+"""
+The Claude Code plugin manifest.
+
+Nothing here talks to Claude Code -- it validates the structure the loader
+requires, so a typo in a manifest fails in CI rather than at
+`/plugin install` time on someone else's machine.
+
+Why this file exists at all: `docs/PRIOR-ART.md` names the project's own
+biggest risk as needing a user who "is comfortable in a terminal". The plugin
+is the answer to that, which makes these manifests load-bearing for adoption
+rather than a nicety.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+PLUGIN = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
+MARKET = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text())
+COMMANDS = sorted((ROOT / "commands").glob("*.md"))
+SKILLS = sorted((ROOT / "skills").glob("*/SKILL.md"))
+
+
+def frontmatter(path: Path) -> dict:
+    text = path.read_text()
+    assert text.startswith("---\n"), f"{path.name} has no YAML frontmatter"
+    return yaml.safe_load(text.split("---", 2)[1])
+
+
+# --------------------------------------------------------------------------
+# manifests
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("field", ["name", "description", "version"])
+def test_plugin_manifest_has_the_required_fields(field):
+    assert PLUGIN.get(field), f"plugin.json is missing {field}"
+
+
+def test_the_plugin_name_is_kebab_case_and_matches_the_package():
+    """The name is **immutable once published** -- it is how existing installs
+    resolve. Renaming later orphans everyone who already installed it."""
+    assert PLUGIN["name"] == "kaleidophone"
+    assert re.fullmatch(r"[a-z0-9-]+", PLUGIN["name"])
+
+
+def test_the_marketplace_lists_this_plugin_from_the_repo_root():
+    assert MARKET["name"] and MARKET["owner"]["name"]
+    entries = {p["name"]: p for p in MARKET["plugins"]}
+    assert PLUGIN["name"] in entries, "the marketplace does not list its own plugin"
+    assert entries[PLUGIN["name"]]["source"] == ".", "repo root is the plugin source"
+
+
+def test_the_marketplace_name_is_not_reserved():
+    """Names that impersonate an official Anthropic source are refused at load
+    time, and a marketplace that stops loading is indistinguishable from a
+    broken one."""
+    reserved = {
+        "claude-code-marketplace", "claude-code-plugins", "claude-plugins-official",
+        "claude-plugins-community", "claude-community", "anthropic-marketplace",
+        "anthropic-plugins", "agent-skills", "anthropic-agent-skills",
+        "knowledge-work-plugins", "first-party-plugins", "healthcare",
+    }
+    assert MARKET["name"] not in reserved
+    assert "anthropic" not in MARKET["name"] and "official" not in MARKET["name"]
+
+
+def test_the_plugin_version_matches_the_package_version():
+    """Two version numbers that drift are worse than one, because the mismatch
+    is invisible until someone reports a bug against the wrong one."""
+    import kaleidophone
+    assert PLUGIN["version"] == kaleidophone.__version__
+    entry = next(p for p in MARKET["plugins"] if p["name"] == PLUGIN["name"])
+    assert entry["version"] == kaleidophone.__version__
+
+
+# --------------------------------------------------------------------------
+# commands
+# --------------------------------------------------------------------------
+def test_there_are_commands_at_all():
+    assert COMMANDS, "commands/ is empty -- the plugin would install and do nothing"
+
+
+@pytest.mark.parametrize("path", COMMANDS, ids=lambda p: p.stem)
+def test_every_command_has_a_description(path):
+    """The description is what a user sees in the command list; without one the
+    command is undiscoverable even once installed."""
+    fm = frontmatter(path)
+    assert fm.get("description"), f"{path.name} has no description"
+    assert len(fm["description"]) < 200, "keep it to one line"
+
+
+@pytest.mark.parametrize("path", COMMANDS, ids=lambda p: p.stem)
+def test_no_command_promises_to_post_anything(path):
+    """ADR-0006 draws the line at generating files. A command that told Claude
+    to publish would route around a boundary the code cannot enforce on prose."""
+    body = path.read_text().lower()
+    for phrase in ("post it to", "upload to instagram", "publish to", "tweet"):
+        assert phrase not in body, f"{path.name} appears to promise posting: {phrase!r}"
+
+
+@pytest.mark.parametrize("path", COMMANDS, ids=lambda p: p.stem)
+def test_every_command_references_a_real_cli_subcommand(path):
+    """Commands are prose, so nothing else catches an invented subcommand.
+
+    Only code spans and fenced blocks are scanned: the plugin's prose says
+    things like "kaleidophone generates release files", and treating that as a
+    subcommand reference is a false positive, not a finding."""
+    from kaleidophone.cli import _build_parser
+    known = set(_build_parser()._subparsers._group_actions[0].choices)
+    text = path.read_text()
+    code = "\n".join(
+        re.findall(r"^```.*?^```", text, re.S | re.M) + re.findall(r"`([^`\n]+)`", text)
+    )
+    used = set(re.findall(r"\bkaleidophone (\w+)", code))
+    unknown = used - known
+    assert not unknown, f"{path.name} references non-existent subcommands: {sorted(unknown)}"
+
+
+# --------------------------------------------------------------------------
+# skills
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("path", SKILLS, ids=lambda p: p.parent.name)
+def test_every_skill_has_name_and_description_frontmatter(path):
+    fm = frontmatter(path)
+    assert fm.get("name") == path.parent.name, "skill name must match its directory"
+    assert fm.get("description"), f"{path.parent.name} has no description"
+
+
+@pytest.mark.parametrize("path", SKILLS, ids=lambda p: p.parent.name)
+def test_every_skill_description_says_when_to_use_it(path):
+    """A description that only says what a skill *is* does not trigger. The
+    ones here are meant to say when to reach for them."""
+    d = frontmatter(path)["description"].lower()
+    assert "use " in d or "when " in d, f"{path.parent.name}'s description has no trigger"
+
+
+def test_the_creative_direction_skill_carries_the_text_rule():
+    """It is the rule most likely to be got wrong, and the one that separates
+    this from a slideshow generator."""
+    body = (ROOT / "skills" / "kaleidophone-creative-direction" / "SKILL.md").read_text()
+    assert "describe nothing, inhabit something" in body.lower()
+    assert "diegetic" in body.lower()

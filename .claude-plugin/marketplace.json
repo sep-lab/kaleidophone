@@ -1,0 +1,19 @@
+{
+  "name": "kaleidophone",
+  "owner": {
+    "name": "sep-lab",
+    "url": "https://github.com/sep-lab"
+  },
+  "description": "Tools for solo musicians shipping a release without a team.",
+  "plugins": [
+    {
+      "name": "kaleidophone",
+      "source": ".",
+      "description": "A song plus your own photos becomes a beat-synced video, cover art, and a per-platform release pack. Claude reads the song's structure and directs the edit; ffmpeg draws every pixel.",
+      "version": "0.2.0",
+      "author": { "name": "sep-lab" },
+      "homepage": "https://github.com/sep-lab/kaleidophone",
+      "license": "Apache-2.0"
+    }
+  ]
+}
