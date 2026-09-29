@@ -132,10 +132,11 @@ P0 or P1 is fixed below, measured before and after.
 - Every ffmpeg call goes through `render/_ffmpeg_util.py` (the only module that
   imports `subprocess`, now a test) with `-nostdin` and no terminal stdin, so a
   `while read` loop around `deliver` no longer loses its input.
-- Actions bumped (checkout 7.0.1, upload-artifact 7.0.1, download-artifact
-  8.0.1), folding in the open Dependabot PRs. The `numba < 0.68` bump is **not**
-  taken: the pin exists to keep an llvmlite with x86_64 macOS wheels, and the
-  bump's edited comment claimed the opposite of what the pin is for.
+- Actions on checkout 7.0.1, upload-artifact 7.0.1 and download-artifact 8.0.1
+  (Dependabot #2–#4), with every new workflow pinned the same way. Dependabot's
+  numba PR (#5) changed only the comment above the Intel-Mac pin, so that it
+  contradicted the pin; the comment is restored. `numba<0.63` is what keeps
+  llvmlite below 0.46, the last line with x86_64 macOS wheels, and it stays.
 - The PyPI publish job waits for a repository variable, and says so when it
   skips, so a tag no longer produces a red run before the trusted publisher
   exists (v0.2.0's did). The README installs from GitHub until then.
