@@ -1,7 +1,9 @@
 # Architecture
 
 How kaleidophone turns a brief into a video, cover, and promo pack — and why the
-pipeline is split where it's split.
+pipeline is split where it's split. Sections 1–7 describe the filter-graph
+engine (footage); [section 8](#8-three-engines) the two engines added in 0.3 —
+frame programs and canvas pieces — and the contract all three keep.
 
 ---
 
@@ -86,6 +88,26 @@ faster when it doesn't," at least for v0.1. A single-pass filter_complex
 renderer is tracked in [ROADMAP.md](ROADMAP.md) as a real, worthwhile
 optimization once the segment model has enough real usage to know which
 effects are common enough to be worth optimizing for.
+
+**What the releases since then said.** Every bespoke release built outside
+this repository re-derived segment-then-concat on its own, each for a
+different reason — which is the strongest evidence for it this project has:
+
+- **Iteration cost** — the reference project, and the two releases before the
+  framework existed (see [case studies](case-studies/README.md)).
+- **Memory** — a single filter graph with 10+ trim branches and overlays was
+  killed by the OOM killer on a 2-core sandbox (THE NIGHT TRACK TALKS). The fix
+  was the canonical form: one file per segment, identical codec parameters,
+  the concat demuxer, one light finishing pass.
+- **Wall-clock limits** — rendering on a small VM whose calls could run for
+  ≤45 s and whose background processes died at the end of each call
+  ([Loneliness](case-studies/loneliness.md)): one segment per call.
+- **State** — effects that remember earlier frames, under 180 s call limits:
+  workers that checkpoint their state and append a part per call
+  ([MIKONAMET](case-studies/mikonamet.md); now `kaleidophone.frames.run_job`).
+- **Parallelism** — canvas pieces that are a pure function of time split a
+  window into contiguous chunks across browser pages and join them
+  (`canvas/tools/render.mjs`).
 
 ## 4. Effects: linear vs. graph filters
 
@@ -207,3 +229,88 @@ plain tuple in the schema — but it isn't the default, and doubling
 resolution roughly quadruples pixel count and render time for a look this
 project's whole aesthetic (grain, scanlines, vignette) doesn't especially
 reward.
+
+## 8. Three engines
+
+Since 0.3 there are three ways to make the picture, and one contract they all
+keep ([ADR-0007](decisions/0007-three-engines-one-contract.md)).
+
+```mermaid
+flowchart LR
+    SONG["song.wav"] --> ENV["kaleidophone envelope\nsong pack: 100 Hz bands,\nflux, beats, grid"]
+    ENV --> FG["filter graphs\nrender/ -- your footage"]
+    ENV --> FP["frame programs\nframes/ -- footage, per pixel,\nstateful, resumable"]
+    ENV --> CV["canvas pieces\ncanvas/ -- drawn, in a browser"]
+    FG --> SIL["silent render\nsegments + concat demuxer,\nkeyframes at the cuts"]
+    FP --> SIL
+    CV --> SIL
+    SIL --> DEL["kaleidophone deliver\ncuts by stream copy, audio muxed,\nloudness + true peak measured"]
+    SONG --> DEL
+    OLD["previous master"] --> MC["kaleidophone master-check\nremux / offset / rerender bars / new grid"]
+    SONG --> MC
+
+    style SIL fill:#fde2e1,stroke:#b91210,color:#7f1d1d
+    style DEL fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+    style ENV fill:#d1faf3,stroke:#0f766e,color:#134e4a
+```
+
+**The contract.**
+
+1. **The song, analysed once.** `kaleidophone envelope` writes a song pack:
+   100 Hz band energies (bass, low-mid, mid, high, air), RMS in dB and
+   normalised, spectral flux (all, bass, high), centroid, a vocal-band
+   mid/side envelope for stereo mixes, the beat grid and the loudest minute.
+   Pictures react to that, never to the audio stream, so a render is
+   repeatable and needs no audio at all.
+2. **A deterministic picture.** Every random choice is seeded; a frame depends
+   on time and the pack. Where possible it depends on *nothing else* — a pure
+   function of time renders any window on its own
+   ([TECHNIQUES #30](TECHNIQUES.md#30-pure-function-of-time)).
+3. **Silent and segmented.** The picture renders without audio, in independent
+   segments joined by the concat demuxer ([§3](#3-why-segment-then-concat-not-one-filter_complex-graph)),
+   with keyframes forced at every planned cut when the engine allows it.
+4. **The audio goes on last, where the master lives.** `kaleidophone deliver`
+   cuts every deliverable from the one render by stream copy (`-frames:v N`,
+   metadata and chapter tracks stripped), muxes the master under each, and
+   measures integrated loudness and true peak **on the delivered file** — the
+   AAC encoder overshoots a hot master's peaks by up to ~2 dB, and the needed
+   margin changed from master to master ([#18](TECHNIQUES.md#18-aac-true-peak-guard),
+   [#50](TECHNIQUES.md#50-aac-guard-per-master)).
+5. **A new master is checked before anything is re-rendered.**
+   `kaleidophone master-check` compares it with the one the picture was cut
+   against — alignment within half a frame, a constant offset, every
+   envelope a piece reads compared bar by bar ([#49](TECHNIQUES.md#49-master-drop-in-check),
+   [#52](TECHNIQUES.md#52-what-the-new-master-added)).
+
+**The engines.**
+
+| | Filter graphs | Frame programs | Canvas pieces |
+|---|---|---|---|
+| Source you author | a `CreativeBrief` (YAML) | a Python program + its state | a piece: `canvas/pieces/<id>/` |
+| Draws with | ffmpeg filter graphs | numpy between an ffmpeg decode and encode | canvas 2D in headless Chromium |
+| State between frames | none | yes, checkpointed (`state_dict`) | none, except one legacy piece |
+| Splits a render by | cut | worker + budgeted part per call | contiguous chunk per browser page |
+| Speed, measured | 37 cuts at 720p in 22.6 s (demo, §6) | ~8.7 fps/worker at 1080p (4-core ARM) | 3–9.5 fps at 1080×1920 per worker, by piece |
+| Covers | `cover/generate.py` | stills from the program | the piece's own cover mode |
+| Keyframes at cuts | not yet (final pass re-encodes) | at job boundaries: every job and checkpointed part is a fresh encode that opens on a keyframe; `run_workers(snap_to=…)` moves worker splits onto cuts | `render.mjs --keys` |
+
+**Where each one lives in the repository, and why.** The canvas engine is
+JavaScript because the pieces are web pages: the same file is the live,
+shareable artwork and the renderer. It sits in `canvas/` with its own lockfile
+and CI job, so the Python package never depends on Node. The four pieces that
+shipped are kept exactly as they shipped (verified frame by frame; see
+[canvas/README.md](../canvas/README.md), "Verified against what shipped");
+what they have in common was extracted into `canvas/lib/` for new pieces rather
+than retrofitted into them, because a byte-identical piece is one that can be
+re-rendered for its release.
+
+**What is private, what is public.** The engines, pieces and tools are public;
+the songs are not. A song pack derived from an unreleased master is private
+like the master. Pieces run in CI, and on the [gallery](https://sep-lab.github.io/kaleidophone/),
+from *synthetic twins*: the real tempo, first downbeat and rounded per-section
+levels and peaks, plus the timing windows a piece is choreographed to where it
+needs them,
+with every hit generated (`canvas/tools/synth.mjs`). CI refuses a real pack
+under any name (`check_no_real_songpacks.py`), and the gallery itself is
+rendered by CI, never committed ([ADR-0003](decisions/0003-public-framework-private-assets.md),
+[ADR-0007](decisions/0007-three-engines-one-contract.md)).

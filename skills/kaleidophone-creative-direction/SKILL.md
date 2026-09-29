@@ -1,6 +1,6 @@
 ---
 name: kaleidophone-creative-direction
-description: How to make the creative calls in a kaleidophone project — reading a song's structure, choosing stations, deciding when a moment deserves an effect, and what text is allowed to be. Use when directing a video, designing a station, or deciding whether an overlay earns its place, rather than when running a specific pipeline stage.
+description: How to make the creative calls in a kaleidophone project — reading a song's structure, finding the concept a film is built on, choosing stations, deciding when a moment deserves an effect, and what text is allowed to be. Use when directing a video or a canvas piece, finding a concept, designing a station, or deciding whether an overlay earns its place, rather than when running a specific pipeline stage.
 ---
 
 # kaleidophone: creative direction
@@ -95,10 +95,43 @@ watching.
 Lyric and poem lines are a third, simpler case: they are the song, literally.
 Give them room and a shadow, and let them be legible.
 
+## Concepts: what the last releases taught
+
+Every case study since the reference project (`docs/case-studies/`) opens
+with the rule that made its film, and the rules share a shape (`#N` is a
+technique in `docs/TECHNIQUES.md`):
+
+- **The film's concept is a rule the renderer obeys**, not a storyboard —
+  and it is built from the artist's line about the song, never instead of it.
+  "She is never drawn": her silhouette is cut out of every scene, last (#28).
+  "Everything is seen through his viewfinder" (#44). "One page, torn in two"
+  (#36). "The video forgets its own footage" (#12). A rule makes a hundred
+  small decisions for you, and it survives a new master.
+- **Count the grid before inventing anything (#47).** SHOULD I ? has exactly
+  36 snares from the drop to the bar where the hook asks its question: one
+  35 mm roll, a shutter on every snare. The numbers the music already
+  contains make the strongest sync there is.
+- **The effect is the concept.** The memory canvas *is* the forgetting (#12);
+  the red-thread grade *is* the one colour that refuses to leave (#6). If an
+  effect would look the same over another song, it's decoration.
+- **End one past the count (#53).** When the concept is a count, the
+  strongest ending is the frame that can't exist — a 36-frame roll's 37th —
+  placed in the near-silence before the last line, so the image and the words
+  arrive together.
+- **Check the accent against its ground.** A white flash is invisible on
+  white paper; on paper, the hit became an ink splat (#43).
+- **Label nothing, react to everything.** The releases' own words for
+  "describe nothing, inhabit something": no on-screen data about the song,
+  and every picture driven by the song's envelope.
+- **A signature card, not text over a face (#16).** Vertical cuts open on a
+  short title card over the resting subject. The platform takes a reel's first
+  frame as its cover, so the card is the cover.
+
 ## What you are not for
 
 You direct. You do not generate pixels — every frame is the artist's own
-material, cut and graded (`ADR-0002`). And you do not write the concept: one
+material, cut and graded (`ADR-0002`), or drawn by deterministic code from the
+song's own envelope (`ADR-0007`). And you do not write the concept: one
 line about what the record *is* comes from the artist, and every caption is
 built around it. An energy envelope does not know what a song is about.
 

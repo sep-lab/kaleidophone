@@ -45,6 +45,14 @@ a shortened radio edit. `render_silent()`'s output is the expensive part;
 `mux_audio()` never re-touches a single effect. See
 `docs/decisions/0001-version-the-brief-not-the-render.md`.
 
+Two cautions before a remux onto a *new master*. Run
+`kaleidophone master-check old.wav new.wav` first: a remux onto a master whose
+grid moved desyncs every later cut without an error (the
+`kaleidophone-master-swap` skill). And `remux` applies no gain and measures
+nothing, while AAC overshoots a hot master's peaks — deliver through
+`kaleidophone deliver`'s true-peak guard instead (the
+`kaleidophone-release-kit` skill).
+
 If you're rendering once and don't expect to re-sync audio, `kaleidophone render`
 (or `kaleidophone run`'s full pipeline) is simpler — it does both steps and
 cleans up the intermediate silent file.

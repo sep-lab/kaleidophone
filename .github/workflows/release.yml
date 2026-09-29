@@ -12,6 +12,8 @@
 #     Environment name: pypi
 # Without that, the publish step fails with an authentication error and
 # nothing is uploaded -- a safe failure, but a confusing one if unexpected.
+# So the publish job only runs once the repository variable
+# PYPI_TRUSTED_PUBLISHING is set to "true" (see the job below).
 #
 # TO RELEASE
 #   1. bump __version__ in src/kaleidophone/__init__.py (the single source --
@@ -69,9 +71,22 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Say so when publishing is switched off
+        # The publish job below is then skipped, and a skipped job doesn't say why.
+        if: vars.PYPI_TRUSTED_PUBLISHING != 'true'
+        run: |
+          msg="Nothing was published to PyPI: the repository variable PYPI_TRUSTED_PUBLISHING is not 'true', so the publish job is skipped. The sdist and wheel are in this run's 'dist' artifact. To publish: add the pending publisher on PyPI (ONE-TIME SETUP at the top of .github/workflows/release.yml), set PYPI_TRUSTED_PUBLISHING=true under Settings -> Secrets and variables -> Actions -> Variables, then run this workflow on the tag (Actions -> Release -> Run workflow)."
+          echo "::notice title=PyPI publish skipped::${msg}"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
   publish:
     name: Publish to PyPI
     needs: [build]
+    # Gated on a repository variable so a tag never produces a red run for a publisher that
+    # doesn't exist yet: v0.2.0's tag failed here with `invalid-publisher` because the PyPI side
+    # of the setup above was never done. Do it, then set the repository variable
+    # PYPI_TRUSTED_PUBLISHING=true (Settings -> Secrets and variables -> Actions -> Variables).
+    if: vars.PYPI_TRUSTED_PUBLISHING == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: pypi

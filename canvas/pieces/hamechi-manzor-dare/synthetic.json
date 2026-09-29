@@ -1,0 +1,76 @@
+{
+  "_comment": "Synthetic twin of HAMECHI MANZOR DARE (73.17 BPM; the beats its driver sees run on the half-time grid, one every 1.64 s, as the release pack's did): per-section levels as [mean, p95, max] rounded to 0.05, measured with tools/synth.mjs --twin; every hit is generated; stored as bytes like the toolkit-era packs.",
+  "seed": 7,
+  "fps": 100,
+  "dur": 208.489,
+  "bpm": 73.17,
+  "downbeat": 1.25,
+  "beatGrid": {"bpm": 36.585, "downbeat": 1.25},
+  "keys": ["bass", "mid", "high", "rms", "flux"],
+  "quantize": 255,
+  "sections": [
+    {
+      "from": 0,
+      "kick": "none",
+      "bass": [0.05, 0.25, 0.95],
+      "mid": [0.25, 0.65, 0.9],
+      "high": [0.05, 0.15, 0.65],
+      "rms": [0.15, 0.45, 0.95],
+      "flux": [0.1, 0.4, 0.75]
+    },
+    {
+      "from": 20,
+      "kick": "1-3",
+      "bass": [0.15, 0.6, 0.95],
+      "mid": [0.45, 0.75, 0.95],
+      "high": [0.1, 0.35, 1],
+      "rms": [0.3, 0.65, 0.95],
+      "flux": [0.2, 0.55, 0.9]
+    },
+    {
+      "from": 44,
+      "kick": "1-3",
+      "bass": [0.2, 0.65, 1],
+      "mid": [0.45, 0.75, 0.95],
+      "high": [0.1, 0.4, 0.9],
+      "rms": [0.35, 0.65, 1],
+      "flux": [0.25, 0.55, 1]
+    },
+    {
+      "from": 104,
+      "kick": "1-3",
+      "bass": [0.15, 0.65, 1],
+      "mid": [0.35, 0.65, 0.9],
+      "high": [0.1, 0.3, 0.7],
+      "rms": [0.3, 0.65, 1],
+      "flux": [0.2, 0.55, 0.85]
+    },
+    {
+      "from": 130,
+      "kick": "1-3",
+      "bass": [0.25, 0.65, 1],
+      "mid": [0.35, 0.65, 1],
+      "high": [0.1, 0.35, 0.8],
+      "rms": [0.3, 0.65, 1],
+      "flux": [0.2, 0.5, 0.9]
+    },
+    {
+      "from": 160,
+      "kick": "1-3",
+      "bass": [0.25, 0.7, 0.95],
+      "mid": [0.3, 0.6, 0.95],
+      "high": [0.05, 0.2, 0.55],
+      "rms": [0.3, 0.65, 1],
+      "flux": [0.15, 0.5, 0.8]
+    },
+    {
+      "from": 190,
+      "kick": "1-3",
+      "bass": [0.15, 0.55, 1],
+      "mid": [0.15, 0.4, 0.8],
+      "high": [0.05, 0.15, 0.3],
+      "rms": [0.15, 0.5, 0.95],
+      "flux": [0.1, 0.35, 0.8]
+    }
+  ]
+}

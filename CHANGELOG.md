@@ -5,6 +5,163 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-29
+
+**Three engines, one contract.** 0.2 cut your footage into a release. The
+releases since then drew theirs: four of the last six had no footage at all,
+and two needed per-pixel effects no filter graph can say. 0.3 brings both into
+the repository as engines, and gives all three one way in (the song pack) and
+one way out (`deliver`). See
+[ADR-0007](docs/decisions/0007-three-engines-one-contract.md).
+
+Before it shipped, 0.3 was reviewed from three seats — a principal musician, a
+visualiser/art director and a staff engineer — and every finding they ranked
+P0 or P1 is fixed below, measured before and after.
+
+### Added — the canvas engine (`canvas/`)
+
+- **Four shipped pieces, runnable from the repository**: HAMECHI MANZOR DARE,
+  ( - ), SAME AS YOU, SHOULD I ? — each one self-contained HTML file with live,
+  render and cover modes. Kept as they shipped and verified against it: SAME AS
+  YOU built byte-identical to its release; SHOULD I ? renders 20/20 test frames
+  and 8/8 covers PNG-identical; against frames decoded from the delivered
+  films, 37.0–44.0 dB PSNR (adjacent frames: 21–25 dB). HAMECHI MANZOR DARE's
+  released reel is *not* reproducible — the one-off harness that rendered it
+  wasn't kept — and the docs say so.
+- **`canvas/lib/`** — what the pieces had in common, for new pieces: `core`
+  (math, keyframes, hashes, the grid, the envelope sampler, sprites), `live`
+  (the three modes; a live analyser scaled from a pre-scan of the dropped
+  track, delayed by the output latency, with the song pack's `voc`; a
+  just-tuned fallback pad that goes half-time below 90 BPM; the 9:16 safe frame
+  drawn with `?qa=1`), `ink` (boil on twos, the envelope held on twos,
+  draw-on and erase, contact QA, a hand-lettered alphabet with per-glyph
+  widths and a title fitter), `rig` (rig v2: IK, seated bodies built from the
+  floor up, chairs built from the body, planted walks), `recursion` (vector
+  droste and kaleidoscope), `viewfinder`.
+- **`canvas/pieces/template`** — the starting point for a new piece: an 8-bar
+  loop that exercises the lib. Both planted feet at 0 px for all 96 frames of
+  its walk at 24 fps, the pose on twos, a title fitted to 78 % of the frame
+  and held a full second, a lamp whose light no longer rings dark.
+- **Tools**: `build.mjs` (one file, fonts inlined from pinned npm packages with
+  a credit comment each — no font binaries in git; refuses a lib listed out of
+  order and any piece that redeclares a lib name, naming both lines;
+  `--reserved` prints the 146 names), `render.mjs` (deterministic silent
+  render from its own build of the piece, parallel workers, forced keyframes by
+  frame or `--key-times`, signature cards, stateful warm-up and resume, a JSON
+  sidecar with the snapped `t0` and `silent_start`; a page error or any network
+  request fails the run), `still.mjs` (QA stills with `--qa`, every cover),
+  `synth.mjs` (synthetic twins, `--twin … --piece` to re-measure one in place),
+  `gallery.mjs` (the public gallery). Every tool rejects a misspelled flag.
+- **Synthetic twins.** Real song packs are private like the audio (ADR-0007);
+  each piece ships the spec of a synthetic twin — the real tempo, first
+  downbeat and section boundaries, each section's `[mean, p95, max]` per
+  envelope rounded to 0.05, every hit generated. Measured against the real
+  packs, the worst per-section gap is 0.02–0.05 (was 0.52–0.96 at the p95), so
+  HAMECHI MANZOR DARE's masks now crack in the gallery as they do on the song.
+- **The gallery**, rendered in CI and published with GitHub Pages
+  (`.github/workflows/pages.yml`): animated WebP clips (0.39–1.25 MB each),
+  posters for reduced motion, covers, the live pieces, a link preview image and
+  the font licences. Nothing is committed. Closes #43.
+
+### Added — frame programs (`kaleidophone.frames`)
+
+- Per-pixel, stateful effects over footage, from two releases: `MemoryCanvas`
+  (the video forgets its own footage), `generation_loss` (photocopies of
+  photocopies, getting paler), `SlitScan`, `red_thread_grade`, `KaleidoBloom`,
+  `GrainBank`, `feedback_echo`, `punch_zoom`, `mean_face`.
+- A resumable runner: budgeted calls, checkpoints that resume bit-identically
+  (no pickle), parts joined by the concat demuxer, worker planning that snaps
+  boundaries to cuts.
+
+### Added — commands
+
+- **`kaleidophone envelope`** — the song pack: 100 Hz band energies, flux,
+  centroid, a centre-channel vocal-band envelope, the beat grid, bar 1 and the
+  loudest minute (snapped to a bar). It prints the other tempo octave with its
+  score and warns when the call is close; fits the grid to the music every
+  8 bars and warns when a live take drifts off it; estimates bar 1 from bass
+  onsets and harmony changes, with a confidence and a runner-up
+  (`--downbeat`, `--beats-per-bar` to overrule it). All of it lands in the
+  pack's `grid_check`. numpy only; no librosa on this path.
+- **`kaleidophone master-check`** — the remux landmark-drift guard from the
+  roadmap (#18). Verdicts `remux` (0), `rerender bars …` (3), `new grid` (4)
+  and `offset` (5, with the `silent_start` to deliver at). Within half a frame
+  at 24 fps (`--tolerance-ms`) counts as aligned; every envelope a piece reads
+  is compared bar by bar, so a master without its hi-hats says which bars and
+  which bands; a vocal moved on an unchanged beat, a varispeed master and an
+  added outro are each named for what they are; times in mm:ss next to bars.
+- **`kaleidophone deliver`** — the delivery sheet: every cut from one silent
+  render by stream copy (`-frames:v`, never `-t`), a signature-card segment
+  concatenated in front, the master muxed with `loudness`, `fixed` or `auto`
+  gain — one gain per master, so a story from a quiet intro stays as quiet as
+  the song made it — and loudness and true peak measured on the delivered
+  files, with the true-peak guard run after the limiter and the AAC encoder in
+  every mode. The ceiling is −1 dBTP, or −2 for masters louder than −14 LUFS
+  (Spotify's published guidance). Fades default to 5 ms in / 15 ms out; a
+  negative `silent_start` pads the head; `audio: none` makes a silent cut
+  (Spotify Canvas); `--dry-run` emits the same thing as a shell script for the
+  machine that holds the master, with every path quoted against expansion.
+
+### Added — the plugin
+
+- Skills: `kaleidophone-canvas-piece`, `kaleidophone-release-kit`,
+  `kaleidophone-master-swap`, `kaleidophone-footage-effects`; the
+  creative-direction skill gains the concept lessons.
+- Commands: `/kaleido:piece`, `/kaleido:deliver`, `/kaleido:master`.
+
+### Added — docs
+
+- **`docs/TECHNIQUES.md`** — 54 techniques from real releases, numbered, each
+  with where it came from and where it lives in the code.
+- **Seven case studies** (`docs/case-studies/`) and an index of all twelve
+  releases. Closes #41, #42.
+- ADR-0007; ARCHITECTURE §8 "Three engines"; CREATIVE-GUIDE "Drawn pieces: the
+  concept is a rule" and "The frame, in numbers" (the 9:16 safe frame, the
+  palette, stroke weights, minimum text size, frame rates, cover sizes);
+  CONFIG-SCHEMA for the delivery sheet, the song pack and the synthetic twin.
+
+### Changed
+
+- The tagline: *Claude directs. Deterministic code draws every pixel.*
+- CI gains a `canvas` job (92 node tests, every piece built from its synthetic
+  twin, one second of each rendered in real Chromium with two workers and
+  forced keyframes, every cover drawn, a page that reaches for the network
+  shown failing) and a guardrail that refuses any tracked song pack not marked
+  synthetic (`*songpack*.json` is ignored as well). Python: 816 tests at 96 %
+  coverage (0.2.0: 143 at ~89 %); the floor rises from 80 to 92.
+- Every ffmpeg call goes through `render/_ffmpeg_util.py` (the only module that
+  imports `subprocess`, now a test) with `-nostdin` and no terminal stdin, so a
+  `while read` loop around `deliver` no longer loses its input.
+- Actions bumped (checkout 7.0.1, upload-artifact 7.0.1, download-artifact
+  8.0.1), folding in the open Dependabot PRs. The `numba < 0.68` bump is **not**
+  taken: the pin exists to keep an llvmlite with x86_64 macOS wheels, and the
+  bump's edited comment claimed the opposite of what the pin is for.
+- The PyPI publish job waits for a repository variable, and says so when it
+  skips, so a tag no longer produces a red run before the trusted publisher
+  exists (v0.2.0's did). The README installs from GitHub until then.
+- ( - )'s paper grain is seeded; as shipped it used `Math.random()`, so no two
+  renders of a frame matched.
+- Live mode in ( - ), SAME AS YOU and SHOULD I ?: the click-to-play beat no
+  longer stops after one kick, and the fallback pad stops when a track is
+  dropped. Render mode is untouched (29/29 frames and covers PNG-identical
+  before and after).
+
+### Known
+
+- `kaleidophone silent` can't force keyframes yet (its concat pass
+  re-encodes), so a filter-graph render is cut by `deliver` only after a
+  re-encode.
+- ffmpeg's native AAC encoder (6.1/7.0, default coder) put short pops 14–20 dB
+  above the local level into one heavily limited *synthetic* master;
+  `-aac_coder fast` brought them to 4–8 dB. Not changed until it's checked on a
+  real master.
+- On ffmpeg 4.2, `-frames:v` drops the audio's last AAC frame, and with it the
+  15 ms fade-out.
+- Bar 1 is an estimate: `kaleidophone envelope` prints its confidence; check
+  it by ear and pass `--downbeat` when it's low.
+- HAMECHI MANZOR DARE draws its credit line in the system monospace font, so
+  its frames differ slightly between machines.
+
 ## [0.2.0] — 2026-08-19
 
 **Deliverables, not just a render.** 0.1 produced a 16:9 video. 0.2 produces
@@ -79,37 +236,6 @@ burned-in bilingual text, and the per-platform copy — all from the same brief.
   tape readout or a DVD menu — which are not data about the song but a fiction
   the song plays inside.
 - Test suite 143 → 281; coverage 89% → 90%.
-
-### Added
-
-- **`output.aspect`** — compose natively at `16:9`, `9:16`, `1:1` or `4:5`
-  instead of centre-cropping an already-rendered 16:9 master. Setting it alone
-  picks the canonical resolution for that shape.
-- **`sections[].framing`** — how a source frame is fitted into a
-  differently-shaped output frame: `fill` (the previous behaviour), `crop` at a
-  chosen `x` in source pixels, or `window`, which shrinks the frame and pads it
-  onto black. Which slice of a wide frame survives a vertical crop is a
-  creative decision, and until now there was nowhere to put it.
-- **`output.window`** — render only a stretch of the song, rebased to start at
-  zero, so one brief produces both the full master and a cutdown instead of two
-  briefs that drift apart. `mux_audio()` seeks the audio to match.
-- **`output.encode`** — CRF, preset, a bitrate ceiling (`maxrate`/`bufsize`),
-  colour tagging (`bt709`/`bt601`/`bt2020`), and audio bitrate/sample rate.
-  Every default reproduces the previously-hardcoded settings exactly, so adding
-  the block is opt-in and omitting it changes nothing.
-
-### Fixed
-
-- `SECURITY.md` named OpenCV as a decode path; it was removed as a dependency
-  in 0.1.0.
-- Four issue/PR-template links used `../blob/main/...`, which resolves outside
-  the repository once GitHub inlines a template into an issue body.
-- `cli.py`'s module docstring — what `kaleidophone --help` prints — listed 6 of
-  the 11 subcommands.
-- `_WorkDirectory`'s docstring cited a `--keep` CLI flag that has never
-  existed; the real control is the `keep_work_dir=` keyword argument.
-
-Nothing yet.
 
 ## [0.1.0] — 2026-08-16
 

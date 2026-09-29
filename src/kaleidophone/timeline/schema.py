@@ -17,13 +17,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from kaleidophone.render._ffmpeg_util import BITRATE_RE as _BITRATE_RE
+
 # A station's duotone colors are interpolated straight into an ffmpeg
 # `curves=` filter string (render/effects.py::_duotone_filter). SECURITY.md
 # names filter-graph injection as in-scope, so the brief -- which is the
 # untrusted input here, since briefs are meant to be shared and reused -- is
 # where the shape gets enforced, not somewhere downstream.
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
-_BITRATE_RE = re.compile(r"^\d+(\.\d+)?[kKmM]?$")
 
 CutDensity = Literal[
     "every_beat",

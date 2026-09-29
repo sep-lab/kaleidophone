@@ -1,0 +1,82 @@
+# The gallery: every canvas piece rendered from its SYNTHETIC twin, published with GitHub Pages.
+#
+# Why a workflow and not files in the repository: the README shows the work, but the repository
+# holds no media at all -- not even renders of procedural pieces (docs/decisions/0003 and 0007).
+# So the clips, posters and covers are built here, from the code and the synthetic song packs,
+# and exist only as this Pages deployment. Same principle as ADR-0001: the render is a cache;
+# the source is what's versioned.
+#
+# ONE-TIME SETUP: Pages must exist with GitHub Actions as its source before the deploy job can
+# publish: Settings -> Pages -> Build and deployment -> Source: GitHub Actions, or
+#   gh api -X POST repos/{owner}/{repo}/pages -f build_type=workflow   (PUT if Pages already exists)
+# Without it only the deploy job fails; the render and its artifact don't depend on it. That is why
+# there is no actions/configure-pages step: there is no site generator to configure, its outputs
+# were never used, and it called the Pages API from the build job, which has only `contents: read`,
+# so the run could fail there, after the full render.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "canvas/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Render the gallery
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: canvas
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: canvas/package-lock.json
+
+      - name: Install
+        run: |
+          npm ci
+          npx playwright-core install --with-deps chromium
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+
+      - name: Render every piece from its synthetic twin (clips, posters, covers, live pieces)
+        run: node tools/gallery.mjs --out ../site
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      - name: What to do if the deploy failed
+        if: failure()
+        run: |
+          echo "::error::The gallery rendered, but the deploy failed. If the error above says Pages is not enabled (404 / Not Found), do the one-time setup at the top of .github/workflows/pages.yml -- Pages with GitHub Actions as its source -- then re-run the failed job: the render is kept in this run's github-pages artifact, so it isn't redone."

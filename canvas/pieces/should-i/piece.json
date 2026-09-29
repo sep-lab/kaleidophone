@@ -1,0 +1,104 @@
+{
+  "title": "SHOULD I ?",
+  "artist": "Sep The Concept",
+  "year": 2026,
+  "medium": "canvas 2D photography: silhouettes and rim light, composited through a film camera's viewfinder",
+  "summary": "The whole film is seen through his camera's viewfinder. The shutter fires on every snare: 36 snares from the drop, one 35 mm roll, running out on the bar where the hook asks its question. The split-image circle tears her in two on every vocal onset. A roll only has 36 frames; the film ends on a 37th.",
+  "template": "template.html",
+  "src": "src",
+  "moduleHeader": true,
+  "fonts": [
+    {
+      "family": "Space Mono",
+      "weight": 400,
+      "file": "@fontsource/space-mono/files/space-mono-latin-400-normal.woff2"
+    },
+    {
+      "family": "Space Mono",
+      "weight": 700,
+      "file": "@fontsource/space-mono/files/space-mono-latin-700-normal.woff2"
+    },
+    {
+      "family": "Barlow Condensed",
+      "weight": 600,
+      "file": "@fontsource/barlow-condensed/files/barlow-condensed-latin-600-normal.woff2"
+    },
+    {
+      "family": "Permanent Marker",
+      "weight": 400,
+      "file": "@fontsource/permanent-marker/files/permanent-marker-latin-400-normal.woff2"
+    }
+  ],
+  "bake": {"__STUTTER__": "events.stutter"},
+  "grid": {"bpm": 80, "downbeat": 0.0, "beatsPerBar": 4, "dur": 182.0},
+  "render": {"fps": 24, "w": 1080, "h": 1920, "crf": 18, "tune": "animation"},
+  "cuts": [
+    {"name": "full", "t0": 0, "dur": 182},
+    {
+      "name": "reel",
+      "t0": 51,
+      "dur": 131,
+      "card": true,
+      "note": "a 48-frame signature card segment (51-53) stream-concatenated in front of the film from the keyframe at 53"
+    },
+    {"name": "story-1", "t0": 0, "dur": 55.5},
+    {"name": "story-2", "t0": 114, "dur": 15}
+  ],
+  "keyframes": [0, 1272, 2160, 2736],
+  "covers": {
+    "size": [3000, 3000],
+    "variants": [
+      {
+        "name": "main",
+        "draw": "sheet",
+        "arg": {"y": -460}
+      },
+      {
+        "name": "ghost",
+        "draw": "cv",
+        "arg": {"v": "circle", "k": 29}
+      },
+      {
+        "name": "door",
+        "draw": "cv",
+        "arg": {"v": "circle", "k": 27}
+      },
+      {
+        "name": "heart",
+        "draw": "cv",
+        "arg": {"v": "circle", "k": 33}
+      },
+      {
+        "name": "three",
+        "draw": "cv",
+        "arg": {
+          "v": "three",
+          "ks": [27, 29, 33]
+        }
+      },
+      {
+        "name": "crossed-out",
+        "draw": "cv",
+        "arg": {"v": "xout", "keep": 33}
+      },
+      {
+        "name": "frame37",
+        "draw": "cv",
+        "arg": {"v": "print37"}
+      },
+      {
+        "name": "eye",
+        "draw": "eye",
+        "arg": {}
+      }
+    ]
+  },
+  "gallery": {
+    "order": 4,
+    "t0": 71.25,
+    "dur": 6.0,
+    "fps": 15,
+    "cover": "main",
+    "alt": "A woman's silhouette seen through a film camera's viewfinder, shutter speed, meter needle and frame counter along the top. The shutter blacks out on the beat; between blinks she stands under rings of bokeh, turns in rim-lit profile, and walks away down a road into a sunset."
+  }
+}

@@ -103,22 +103,35 @@ def test_no_command_promises_to_post_anything(path):
         assert phrase not in body, f"{path.name} appears to promise posting: {phrase!r}"
 
 
-@pytest.mark.parametrize("path", COMMANDS, ids=lambda p: p.stem)
-def test_every_command_references_a_real_cli_subcommand(path):
-    """Commands are prose, so nothing else catches an invented subcommand.
+def subcommands_in(text: str) -> set[str]:
+    """Every `kaleidophone <sub>` named in a file's code spans and fenced blocks.
 
-    Only code spans and fenced blocks are scanned: the plugin's prose says
-    things like "kaleidophone generates release files", and treating that as a
-    subcommand reference is a false positive, not a finding."""
-    from kaleidophone.cli import _build_parser
-    known = set(_build_parser()._subparsers._group_actions[0].choices)
-    text = path.read_text()
+    Only code is scanned: the plugin's prose says things like "kaleidophone
+    generates release files", and treating that as a subcommand reference is a
+    false positive, not a finding. Subcommands can be hyphenated
+    (`master-check`), so a name runs on through hyphens -- `\\w+` alone read
+    `kaleidophone master-check` as `master` and failed a correct command. It
+    must start with a word character, so `kaleidophone --version` is a flag,
+    not a subcommand called `--version`."""
     code = "\n".join(
         re.findall(r"^```.*?^```", text, re.S | re.M) + re.findall(r"`([^`\n]+)`", text)
     )
-    used = set(re.findall(r"\bkaleidophone (\w+)", code))
-    unknown = used - known
+    return set(re.findall(r"\bkaleidophone (\w[\w-]*)", code))
+
+
+@pytest.mark.parametrize("path", COMMANDS + SKILLS, ids=lambda p: p.stem if p.stem != "SKILL" else p.parent.name)
+def test_every_command_references_a_real_cli_subcommand(path):
+    """Commands and skills are prose, so nothing else catches an invented
+    subcommand -- and a skill that names one is followed just as literally."""
+    from kaleidophone.cli import _build_parser
+    known = set(_build_parser()._subparsers._group_actions[0].choices)
+    unknown = subcommands_in(path.read_text()) - known
     assert not unknown, f"{path.name} references non-existent subcommands: {sorted(unknown)}"
+
+
+def test_the_subcommand_scan_reads_a_hyphenated_name_whole():
+    text = "Check first: `kaleidophone master-check old.wav new.wav`, then `kaleidophone --version`."
+    assert subcommands_in(text) == {"master-check"}
 
 
 # --------------------------------------------------------------------------

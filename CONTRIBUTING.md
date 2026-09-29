@@ -68,11 +68,23 @@ scorer is a first pass, honestly described as one in
 have a photo library it curates badly, a failing test case built from
 synthetic fixtures reproducing the failure mode is extremely welcome.
 
-**3. A second worked case study.** `docs/case-studies/love.md` is the only
-one so far. A second real project, written up with the same care taken to
-scrub identifying details (see that doc's own notes on what was removed and
-why), would do more to prove this framework generalizes than anything else
-on the roadmap.
+**3. A case study from your own release.** There are eight in
+`docs/case-studies/`, all from one artist's practice. A project by someone
+else, written up with the same care taken to scrub identifying details (see
+`love.md`'s notes on what was removed and why), would do more to prove this
+framework travels than anything else on the roadmap.
+
+**3b. A canvas piece of your own.** Copy `canvas/pieces/template`, find the
+rule that generates your film (see `docs/CREATIVE-GUIDE.md`, "Drawn pieces"),
+and ship it with a `synthetic.json` twin of your song
+(`node tools/synth.mjs --twin`) — never the real song pack. It will build and
+render in CI like the others. Reusable parts belong in `canvas/lib/`, with a
+test in `canvas/test/`. The four shipped pieces are frozen reference
+implementations: don't refactor them.
+
+**3c. Frame-program effects.** `src/kaleidophone/frames/effects.py` — numpy,
+seeded, stateful effects implement `state_dict()`/`load_state_dict()`. If
+ffmpeg's filter language can say it, it belongs in `render/effects.py` instead.
 
 **4. Smarter auto-sectioning.** `timeline/autobrief.py`'s boundary picker
 falls back to even slicing when a song hands back too many or too few
@@ -81,9 +93,10 @@ candidate boundaries — see its docstring and ROADMAP.md. Keeping the
 tractable work.
 
 **5. Adversarial review of the privacy guardrails.** If you can get a real
-path or a media file past `check_no_personal_paths.py` /
-`check_no_media.sh`, that's a report we want — see
-[ADR-0003](docs/decisions/0003-public-framework-private-assets.md).
+path, a media file or a real song pack past `check_no_personal_paths.py` /
+`check_no_media.sh` / `check_no_real_songpacks.py` / review, that's a report we want — see
+[ADR-0003](docs/decisions/0003-public-framework-private-assets.md) and
+[ADR-0007](docs/decisions/0007-three-engines-one-contract.md).
 
 ## Ground rules for claims
 

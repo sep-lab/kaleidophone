@@ -124,6 +124,61 @@ were playing and nobody had analysed it?* A frame counter would not —
 something had to measure the video to draw it. A tape readout would; tapes
 have them whether or not anyone is watching.
 
+## Drawn pieces: the concept is a rule
+
+The canvas pieces ([canvas/](../canvas/README.md)) have no footage, so nothing
+constrains the picture except the song — which is exactly why each one needs a
+rule the renderer obeys, found before a line is drawn. Four releases, four
+rules:
+
+- **( - ):** *she is never drawn.* Her silhouette is filled with bare paper,
+  last, so anything that reaches into it — a hand at a crossing, a flower at a
+  door — stops. The absence is a rendering order.
+- **SAME AS YOU:** *one page, torn in two.* His half-world on the left, hers on
+  the right, mirrored, differing only in the people; the gap between the halves
+  is the distance, and it is one number.
+- **SHOULD I ?:** *we only ever see through his viewfinder.* He is never drawn;
+  focusing is deciding; the shutter is the snare.
+- **HAMECHI MANZOR DARE:** *everything means something.* A swarm of eyes and
+  words closing in as the track builds; masks for the calm, torn off by the
+  loudest hit.
+
+What those releases taught about finding the rule:
+
+- **Count the grid before inventing.** The numbers the music already contains
+  are the sync that reads as magic: 36 snares from the drop to the hook = one
+  roll of film, running out on the question
+  ([TECHNIQUES #47](TECHNIQUES.md#47-grid-arithmetic)).
+- **The effect is the concept.** A video that forgets itself block by block, one
+  colour refusing to leave a drained memory, a torn page: when the technique *is*
+  the idea, nothing needs explaining.
+- **End one past the count.** When the concept is a count, the strongest ending
+  is the frame that can't exist: a 37th exposure on a 36-frame roll
+  ([#53](TECHNIQUES.md#53-one-past-the-count)).
+- **Diegetic, still.** A viewfinder's frame counter is not a readout about the
+  song — the camera has one whether or not anyone is listening. It passes the
+  test above; a BPM readout would not.
+- **Mind the medium's physics.** A white flash is invisible on white paper; an
+  ink splat reads ([#43](TECHNIQUES.md#43-inhale-erase-splash)). Stroke weights
+  must scale with the canvas or a cover goes hairline
+  ([#22](TECHNIQUES.md#22-stroke-scaling)).
+- **Open on a signature card, not on text over a face.** The platform takes the
+  first frame as the cover ([#16](TECHNIQUES.md#16-signature-card)).
+
+### The frame, in numbers
+
+What the shipped pieces settled on, for a new piece drawn at 1080×1920. The
+why is in the linked techniques.
+
+| | |
+|---|---|
+| **Safe frame** | ≈ x 54–1026, y 220–1480: keep inside it anything that must be read. Above it sits the Reels/TikTok header, below it the caption. **Inferred** from the platforms' overlays, which change; `?qa=1` draws it on any piece built on `canvas/lib` (`SAFE_FRAME` in `live.js`). Picture and texture can bleed past it. Two shipped pieces put text outside it (**measured** on stills of their synthetic twins): SHOULD I ?'s viewfinder readouts (shutter speed, meter, frame counter) at y 122–223, and HAMECHI MANZOR DARE's title and credit line at y 1831–1882. |
+| **Palette** | `C` in `canvas/lib/ink.js`: paper `#ede6d6`, ink `#17140f`, grey `#8f887c`, grey2 `#cbc3b2`, dark `#2b2723`, night `#1a1714`, black `#0d0c0a`, and one accent, `#c9301c` (also `C.red`). For the sketch hand, frames and props: `#5e584f`, `#ddd6c6`, `#3f3a34`, `#4a463f`, `#5a4431`, `#8c6c4c`. Recolour a piece by changing `C`. |
+| **Line** | `LW(1)` = 6.4 px in the 1080-wide frame. A square cover keeps that weight by drawing through a transform ([#31](TECHNIQUES.md#31-square-cover-crop)); anything drawn at another scale multiplies it ([#22](TECHNIQUES.md#22-stroke-scaling)). Boil moves every point by up to ±1.2 px, and ±1.9 px at full loudness (`boilFrame`, [#29](TECHNIQUES.md#29-on-twos-and-boil)). |
+| **Text** | At least 33 px for anything that must be read. **Inferred**: 1080 px fill a phone 360–440 pt wide, so Apple's 11 pt minimum text size (**cited**: [Human Interface Guidelines, Typography](https://developer.apple.com/design/human-interface-guidelines/typography)) comes to 27–33 px; take the narrow phone. SHOULD I ?'s frame counter is 46 px; HAMECHI MANZOR DARE's credit line is 12 px. |
+| **Frame rate** | Render at the delivery rate, `render.fps` in `piece.json` ([#29](TECHNIQUES.md#29-on-twos-and-boil)). ( - ), SAME AS YOU, SHOULD I ? and the template run at 24 fps; ( - )'s release rendered its 12 drawings a second and doubled them to 24. HAMECHI MANZOR DARE runs at 30 fps. |
+| **Covers** | `covers` in `piece.json`; `still.mjs --cover all` renders them. They are 3000×3000 for ( - ) (square crops of portrait scenes, [#31](TECHNIQUES.md#31-square-cover-crop)), SHOULD I ? ([#51](TECHNIQUES.md#51-contact-sheet-cover), [#54](TECHNIQUES.md#54-cover-variant-family)) and HAMECHI MANZOR DARE (its own cover mode). SAME AS YOU's are 3000×5333, full 9:16 frames, and the template's 2000×2000. |
+
 ## Default mode vs. authored briefs
 
 `kaleidophone auto` exists so nobody has to learn this vocabulary before seeing a
@@ -137,8 +192,9 @@ choice instead of trial and error.
 
 ## What this vocabulary is not
 
-It's specific to kaleidophone's actual mechanism: real photos/clips, cut and
-graded by ffmpeg. It is not a general "psychedelic video" prompt vocabulary
-for a generative model — see
-[ADR-0002](decisions/0002-deterministic-edit-engine.md) for why that's a
+It's specific to kaleidophone's actual mechanisms: real photos and clips, cut
+and graded by ffmpeg or processed frame by frame, and pieces drawn by code. It
+is not a general "psychedelic video" prompt vocabulary for a generative model —
+see [ADR-0002](decisions/0002-deterministic-edit-engine.md) and
+[ADR-0007](decisions/0007-three-engines-one-contract.md) for why that's a
 deliberate boundary, not an oversight.

@@ -11,6 +11,7 @@ as a `CreativeBrief`. **You never generate a frame** — ffmpeg draws every pixe
 from the artist's own media. See `docs/decisions/0002-deterministic-edit-engine.md`.
 
 Arguments: `$ARGUMENTS` (a song file and a media folder; ask if either is missing).
+No footage at all, and the picture should be drawn? That's `/kaleido:piece`.
 
 ## Listen first, propose second
 

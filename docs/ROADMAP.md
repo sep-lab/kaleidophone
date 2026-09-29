@@ -28,24 +28,27 @@ people to pick up.
       (`examples/demo/`) with real, measured timings in
       `docs/ARCHITECTURE.md`.
 
-## Phase 1 — Prove it on a second real song
+## Phase 1 — Prove it on a second real song ✅ complete, twelve times over
 
 **Goal: confirm the framework generalizes past the one project it was
-extracted from.** Everything in Phase 0 was designed by generalizing from a
-single case study; it hasn't yet been run against a second one.
+extracted from.** It did, and not only as a footage engine: twelve real
+releases, built independently, kept re-deriving the same architecture — the
+envelope, the silent segmented render, the mux at the end — across footage,
+frame programs and drawn canvas pieces. See the
+[case studies](case-studies/README.md) and
+[ADR-0007](decisions/0007-three-engines-one-contract.md).
 
-- [ ] A second worked case study and `examples/` brief, scrubbed the same
-      way `docs/case-studies/love.md` was — tracked, pending the source
-      material. See `CONTRIBUTING.md`, "Ways to contribute that we
-      especially want".
-- [ ] Whatever that run breaks or gets visibly wrong, fixed and written up
-      honestly (a bad first result is a finding, not a failure to hide —
-      matches this project's borrowed documentation ethic; see `AGENTS.md`).
-- [ ] Real-world beat-tracking accuracy measured against at least one real
-      (non-synthetic) song, since `examples/demo/`'s synthetic fixtures are
-      rhythmically simple by design and don't test this — see
-      `examples/demo/generate_fixtures.py`'s own "what this does not
-      handle".
+- [x] Worked case studies, scrubbed the way `love.md` was — seven new ones in
+      0.3 ([#41](https://github.com/sep-lab/kaleidophone/issues/41),
+      [#42](https://github.com/sep-lab/kaleidophone/issues/42)).
+- [x] What those runs broke, fixed and written up: the drift guard, the AAC
+      true-peak guard, frame-exact cuts, the delivery sheet ([TECHNIQUES.md](TECHNIQUES.md)).
+- [ ] Real-world beat-tracking accuracy measured against real songs, for both
+      `analyze` (librosa) and `envelope` (comb search) — the release notes
+      have the real grids to compare against
+      ([#49](https://github.com/sep-lab/kaleidophone/issues/49)).
+- [ ] A case study from someone else's release. Twelve releases by one artist
+      prove the architecture repeats, not that it travels.
 
 ## Phase 2 — Quality and cost tuning
 
@@ -57,14 +60,15 @@ single case study; it hasn't yet been run against a second one.
       real-project data points (raw grain vs. temporal-denoise-then-encode
       at 720p) — see the measured numbers at the end of
       `docs/case-studies/love.md`.
-- [ ] **Remux landmark-drift guard.** Learned in the reference project's
-      iteration 2 (`docs/case-studies/love.md`): a replacement master moved
-      the switch ~5s earlier, and `remux` would have silently desynced the
-      whole edit. Run `analyze` on the new audio, compare landmark times
-      (quiet passages, energy jumps, duration) against the brief's
-      sections, and warn loudly — or refuse without a force flag — beyond
-      a per-cut tolerance.
-- [ ] **Three field-proven effect candidates** from the same iteration:
+- [x] **Remux landmark-drift guard** — `kaleidophone master-check` (0.3,
+      [#18](https://github.com/sep-lab/kaleidophone/issues/18)). Next: have
+      `remux` run it and refuse a `new grid` verdict without a force flag.
+- [ ] **Forced keyframes in `kaleidophone silent`**, so a filter-graph render
+      can be cut by `deliver` with `-c:v copy` like the other two engines (its
+      concat pass re-encodes today).
+- [ ] **Three field-proven effect candidates** from the same iteration
+      (`feedback_echo` and `punch_zoom` exist as frame-program effects since
+      0.3; the filter-graph versions are still open):
       `scope_overlay` (a waveform oscilloscope with per-section
       color/amplitude), `feedback_echo` (previous-frame zoom-blend — cuts
       become morphs; the cheapest hypnosis dial found so far), and
@@ -89,6 +93,31 @@ single case study; it hasn't yet been run against a second one.
       — the deterministic scorer stays the default with no API key required;
       see [ADR-0002](decisions/0002-deterministic-edit-engine.md).
 
+## Phase 2b — The canvas engine (0.3 →)
+
+- [x] The four shipped canvas pieces in the repository, verified against the
+      delivered films; `canvas/lib/`; a template; synthetic twins; the gallery
+      ([#43](https://github.com/sep-lab/kaleidophone/issues/43)).
+- [ ] More of the pieces' techniques as lib modules: the torn-page mirror
+      compositor, chromatography blooms, the pressure-ring swarm, the mask
+      state machine, sprite fire, the contact-sheet cover family.
+- [ ] A loop-seam check for reels meant to repeat: compare a cut's last frame
+      with its first on the delivered file
+      ([#19](https://github.com/sep-lab/kaleidophone/issues/19)).
+- [x] A silent cut in `deliver` for a Spotify Canvas: `audio: none` on a cut
+      writes it with no audio stream, and a sheet whose every cut is silent
+      needs no master (0.3.0).
+- [ ] The Canvas loop itself (8 s, crossfaded) as a render mode of the
+      canvas harness; SAME AS YOU's came from a state of its own in the piece
+      (`canvasState()`).
+- [x] `render.mjs` writes the `silent_start` it snapped to, with the forced
+      keyframes, in a JSON sidecar next to every render (0.3.0).
+- [ ] `deliver` from that sidecar in one step, instead of copying
+      `silent_start` into the sheet by hand.
+- [ ] Check the AAC encoder's coder on real masters: on one heavily limited
+      synthetic master, ffmpeg's default AAC coder left short pops that
+      `-aac_coder fast` mostly removed (see CHANGELOG 0.3.0, "Known").
+
 ## Phase 3 — Cover art and captions get an AI option
 
 Scoped narrowly on purpose — see
@@ -109,20 +138,19 @@ caption.
 - [x] Decide [ADR-0005](decisions/0005-project-naming.md) and do the rename
       pass (package dir, `pyproject.toml`, imports, docs) — landed as
       `kaleidophone`.
-- [ ] Publish: a public GitHub repo (mirroring
-      [sep-lab/Wit](https://github.com/sep-lab/Wit)'s structure, which this
-      scaffold already follows), then a PyPI release once the CLI surface
-      (`analyze`/`curate`/`compose`/`preview`/`silent`/`remux`/`render`/
-      `cover`/`promo`/`run`/`auto`) has had a real second project run
-      through it (Phase 1).
+- [x] Publish: a public GitHub repo (0.1.0), a Claude Code plugin (0.2.0).
+- [ ] PyPI: the release workflow is ready; it needs the trusted publisher on
+      PyPI's side and the repository variable `PYPI_TRUSTED_PUBLISHING=true`
+      (see `.github/workflows/release.yml`).
+- [ ] Submit the plugin to the official Claude Code plugin directory
+      ([#39](https://github.com/sep-lab/kaleidophone/issues/39)).
 - [x] `docs/PRIOR-ART.md` — a fair look at existing "photo slideshow to
       music" and AI-music-video tools, what they actually do differently,
       and what risk (if any) remains unanswered here. Wit's own
       `docs/PRIOR-ART.md` is the template.
-- [ ] A short screen-recorded or exported demo (using `examples/demo/`'s
-      synthetic fixtures, or a real project once one's been publicly
-      shared) linked from the README, once there's output worth showing
-      publicly.
+- [x] A demo people can actually watch, without committing media: the
+      [gallery](https://sep-lab.github.io/kaleidophone/), rendered in CI from
+      synthetic twins (0.3).
 
 ## Explicitly not planned
 

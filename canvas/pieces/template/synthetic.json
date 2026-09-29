@@ -1,0 +1,33 @@
+{
+  "_comment": "The template's song is synthetic by definition: 120 BPM, an 8-bar loop that starts soft, builds, and drops back for the seam. Levels are section means, the way --twin measures a real song, so the kick peaks (not the whole section) cross the template's 0.75 blink threshold.",
+  "seed": 7,
+  "fps": 100,
+  "dur": 16.0,
+  "bpm": 120,
+  "downbeat": 0,
+  "keys": ["bass", "lowmid", "mid", "high", "air", "rms", "flux", "bflux", "hflux", "cent"],
+  "sections": [
+    {
+      "from": 0,
+      "kick": "none",
+      "snare": false,
+      "bass": 0.05,
+      "mid": 0.3,
+      "high": 0.2,
+      "air": 0.2,
+      "rms": 0.15
+    },
+    {"from": 2, "kick": "all", "bass": 0.3, "mid": 0.45, "high": 0.35, "air": 0.3, "rms": 0.45},
+    {"from": 10, "kick": "all", "bass": 0.4, "mid": 0.5, "high": 0.45, "air": 0.4, "rms": 0.6},
+    {
+      "from": 14,
+      "kick": "none",
+      "snare": false,
+      "bass": 0.1,
+      "mid": 0.35,
+      "high": 0.25,
+      "air": 0.2,
+      "rms": 0.2
+    }
+  ]
+}

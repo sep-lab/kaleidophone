@@ -1,0 +1,59 @@
+{
+  "title": "HAMECHI MANZOR DARE",
+  "titleFa": "همه‌چی منظور داره",
+  "artist": "Sep The Concept",
+  "year": 2026,
+  "medium": "live audio-reactive canvas 2D: sprite fire, a pressure-ring swarm, a mask state machine",
+  "summary": "A paranoia piece: everything means something. One screaming figure, surrounded by a swarm of eyes, whispering mouths and pointed words that closes in as the track builds; the head on fire; masks that slam on during calm phrases, crack on bass hits and tear off on the loudest one.",
+  "template": "template.html",
+  "src": "src",
+  "fonts": [
+    {
+      "family": "Vazirmatn",
+      "weight": 400,
+      "file": "vazirmatn/fonts/webfonts/Vazirmatn-Regular.woff2"
+    },
+    {
+      "family": "Vazirmatn",
+      "weight": 700,
+      "file": "vazirmatn/fonts/webfonts/Vazirmatn-Bold.woff2"
+    },
+    {
+      "family": "Vazirmatn",
+      "weight": 500,
+      "file": "vazirmatn/fonts/webfonts/Vazirmatn-Medium.woff2"
+    }
+  ],
+  "fontJoiner": "\n  ",
+  "grid": {"bpm": 73.17, "dur": 208.5},
+  "render": {"fps": 30, "w": 1080, "h": 1920, "crf": 18, "tune": "film", "seed": 7},
+  "cuts": [
+    {
+      "name": "reel",
+      "t0": 44,
+      "dur": 60,
+      "mode": "reel",
+      "note": "the loudest 60 s; t0 snaps to the nearest beat and the audio mux must use the snapped value"
+    },
+    {"name": "story", "t0": 92, "dur": 60, "mode": "story"}
+  ],
+  "covers": {
+    "mode": "cover",
+    "size": [3000, 3000],
+    "variants": [
+      {"name": "scream"},
+      {"name": "mask"}
+    ]
+  },
+  "gallery": {
+    "order": 1,
+    "t0": 75.05,
+    "dur": 6.0,
+    "fps": 15,
+    "mode": "none",
+    "poster": 4.5,
+    "quality": 50,
+    "cover": "scream",
+    "alt": "A white line-drawn figure on black, his head on fire, in a swarm of small eyes, arrows and Persian words. A blank white mask covers his face and cracks, then tears off on the loudest hit: underneath, he is screaming."
+  }
+}
