@@ -1,8 +1,8 @@
 {
   "name": "kaleidophone",
   "displayName": "kaleidophone",
-  "version": "0.2.0",
-  "description": "Turn a song and your own photos into a beat-synced music video, cover art, and a per-platform release pack — from one versionable YAML brief. Claude directs; ffmpeg renders. No generated frames.",
+  "version": "0.3.0",
+  "description": "Turn a song into a music video, cover art and a per-platform release pack. Three engines: ffmpeg filter graphs over your photos and clips, frame programs for per-pixel effects on footage, and canvas pieces when there is no footage. Claude directs; deterministic code draws every pixel. No generated frames.",
   "author": {
     "name": "sep-lab",
     "url": "https://github.com/sep-lab"

@@ -52,6 +52,13 @@ local/
 *.local.yaml
 *.private.yaml
 
+# --- Real song packs: private, like the audio they are measured from ---
+# `kaleidophone envelope` writes ./songpack.json by default. Keep real packs in
+# a private/ folder (above); synthetic ones are generated into canvas/out/songs/
+# and never committed. CI refuses a real pack under any name, even if this is
+# bypassed: .github/workflows/scripts/check_no_real_songpacks.py.
+*songpack*.json
+
 # --- Render outputs / caches (derived, rebuildable — never history) ---
 # Same principle as docs/decisions/0001: the render is a cache, not source.
 renders/
@@ -71,3 +78,10 @@ examples/demo/_fixtures/
 .idea/
 *.swp
 _to_delete/
+
+# --- The canvas engine: installs, builds and renders are all derived ---
+# dist/ is already ignored above; these are the canvas-specific ones.
+canvas/node_modules/
+canvas/out/
+# The gallery site is built in CI (.github/workflows/pages.yml), never committed.
+site/

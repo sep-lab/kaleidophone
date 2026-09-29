@@ -64,3 +64,19 @@ def test_no_media_slipped_into_the_distribution(wheel_contents):
     media = {".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mov", ".wav", ".mp3"}
     found = [n for n in wheel_contents if Path(n).suffix.lower() in media]
     assert not found, f"media in the wheel: {found}"
+
+
+def test_the_canvas_engine_carries_the_package_version():
+    """The Python package and the canvas engine release together, and every
+    canvas render's sidecar (<out>.json) records canvas/package.json's version
+    as the tool that made it -- so the two numbers must be the same one. No
+    wheel needed: this reads the source tree."""
+    import json
+
+    from kaleidophone import __version__
+
+    canvas = json.loads((ROOT / "canvas" / "package.json").read_text(encoding="utf-8"))
+    assert canvas["version"] == __version__, (
+        f"canvas/package.json is {canvas['version']}, kaleidophone.__version__ is {__version__}: "
+        "bump both when releasing"
+    )

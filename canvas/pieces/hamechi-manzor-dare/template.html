@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>همه‌چی منظور داره</title>
+<style>
+  /*__FONTS__*/
+  html,body{margin:0;padding:0;background:#060505;height:100%;overflow:hidden;}
+  canvas{display:block;position:fixed;inset:0;}
+  #ui{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      color:#e9e4d8;font-family:'Vazirmatn',system-ui,sans-serif;text-align:center;cursor:pointer;
+      transition:opacity .9s ease;z-index:3;user-select:none;-webkit-user-select:none;}
+  #ui .fa{font-size:clamp(28px,6.5vw,64px);font-weight:700;letter-spacing:.02em;direction:rtl;}
+  #ui .en{margin-top:10px;font-size:clamp(10px,1.6vw,13px);letter-spacing:.55em;opacity:.45;
+      font-family:ui-monospace,Menlo,monospace;padding-left:.55em;}
+  #ui .go{margin-top:56px;font-size:clamp(12px,2vw,15px);opacity:.55;direction:rtl;}
+  #ui .go span{display:inline-block;animation:pulse 2.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:.95}}
+  #ui.gone{opacity:0;pointer-events:none;}
+  #hint{position:fixed;right:14px;bottom:12px;color:#e9e4d8;opacity:0;font-family:ui-monospace,Menlo,monospace;
+      font-size:10px;letter-spacing:.2em;z-index:2;transition:opacity 1.2s;pointer-events:none;}
+  #filein{display:none;}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="ui">
+  <div class="fa">همه‌چی منظور داره</div>
+  <div class="en">SEP THE CONCEPT</div>
+  <div class="go"><span>بزن که شروع شه</span><br><span style="font-size:.72em;opacity:.6;animation-delay:.4s">click — or drop the wav</span></div>
+</div>
+<div id="hint">DROP THE WAV</div>
+<input id="filein" type="file" accept="audio/*">
+<script>
+/*__JS__*/</script>
+</body>
+</html>

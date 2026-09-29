@@ -2,66 +2,80 @@
 
 <p align="center">
   <strong>Compose the edit, not the pixels.</strong><br>
-  A song + your own photos and clips -> a beat-synced, station-graded music
-  video, vertical cutdowns, cover art, and the per-platform release copy —
-  all derived from one small YAML file you can read.
+  A song becomes its music video, the vertical cuts, the covers and the
+  release copy — cut from your own footage, or drawn from nothing but the
+  song — all derived from sources you can read.
 </p>
 
 <p align="center">
-  <em>Claude directs. ffmpeg draws every pixel. Nothing is generated into a frame.</em>
+  <em>Claude directs. Deterministic code draws every pixel. Nothing is generated into a frame.</em>
 </p>
 
 <p align="center">
   <a href="https://github.com/sep-lab/kaleidophone/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sep-lab/kaleidophone/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://pypi.org/project/kaleidophone/"><img alt="PyPI" src="https://img.shields.io/pypi/v/kaleidophone.svg"></a>
+  <a href="https://sep-lab.github.io/kaleidophone/"><img alt="Gallery" src="https://img.shields.io/badge/gallery-live%20pieces-c9301c.svg"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue.svg">
+  <img alt="Node 20+" src="https://img.shields.io/badge/node-20%2B-blue.svg">
   <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-blueviolet.svg"></a>
+</p>
+
+<table align="center">
+  <tr>
+    <td align="center"><a href="https://sep-lab.github.io/kaleidophone/pieces/hamechi-manzor-dare.html"><picture><source media="(prefers-reduced-motion: reduce)" srcset="https://sep-lab.github.io/kaleidophone/gallery/hamechi-manzor-dare.jpg"><img src="https://sep-lab.github.io/kaleidophone/gallery/hamechi-manzor-dare.webp" width="176" height="313" alt="A white line-drawn figure on black, his head on fire, in a swarm of small eyes, arrows and Persian words. A blank white mask covers his face and cracks, then tears off on the loudest hit: underneath, he is screaming."></picture></a></td>
+    <td align="center"><a href="https://sep-lab.github.io/kaleidophone/pieces/minus.html"><picture><source media="(prefers-reduced-motion: reduce)" srcset="https://sep-lab.github.io/kaleidophone/gallery/minus.jpg"><img src="https://sep-lab.github.io/kaleidophone/gallery/minus.webp" width="176" height="313" alt="Flat ink cartoon on cream paper: a small man beside a blank, paper-white silhouette of a woman. A grid of photos scrolls by with the same empty shape beside him in every one, until one opens full screen."></picture></a></td>
+    <td align="center"><a href="https://sep-lab.github.io/kaleidophone/pieces/same-as-you.html"><picture><source media="(prefers-reduced-motion: reduce)" srcset="https://sep-lab.github.io/kaleidophone/gallery/same-as-you.jpg"><img src="https://sep-lab.github.io/kaleidophone/gallery/same-as-you.webp" width="176" height="313" alt="Ink cartoon of a man and a woman, eyes closed, haloed by soft spots of colour. They sit side by side in a lit window at night under a red neon heart that holds the same scene again; the view falls into the heart and folds into a turning kaleidoscope of their faces."></picture></a></td>
+    <td align="center"><a href="https://sep-lab.github.io/kaleidophone/pieces/should-i.html"><picture><source media="(prefers-reduced-motion: reduce)" srcset="https://sep-lab.github.io/kaleidophone/gallery/should-i.jpg"><img src="https://sep-lab.github.io/kaleidophone/gallery/should-i.webp" width="176" height="313" alt="A woman's silhouette seen through a film camera's viewfinder, shutter speed, meter needle and frame counter along the top. The shutter blacks out on the beat; between blinks she stands under rings of bokeh, turns in rim-lit profile, and walks away down a road into a sunset."></picture></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>HAMECHI MANZOR DARE</b><br>paranoia, a swarm, masks, fire</sub></td>
+    <td align="center"><sub><b>( - )</b><br>she is never drawn</sub></td>
+    <td align="center"><sub><b>SAME AS YOU</b><br>one page, torn in two</sub></td>
+    <td align="center"><sub><b>SHOULD I ?</b><br>36 frames, 36 snares, a 37th</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <sub>Four songs by <a href="https://soundcloud.com/septheconcept">Sep The Concept</a>, each a single HTML file that plays live, renders its own film and draws its own covers.
+  Clips rendered in CI from <b>synthetic</b> songs — <a href="https://sep-lab.github.io/kaleidophone/">open the gallery</a> to play them live.</sub>
 </p>
 
 <p align="center">
   <a href="#two-front-doors">Start here</a> ·
+  <a href="#three-engines-one-contract">Three engines</a> ·
   <a href="#the-idea">The idea</a> ·
-  <a href="#the-workflow-this-is-built-around">Draft -> confirm -> final</a> ·
+  <a href="#the-workflow-this-is-built-around">Draft → confirm → final</a> ·
   <a href="#the-vibe">The vibe</a> ·
   <a href="#made-with-this">Made with this</a> ·
   <a href="#cost-measured">Cost, measured</a> ·
-  <a href="#documentation">Docs</a> ·
-  <a href="#where-to-start-contributing">Contribute</a>
+  <a href="#documentation">Docs</a>
 </p>
 
 ---
 
 ## What this is
 
-You have a song and a folder of photos and clips. You want a music video that
-cuts on the beat and looks like something — not a slideshow with a Ken Burns
-pan — plus the vertical cutdown, the cover, and the caption you have to write
-before you can post any of it.
+You have a song. Maybe a folder of photos and clips too, maybe nothing but an
+idea. You want a music video that moves with the song — not a slideshow with a
+Ken Burns pan — plus the vertical cutdown, the covers, and the caption you have
+to write before you can post any of it.
 
-kaleidophone turns that into a release from one source file:
+kaleidophone turns that into a release:
 
-- a **video**, cut on the beat, colour-graded per section, in a deliberately
-  vintage/psychedelic/loopish default look — at 16:9, or composed **natively
-  vertical** for a reel, with per-shot framing so the crop lands where the
-  subject actually is;
-- **timed text cards** burned into the picture — titles, lyric lines, credits —
-  with real right-to-left shaping, so a bilingual card is not a workaround;
-- **cover art**, generated from the song's own energy envelope, in the same
-  station's palette as the video;
+- a **video**, cut and coloured on the song's own structure — from your
+  footage (graded per section, framed natively vertical), or **drawn**: a
+  canvas piece whose every frame is a function of the song's envelope;
+- **the cuts** — reel, stories, the full film — sliced frame-exactly from one
+  render, with the master muxed under each and its loudness and true peak
+  measured on the delivered file;
+- **cover art**, from the same code that draws the video;
 - a **release pack** — per-platform captions, chapters, timed comments, a
-  pinned comment, a posting order — as markdown, with every timestamp derived
-  from the edit rather than retyped.
+  posting order — with every timestamp derived from the edit.
 
-The source file is a `CreativeBrief`: one small, readable, diffable YAML
-document. Everything else — the edit-decision-list, the rendered video, the
-teasers, the thumbnails, the cover, the copy — is derived from it and
-rebuildable. That's not an implementation detail, it's the whole architecture;
-see [**the idea**](#the-idea) below.
-
-kaleidophone shells out to a real `ffmpeg` for every pixel; there is no
-per-frame AI generation in the render path (why, below). It runs comfortably
-on a laptop.
+Every one of those comes from a source you author and version — a YAML brief, a
+frame program, a piece — never from a render you can't reproduce. That's not an
+implementation detail, it's the whole architecture; see
+[**the idea**](#the-idea).
 
 ## Two front doors
 
@@ -74,35 +88,44 @@ Install it as a Claude Code plugin and talk to it:
 /plugin install kaleidophone@kaleidophone
 ```
 
-Then, in the folder with your song and your photos:
+Then, in the folder with your song:
 
-```
-/kaleido:direct song.wav ./photos
-```
+| | |
+|---|---|
+| `/kaleido:direct song.wav ./photos` | direct an edit of your own footage — Claude reads the song, asks what the audio can't answer, writes the brief, shows a contact sheet before anything expensive |
+| `/kaleido:piece song.wav` | make a **drawn** piece: find the rule that generates the film, count the grid, start from the template |
+| `/kaleido:deliver` | cut every deliverable from one silent render, mux and measure the audio |
+| `/kaleido:master old.wav new.wav` | a new master arrived: re-mux, re-render some bars, or start again? |
+| `/kaleido:release` | the whole arc, checking in at each expensive step |
 
-Claude analyses the track, tells you where the quiet passages and the energy
-jumps actually are, asks you the two or three things the audio can't answer,
-writes the brief, and shows you a contact sheet before anything expensive
-happens. It is directing, not generating — every frame is your own material.
-
-Other commands: `/kaleido:release` (the whole arc), `/kaleido:caption`,
-`/kaleido:cover`, `/kaleido:brief`.
+Also `/kaleido:caption`, `/kaleido:cover`, `/kaleido:brief`. It is directing,
+not generating — every frame is your material or code you can read.
 
 ### I write code
 
 ```bash
-pip install kaleidophone            # needs a system ffmpeg on PATH
+pip install "kaleidophone @ git+https://github.com/sep-lab/kaleidophone"   # needs a system ffmpeg
 ```
+
+(Not on PyPI yet — the release workflow is ready and waiting for its trusted
+publisher.) Then:
 
 ```bash
-kaleidophone auto song.wav ./photos -o out/ --aspect 9:16 --preview-only
+kaleidophone auto song.wav ./photos -o out/ --aspect 9:16 --preview-only   # footage -> a brief + contact sheet
+kaleidophone envelope song.wav -o songpack.json                           # the song, analysed at 100 Hz
+kaleidophone master-check old.wav new.wav                                 # did the new master move anything?
+kaleidophone deliver delivery.yaml                                        # one silent render -> every cut
 ```
 
-That writes `out/generated_brief.yaml` — a completely normal, fully editable
-brief — plus a contact sheet. Edit it, then `kaleidophone run` it for real.
-`docs/CONFIG-SCHEMA.md` is the full field reference.
+The canvas engine lives in [`canvas/`](canvas/README.md) (Node 20+):
 
-Or from a checkout, with nothing of your own required:
+```bash
+cd canvas && npm ci && npx playwright-core install chromium
+node tools/build.mjs --all && open dist/should-i.html                     # play a piece live
+node tools/render.mjs same-as-you --song out/songs/same-as-you.songpack.json --t0 62.255 --dur 10 --out heart.mp4
+```
+
+Or the footage pipeline end to end, with nothing of your own:
 
 ```bash
 git clone https://github.com/sep-lab/kaleidophone && cd kaleidophone
@@ -115,22 +138,37 @@ real, nothing personal — then runs the real pipeline end to end.
 24-second/37-cut video at 640x360, on the machine named in
 [Cost, measured](#cost-measured).
 
-Needs a system `ffmpeg` (`brew install ffmpeg` / `apt install ffmpeg`) — see
-[ADR-0002](docs/decisions/0002-deterministic-edit-engine.md).
+## Three engines, one contract
+
+The first releases were cut from photographs; the recent ones have no footage
+at all. Rather than one engine stretched over both, kaleidophone has three, and
+they keep one contract ([ADR-0007](docs/decisions/0007-three-engines-one-contract.md)):
+
+| Engine | Where | For |
+|---|---|---|
+| **Filter graphs** | `src/kaleidophone/render/` | your photos and clips: cut on the beat, graded per section, framed per shot — anything ffmpeg's filter language can say |
+| **Frame programs** | `src/kaleidophone/frames/` | footage that needs per-pixel, stateful effects: a picture that forgets itself block by block, photocopies of photocopies, one colour that refuses to leave |
+| **Canvas pieces** | [`canvas/`](canvas/README.md) | no footage — the picture is drawn: one self-contained HTML file per piece, live / render / cover modes |
+
+The contract: the song is analysed once into an envelope pack
+(`kaleidophone envelope`); every picture is a deterministic function of time and
+that pack; the render is silent and segmented; the audio goes on last, where the
+master lives (`kaleidophone deliver`). Every technique the releases taught is
+written down, numbered, with where it lives in the code:
+[docs/TECHNIQUES.md](docs/TECHNIQUES.md).
 
 ## The idea
 
-**kaleidophone versions the creative brief, not the render.** A `CreativeBrief` —
-song, stations (color-grade "looks"), sections (structure + effects),
-output settings — is the one file a person authors or edits by hand. The
+**kaleidophone versions the source, not the render.** For footage that source
+is a `CreativeBrief` — song, stations (colour-grade "looks"), sections (structure
++ effects), output settings: the one file a person authors by hand. The
 edit-decision-list, the silent video, the muxed master, the teasers, the
-thumbnails, the cover art: all derived, all rebuildable, none of them the
-source of truth. See
-[ADR-0001](docs/decisions/0001-version-the-brief-not-the-render.md) for the
-full reasoning — it's the decision everything else in this repo follows
-from, the same way its sibling project
-[Wit](https://github.com/sep-lab/Wit) versions the *recipe* of a DAW
-session rather than its bounced audio.
+thumbnails, the cover art: all derived, all rebuildable, none of them the source
+of truth. See [ADR-0001](docs/decisions/0001-version-the-brief-not-the-render.md) —
+the decision everything else follows from, the same way its sibling project
+[Wit](https://github.com/sep-lab/Wit) versions the *recipe* of a DAW session
+rather than its bounced audio. A canvas piece is the same idea taken further:
+the piece *is* the source, and the film, the reel and the covers are renders of it.
 
 ```mermaid
 flowchart LR
@@ -140,8 +178,8 @@ flowchart LR
     C --> E["EDL\n(resolved timeline)"]
     E --> P["preview\ncontact sheet, < 1s"]
     E --> S["silent render\nexpensive: ffmpeg per cut"]
-    S --> R["remux\ncheap: swap the audio, no re-render"]
-    R --> V["master.mp4"]
+    S --> R["remux / deliver\ncheap: swap the audio, no re-render"]
+    R --> V["master.mp4 + cuts"]
     AN --> COV["cover art"]
     B --> PR["promo pack"]
 
@@ -160,10 +198,11 @@ wave — without re-rendering the video.**
 
 ```bash
 kaleidophone silent edl.json brief.yaml -o silent.mp4     # expensive: one+ ffmpeg call per cut
+kaleidophone master-check draft.wav mastered_song.wav     # does the master still fit the edit?
 kaleidophone remux   silent.mp4 mastered_song.wav -o master.mp4   # cheap: audio swap only, no re-render
 ```
 
-`render_silent()` is the only step that touches every cut's color grade and
+`render_silent()` is the only step that touches every cut's colour grade and
 effects; `mux_audio()` is one ffmpeg stream-copy on the video side plus one
 audio re-encode. **Measured on this repo's own demo (37 cuts, 24s):**
 
@@ -174,97 +213,86 @@ audio re-encode. **Measured on this repo's own demo (37 cuts, 24s):**
 
 (Both `remux` figures include ~0.8s of Python interpreter and librosa import
 startup, which is most of what they measure — the ffmpeg work itself is a
-fraction of a second. That startup cost is why the speedup here looks smaller
-than the underlying ffmpeg ratio.)
+fraction of a second.)
 
-The speedup isn't a fixed constant — `remux` barely moves with resolution
-(it's not re-encoding video), while `silent` scales with pixel count, so
-the gap widens the higher you render. Either way: approve the edit once,
-then iterate on the audio (a rough mix -> a mastered file -> a radio edit)
-in about a second each time, near-independent of resolution. See
-[ADR-0001](docs/decisions/0001-version-the-brief-not-the-render.md) and the
-`kaleidophone-render` skill.
-
-`kaleidophone render` (or `kaleidophone run`'s full pipeline) does both steps in one
-call and cleans up the intermediate — use that instead when you don't
-expect to touch the audio again.
+The swap is only safe if the new master still lines up with the edit — the
+reference project learned that when a replacement master moved its biggest
+moment ~5 s and the cheap swap would have desynced everything.
+`kaleidophone master-check` answers that before you mux: the same grid and the
+same material (**re-mux**), the same song starting earlier or later (**offset**:
+it prints the `silent_start` to deliver at), some bars changed (**re-render
+these bars**, naming the bands that changed), or a new grid. On a real release it proved a final master was a re-mux even though the
+arrangement after the drop had changed
+([#49](docs/TECHNIQUES.md#49-master-drop-in-check)).
 
 ## The vibe
 
 The look isn't a preset you opt into — it's the default, because that's
 the aesthetic this framework was built to produce fast: vintage, grainy,
-a little psychedelic, loopish, radio-static energy. Structure comes from
-**stations** — named color-grade "looks" any brief can point at its own
-media:
+a little psychedelic, loopish, radio-static energy. For footage, structure
+comes from **stations** — named colour-grade "looks" any brief can point at
+its own media:
 
 | Station | Feel | Typically used for |
 |---|---|---|
 | `amber-room` | warm interiors, lamplight, intimate | an intro, a home-recorded feeling |
 | `noir-crush` | black & white, crushed blacks, scanlines | street/documentary energy |
 | `gold-hour` | golden hour, backlit, slow | a song's quiet or held moment |
-| `fire-leak` | boosted color, hot light-leak energy | the loudest, most saturated stretch |
+| `fire-leak` | boosted colour, hot light-leak energy | the loudest, most saturated stretch |
 
 Effects layer on top per section — `strobe`, `kaleidoscope`, `halation`,
-`freeze_on_peak`, `zoom_breathe`, `grain`, `scanlines`, and more — several
-of them conditional on the song's own structure (`strobe` only fires on
-cuts containing a real onset, not every cut in a section).
+`freeze_on_peak`, `zoom_breathe`, `grain`, `scanlines`, and more — several of
+them conditional on the song's own structure (`strobe` only fires on cuts
+containing a real onset). **Framing** is a creative field, not a computation:
+`framing: {mode: crop, x: 700}` or `mode: window`. **Text** is `overlays`: timed
+cards with real right-to-left shaping, so `من از نهایت شب حرف می‌زنم` renders as
+connected Persian letterforms.
 
-**Framing** is a creative field, not a computation. Pulling a 9:16 frame out
-of 16:9 footage throws away two thirds of the width, and which two thirds is a
-decision — the subject is rarely centred. Each section can take
-`framing: {mode: crop, x: 700}`, or `mode: window` to shrink the whole frame
-and float it on black, which reads completely differently.
-
-**Text** is `overlays`: timed cards with real shaping, so
-`من از نهایت شب حرف می‌زنم` renders as connected Persian letterforms rather
-than reversed characters that look like text to anyone who can't read it.
-Sizes are fractions of frame height, so a card designed at 1080x1920 survives
-being re-rendered at 4K. Fonts ship with the package — a font resolved from a
-system path renders differently on every machine.
+For drawn pieces the vocabulary is different but the attitude isn't: find the
+**rule** that generates the film — *she is never drawn*, *everything is seen
+through his viewfinder*, *one page, torn in two* — and let the renderer obey it.
+Count the grid before inventing anything: in SHOULD I ? there are exactly 36
+snares from the drop to the hook, so the camera shoots one roll of film, and
+runs out on the question.
 
 What text is *for* is the opinionated part, and it's in the creative guide:
-**describe nothing, inhabit something.** No dials, no frame counters, no
-labels naming the section — those describe the song from outside it. A tape
-readout, a DVD menu, a radio dial sweeping AM to FM: those assert the song is
-playing inside a machine, and that machine is a character.
-
-Full vocabulary and the "two rooms, one frequency" AM/FM concept these presets
-generalize from: [docs/CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md) and
-[docs/case-studies/love.md](docs/case-studies/love.md) — a real ~11-minute
-project this framework was extracted from (identifying details scrubbed;
-structure, timestamps, and station design are real).
+**describe nothing, inhabit something.** No dials, no frame counters, no labels
+naming the section — unless the song is playing inside a machine and that
+machine is a character. (A viewfinder's frame counter counts to 36 because the
+camera does.) Full vocabulary: [docs/CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md).
 
 ## Made with this
 
 This isn't a framework looking for a user. It was extracted from a working
 practice — the releases came first, the tool second, and each new song still
-finds something it gets wrong.
+finds something it gets wrong. Twelve releases, built independently, kept
+re-deriving the same architecture; the [case studies](docs/case-studies/README.md)
+are the evidence:
 
-The music and visuals it generalizes from:
+| | Release | Engine | What it added |
+|---|---|---|---|
+| [→](docs/case-studies/love.md) | LOVE | filter graphs | the reference project: stations, the brief, draft→master |
+| [→](docs/case-studies/loneliness.md) | Loneliness | ffmpeg | a track fitted bar by bar to someone else's finished film |
+| [→](docs/case-studies/ahange-aroosi.md) | AHANGE AROOSI | frame program | found footage: a tracked watermark removed, one colour kept |
+| [→](docs/case-studies/mikonamet.md) | MIKONAMET YEROZI KHOB FARAMOOSH | frame program | a video that forgets itself; resumable on-device renders |
+| [→](docs/case-studies/hamechi-manzor-dare.md) | HAMECHI MANZOR DARE | canvas | the three-mode piece: live, render, cover |
+| [→](docs/case-studies/minus.md) | ( - ) | canvas | the paper cut-out; Flash on twos; demo → master in one evening |
+| [→](docs/case-studies/same-as-you.md) | SAME AS YOU | canvas | rig v2, the torn page, vector droste, frame-exact cuts |
+| [→](docs/case-studies/should-i.md) | SHOULD I ? | canvas | the viewfinder; grid arithmetic; the master drop-in check |
 
-- **[septheconcept on SoundCloud](https://soundcloud.com/septheconcept)** — the tracks
-- **[The Analog Guys in Digital Worlds on YouTube](https://www.youtube.com/@theanalogguysindigitalworlds)** — the videos and covers
-
-That channel name is more or less this project's thesis: analog material —
-35mm film scans, phone footage shot at 3am, photographs taken over years —
-put through a digital process that is deterministic and inspectable rather
-than generative. The frames are real. What the code decides is *where the cuts
-land and what the grade is*, not what the picture contains.
-
-None of that material is in this repository, and none of it can be:
-`check_no_media.sh` refuses it at commit time. See
-[Your media stays yours](#your-media-stays-yours).
+The music: **[Sep The Concept on SoundCloud](https://soundcloud.com/septheconcept)**.
+The videos: **[The Analog Guys in Digital Worlds on YouTube](https://www.youtube.com/@theanalogguysindigitalworlds)**.
+None of that material — no song, stem, lyric, photo or frame — is in this
+repository, and none of it can be: see [Your media stays yours](#your-media-stays-yours).
 
 ## Cost, measured
 
-One data point, on one machine, from `examples/demo/`'s synthetic
-24s/37-cut fixture — not a benchmark suite. Reproduce these yourself: see
-[CONTRIBUTING.md](CONTRIBUTING.md), "Ground rules for claims".
+One data point per row, on the machine named — not a benchmark suite. Reproduce
+the demo rows yourself: [CONTRIBUTING.md](CONTRIBUTING.md), "Ground rules for
+claims".
 
-**Measured on:** Apple M1 Pro (10 cores), macOS 15.7, ffmpeg 7.1, CPython
-3.11.10 — note that this is an *x86_64* Python running under Rosetta 2, not a
-native arm64 build, so a native run should be faster. Stated because "one
-machine" is only useful if you know which.
+**Footage (filter graphs), `examples/demo/`:** Apple M1 Pro (10 cores), macOS
+15.7, ffmpeg 7.1, CPython 3.11.10 (x86_64 under Rosetta 2).
 
 | | Resolution | Time | Size |
 |---|---|---|---|
@@ -273,59 +301,53 @@ machine" is only useful if you know which.
 | `silent` render alone | 640x360 -> 1280x720 | 10.7s -> 22.6s | 26.7 MB -> 104.9 MB |
 | `remux` alone (either resolution) | — | ~1.0s | — |
 
-Grain and noise-heavy effects resist h264 compression, which is a real
-tradeoff between the vintage look this project defaults to and output file
-size — not a bug. Turn down `StationConfig.grain` if size matters more than
-texture for a given project. Full breakdown, including *why* the render
-pipeline is segment-then-concat rather than one giant filter graph:
+**Drawn and frame-program releases, as rendered for real** (from the case
+studies; 1080×1920):
+
+| | Where | Speed |
+|---|---|---|
+| SAME AS YOU, full film (3,324 frames) | 2 cloud cores, 2 workers | 6.1 fps |
+| ( - ), full film at 12 drawings/s | cloud | ~8.5 fps |
+| HAMECHI MANZOR DARE, JPEG vs PNG capture | cloud | ~9.5 vs ~4 fps |
+| SHOULD I ?, the darkroom section | 2 cloud cores | ~3 fps per worker |
+| MIKONAMET, frame program | 4-core ARM VM | ~8.7 fps per worker, ~13 fps with 3 |
+
+Grain and noise-heavy effects resist h264 compression — a real tradeoff between
+the vintage look and file size, not a bug. Beat tracking is a heuristic first
+pass, and synthetic material flatters it (measured; none of this is on real
+songs). On the demo's synthetic click track, programmed at exactly 120.0 BPM,
+librosa returns **117.5**. `kaleidophone envelope` returns click tracks at 60,
+93.5, 120 and 174 BPM within 0.05 BPM (its tests), and on synthetic grooves
+made for the 0.3 review — 80 to 140 BPM, a 62% swing, a 30 s beatless intro —
+every grid beat landed within 10 ms of the programmed one. It fails on the
+octave and on a tempo that moves: a 70 BPM ballad of 8th-note piano comes back
+at 140 and a 174 BPM drum-and-bass two-step at 87 (both pinned in
+`tests/test_envelope.py`), and a click track gliding from 88 to 92 BPM
+(`tempo_ramp` there) leaves 68 of its 88 beats more than half a 24 fps frame
+off the best single grid. So the song pack says what it is unsure of — the
+other octave and its score, how far the music sits from the grid in every 8
+bars, how sure bar 1 is — and `--bpm-range` and `--downbeat` override it. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Also measured: beat detection on the demo's synthetic click track
-(programmed at exactly 120.0 BPM) comes back **117.5** — a real reminder
-that tempo tracking is a heuristic first pass, overridable via
-`SongConfig.bpm`, not a promise of exact detection even on a clean signal.
-On that same track librosa returns **no beats at all** for the first 11
-seconds (a quiet intro and a near-silent hush); sections with no detected
-beats fall back to the tempo grid and say so on stderr, rather than
-silently collapsing into one long static shot. See
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), "Frame-accurate cuts".
+## Why deterministic code, not AI video generation
 
-## Demos
-
-Every push builds the demo on real ffmpeg and uploads the actual output —
-`master.mp4`, `cover.jpg`, the contact sheet, the promo pack — as a CI
-artifact you can download:
-[latest CI runs](https://github.com/sep-lab/kaleidophone/actions/workflows/ci.yml)
-→ any green run → **Artifacts** → `demo-output-ubuntu-latest`.
-
-That output is entirely synthetic (procedural gradients and a generated
-click track), because no real photo, video, or audio is ever committed here
-— see [ADR-0003](docs/decisions/0003-public-framework-private-assets.md). A
-hosted demo built from a real project is on
-[the roadmap](docs/ROADMAP.md), Phase 4, and will be linked here when there
-is one worth showing.
-
-## Why ffmpeg, not AI video generation
-
-Real photos and clips, assembled deterministically — not a per-frame
-generative model. Three reasons, in order: cost (per-frame generation for a
-multi-minute video is expensive and slow; ffmpeg filter graphs on real
-media are neither), reproducibility (the same brief renders the same video
-every time — a property `kaleidophone silent`/`kaleidophone remux`'s whole cheap-resync
-workflow depends on), and creative control (a station's color grade is a
-handful of legible numbers, not a prompt you reverse-engineer until it
-looks right). AI-assisted *extensions* — cover art, captions — are a
-documented, opt-in, not-yet-built roadmap item that plugs into the same
-pipeline rather than replacing it; see
+Real photos and clips assembled deterministically, or pictures drawn by code
+you can read — not a per-frame generative model. Three reasons, in order: cost
+(per-frame generation for a multi-minute video is expensive and slow),
+reproducibility (the same source renders the same frames every time — the whole
+cheap-resync workflow depends on it), and creative control (a station's grade is
+a handful of legible numbers; a piece's rule is a few lines you can change, not
+a prompt you reverse-engineer). See
 [ADR-0002](docs/decisions/0002-deterministic-edit-engine.md) and
-[docs/ROADMAP.md](docs/ROADMAP.md).
+[ADR-0007](docs/decisions/0007-three-engines-one-contract.md).
 
 ## Your media stays yours
 
 kaleidophone is local-first and never transmits your photos, video, or audio
-anywhere — everything runs on your own machine through your own `ffmpeg`.
-This repository itself is built so that **no real media and no personal
-file path can be committed to it**, enforced in CI, not just by
+anywhere — everything runs on your own machine through your own `ffmpeg` (and,
+for canvas pieces, your own browser: a piece makes no network request at all).
+This repository itself is built so that **no real media, no personal file path
+and no real song data can be committed to it**, enforced in CI, not just by
 convention:
 
 - `.gitignore` blocklists every common audio/video/image extension.
@@ -333,86 +355,90 @@ convention:
   oversized-file ceiling for formats nobody thought to blocklist yet.
 - `check_no_personal_paths.py` refuses absolute paths into a real home
   directory (`/Users/you/...`, `/home/you/...`) anywhere in a tracked file.
-- Every example brief in this repo ships placeholder paths
-  (`/path/to/your/photos/...`) and an empty `promo.handles: []` —
-  never a real folder, never a real collaborator.
+- Every example brief ships placeholder paths and no real collaborator.
+- A real **song pack** — the envelopes and vocal onsets of an unreleased master
+  — is private like the audio. Pieces here run on **synthetic twins**: the
+  song's tempo, first downbeat and rounded per-section levels, every hit
+  generated. `check_no_real_songpacks.py` refuses any tracked pack not marked
+  synthetic.
+- The **gallery** is rendered in CI and published with GitHub Pages; not one
+  image or clip is in git.
 
 See [ADR-0003](docs/decisions/0003-public-framework-private-assets.md),
+[ADR-0007](docs/decisions/0007-three-engines-one-contract.md),
 [AGENTS.md](AGENTS.md), and [SECURITY.md](SECURITY.md).
 
 ## Repo map
 
 ```
 src/kaleidophone/
-  audio/        analyze a song -> BPM, beats, structure, wave map
+  audio/        analyze a song; the envelope pack; the master drop-in check
   assets/       station presets + heuristic photo/clip curation
   timeline/     CreativeBrief schema, EDL, compose(), zero-config auto mode
-  render/       ffmpeg pipeline (silent/remux split, effects, preview, teasers)
+  render/       ffmpeg pipeline (silent/remux split, effects, preview, teasers), deliver
+  frames/       frame programs: per-pixel, stateful effects; resumable workers
   cover/        procedural cover art from the song's own energy envelope
-  promo/        chapters, caption draft, teaser cadence, pinned-comment suggestion
+  overlay/      timed text cards, shaped right-to-left, bundled OFL fonts
+  promo/ release/   chapters, captions, the per-platform copy pack
   cli.py        the `kaleidophone` command
-skills/         one SKILL.md per pipeline stage — for agents and people alike
+canvas/         the canvas engine (Node): pieces/, lib/, tools/, test/ -- see canvas/README.md
+skills/ commands/   the Claude Code plugin: one skill per stage, slash commands
 examples/
   demo/         fully synthetic end-to-end demo (run_demo.sh)
-  love/         a hand-authored brief matching a real reference project
+  love/         a hand-authored brief matching the reference project
 docs/
-  decisions/    ADRs — the design, and what would overturn each one
-  case-studies/ the real project this framework generalizes from
-tests/          unit tests; tests/factories/ builds every fixture from
-                numbers -- no real media, no audio decode, no ffmpeg call.
-                The ffmpeg-facing modules are covered by asserting on the
-                argv they build, not by running it.
-.github/workflows/  CI: lint, tests, the privacy guardrails, and a real
-                     ffmpeg run of the demo on every push
+  TECHNIQUES.md every field-tested technique, numbered, with where it lives
+  decisions/    ADRs -- the design, and what would overturn each one
+  case-studies/ the real releases this framework generalizes from
+tests/          unit tests; synthetic fixtures only; ffmpeg argv asserted, never run
+.github/workflows/  CI (lint, tests, guardrails, demo, canvas) and the Pages gallery
 ```
 
 ## Documentation
 
-- **[AGENTS.md](AGENTS.md)** — the canonical brief for anyone (or any
-  agent) working on this repo. Start here if you're contributing code.
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the pipeline in
-  detail, the measured cost table, and the render-design tradeoffs.
-- **[docs/decisions/](docs/decisions/)** — five ADRs, all accepted. Read
-  [0001](docs/decisions/0001-version-the-brief-not-the-render.md) and
-  [0002](docs/decisions/0002-deterministic-edit-engine.md) first.
-- **[docs/CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md)** — the visual/sonic
-  vocabulary: stations, effects, structure.
-- **[docs/CONFIG-SCHEMA.md](docs/CONFIG-SCHEMA.md)** — full `CreativeBrief`
-  field reference.
-- **[docs/ROADMAP.md](docs/ROADMAP.md)** — what's next, including the
-  opt-in AI-assisted cover-art/caption extension points.
-- **[docs/PRIOR-ART.md](docs/PRIOR-ART.md)** — what else already does this,
-  what those tools do better, and the risks to this one's premise.
-- **[docs/case-studies/love.md](docs/case-studies/love.md)** — the real
-  project this framework was extracted from.
+- **[AGENTS.md](AGENTS.md)** — the canonical brief for anyone (or any agent)
+  working on this repo. Start here if you're contributing code.
+- **[docs/TECHNIQUES.md](docs/TECHNIQUES.md)** — 54 techniques from real releases,
+  numbered, each with where it came from and where it lives.
+- **[canvas/README.md](canvas/README.md)** — the canvas engine: the piece
+  contract, song packs, rendering, starting a new piece.
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the pipeline in detail, the
+  three engines, the measured cost table, the render-design tradeoffs.
+- **[docs/decisions/](docs/decisions/)** — seven ADRs, all accepted. Read
+  [0001](docs/decisions/0001-version-the-brief-not-the-render.md),
+  [0002](docs/decisions/0002-deterministic-edit-engine.md) and
+  [0007](docs/decisions/0007-three-engines-one-contract.md) first.
+- **[docs/CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md)** — the visual vocabulary:
+  stations, effects, structure, and the rules the drawn pieces follow.
+- **[docs/CONFIG-SCHEMA.md](docs/CONFIG-SCHEMA.md)** — the `CreativeBrief`, the
+  delivery sheet and the song pack, field by field.
+- **[docs/case-studies/](docs/case-studies/README.md)** — the releases.
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** and **[docs/PRIOR-ART.md](docs/PRIOR-ART.md)**.
 
 ## Status
 
-**v0.2, working end to end.** Every claim above was measured by running the
-pipeline on the machine named in [Cost, measured](#cost-measured). See
-[CHANGELOG.md](CHANGELOG.md) for what's built, including the real bugs found
-and fixed rather than documented as known issues.
+**v0.3 — three engines.** Every claim above was measured on the machine or the
+release it names; see [CHANGELOG.md](CHANGELOG.md) for what's built, including the
+real bugs found and fixed rather than documented as known issues. Before it
+shipped, 0.3 was reviewed from three seats — a musician's, an art director's and
+a staff engineer's — and it ships with their findings fixed and measured.
 
 What's genuinely still open, in the order it hurts:
 
-- **Cover art is procedural, not designed.** `cover/generate.py` draws a
-  frequency stack from the song's energy envelope. It is honestly derived and
-  it is *not* a typographic, photograph-based cover. The templates for those —
-  a burned-in subtitle, a two-ink screen print, a negative, type set so a light
-  in the photograph becomes the full stop — are
+- **Filter-graph renders can't be stream-cut yet.** `kaleidophone silent`
+  re-encodes in its final pass and can't force keyframes, so `deliver` cuts
+  canvas and frame-program renders losslessly but a footage render only after a
+  re-encode.
+- **Cover art for footage is procedural, not designed.** The typographic
+  templates — a burned-in subtitle, a two-ink screen print, a negative — are
   [designed and not built](https://github.com/sep-lab/kaleidophone/issues/21).
-- **The release pack is a scaffold, not copy.** Every timestamp, chapter and
-  credit in it is derived, so the facts are right. The voice is not, and the
-  pack says so in its own header. Rewriting it is what
-  `/kaleido:caption` is for.
-- **Proven on a narrow set of material.** The framework generalizes from one
-  artist's projects. A case study run by someone else would do more to prove
-  it travels than anything else on the roadmap — see
-  [CONTRIBUTING.md](CONTRIBUTING.md).
-- **`kaleidophone auto` lags the hand-authored path.** It won't propose
-  framing or overlays, and its auto-sectioning falls back to even slicing more
-  often than it should
-  ([#45](https://github.com/sep-lab/kaleidophone/issues/45)).
+  (Drawn pieces draw their own covers.)
+- **Proven on one artist's work.** Twelve releases, one practice. A case study
+  run by someone else would do more to prove it travels than anything else on
+  the roadmap — see [CONTRIBUTING.md](CONTRIBUTING.md).
+- **`kaleidophone auto` lags the hand-authored path**
+  ([#45](https://github.com/sep-lab/kaleidophone/issues/45),
+  [#54](https://github.com/sep-lab/kaleidophone/issues/54)).
 
 ## Where to start contributing
 
@@ -420,11 +446,12 @@ Full guide: **[CONTRIBUTING.md](CONTRIBUTING.md)**. The short version:
 
 | | Task |
 |---|---|
-| 🟢 | More effects — `render/effects.py` is small composable filter-string builders; a new one is a function plus a registry entry |
-| 🟢 | A second worked case study — the single highest-value contribution on the roadmap |
-| 🟡 | Better auto-curation — `assets/curation.py`'s heuristic scorer is a documented first pass ([ADR-0004](docs/decisions/0004-default-mode-and-auto-curation.md)) |
-| 🟡 | Smarter auto-sectioning — `timeline/autobrief.py` currently falls back to even slicing more often than it should |
-| 🔴 | Adversarial review of the privacy guardrails — if you can get a real path or a media file past CI, that's exactly the report this project wants |
+| 🟢 | A canvas piece of your own, from `canvas/pieces/template` — with a synthetic twin, it can live in the repo |
+| 🟢 | More effects — `render/effects.py` is small composable filter-string builders; `frames/effects.py` is numpy |
+| 🟢 | A case study from your own release — the single highest-value contribution on the roadmap |
+| 🟡 | Forced keyframes in `kaleidophone silent`, so footage renders can be cut losslessly |
+| 🟡 | Smarter auto-sectioning — `timeline/autobrief.py` falls back to even slicing more often than it should |
+| 🔴 | Adversarial review of the privacy guardrails — if you can get a real path, a media file or a real song pack past CI, that's exactly the report this project wants |
 
 ## License
 

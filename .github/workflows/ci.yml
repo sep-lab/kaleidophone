@@ -10,6 +10,9 @@
 #   3. The actual end-to-end promise ("a song + your photos -> a video")
 #      still works, on real ffmpeg, from a clean checkout
 #         -> job: demo
+#   4. The canvas engine: every piece still builds into one self-contained
+#      file and still renders, from its synthetic twin, in a real Chromium
+#         -> job: canvas
 #
 # Every failure message in this pipeline should say what to do next, not
 # just what went wrong. If a check ever fails for a reason a contributor
@@ -36,19 +39,20 @@ env:
   # ---------------------------------------------------------------------
   # THE COVERAGE FLOOR. One number, deliberately in one obvious place.
   #
-  # Honest status: 143 tests exercising src/kaleidophone at ~89%, measured on
-  # Python 3.11. The ffmpeg-facing modules used to sit near 0% -- covered
-  # only by the `demo` job actually running them -- and are now unit-tested
-  # by monkeypatching `run()`/`require_ffmpeg()` and asserting on the argv
-  # they build (tests/test_ffmpeg_pipeline.py, test_variants.py,
-  # test_ffmpeg_util.py). pytest still never invokes ffmpeg; the `demo` job
-  # remains the only thing that does, per docs/decisions/0002 and AGENTS.md.
+  # Honest status (0.3.0): 816 tests exercising src/kaleidophone at ~96%,
+  # measured on Python 3.11 with no ffmpeg on PATH (0.2.0: 143 at ~89%). The
+  # ffmpeg-facing modules are unit-tested by monkeypatching `run()`/
+  # `require_ffmpeg()` and asserting on the argv they build
+  # (tests/test_ffmpeg_pipeline.py, test_variants.py, test_ffmpeg_util.py,
+  # test_deliver.py, test_frames_engine.py). pytest still never invokes
+  # ffmpeg; the `demo` job remains the only thing that does, per
+  # docs/decisions/0002 and AGENTS.md.
   #
-  # The floor is 80, a few points under the measured number. It is a ratchet
+  # The floor is 92, a few points under the measured number. It is a ratchet
   # against regression, not a target: raise it as coverage genuinely climbs,
   # and do not lower it to make a build green -- a drop is itself the finding.
   # ---------------------------------------------------------------------
-  COVERAGE_FLOOR: "80"
+  COVERAGE_FLOOR: "92"
 
   # Pinned so a lint upgrade lands as a reviewable dependency bump rather
   # than a surprise failure on someone else's unrelated change.
@@ -129,7 +133,7 @@ jobs:
             --cov=src/kaleidophone \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
-            $extra \
+            ${extra:+"$extra"} \
             2>&1 | tee pytest-output.txt
 
       - name: Coverage summary
@@ -159,7 +163,7 @@ jobs:
 
   # =========================================================================
   guardrails:
-    name: Guardrails (no media, no private paths, repo stays small)
+    name: Guardrails (no media, no private paths or song packs, repo stays small)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -182,6 +186,9 @@ jobs:
       - name: No absolute personal paths committed
         run: python3 .github/workflows/scripts/check_no_personal_paths.py
 
+      - name: No real song packs committed
+        run: python3 .github/workflows/scripts/check_no_real_songpacks.py
+
       - name: Why these checks exist
         if: always()
         run: |
@@ -193,6 +200,7 @@ jobs:
             echo "| no media / oversized files | kaleidophone exists to work on *your* real photos, video, and audio -- a repo that committed any would refute its own premise, and would carry real people's copyrighted work and likenesses. See docs/decisions/0003. |"
             echo "| per-file + repo size ceiling | Catches a format nobody thought to blocklist. History size cannot be undone by a later delete. |"
             echo "| no absolute personal paths | A real CreativeBrief's \`media_dir\`/\`audio_path\` are local paths into someone's actual folders. Pasting one into a doc or issue leaks a username and folder structure. See AGENTS.md. |"
+            echo "| no real song packs | A song pack is the song measured 100 times a second. One made from an unreleased master is as private as the master, and at ~1.6 MB for four minutes it passes the size ceiling. Pieces ship synthetic twins instead. See docs/decisions/0007. |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # =========================================================================
@@ -257,12 +265,95 @@ jobs:
           retention-days: 7
 
   # =========================================================================
+  canvas:
+    # The second engine (canvas/, docs/decisions/0007): node unit tests for the lib and the
+    # tools, every piece built from its synthetic twin, then one real second of every piece
+    # rendered in headless Chromium and encoded by ffmpeg. The real songs never come near CI.
+    name: Canvas engine (node tests, build, smoke render)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: canvas
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: canvas/package-lock.json
+
+      - name: "Install (exact versions: the fonts are inlined byte-for-byte from these packages)"
+        run: npm ci
+
+      - name: Unit tests (lib math, rig, glyphs, synthetic twins, self-contained builds, the tools' arguments)
+        run: npm test
+
+      - name: Chromium and ffmpeg for the smoke render
+        run: |
+          npx playwright-core install --with-deps chromium
+          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+
+      - name: Build every piece from its synthetic twin
+        run: node tools/build.mjs --all
+
+      - name: Render one second of every piece (two workers, forced keyframes), and a still of each cover
+        run: |
+          # Two workers and a keyframe forced inside the second part, so the split, the concat and
+          # -force_key_frames all run (a stateful piece renders in one worker). A page error, or any
+          # request that isn't file:/data:/blob:, fails the render -- none of these may pass it.
+          set -euo pipefail
+          mkdir -p out/smoke
+          for dir in pieces/*/; do
+            p=$(basename "$dir")
+            [ -f "pieces/$p/piece.json" ] || continue
+            t0=$(node -e "console.log(require('./pieces/$p/piece.json').gallery.t0)")
+            node tools/render.mjs "$p" --song "out/songs/$p.songpack.json" --t0 "$t0" --dur 1 \
+              --w 270 --h 480 --fps 12 --workers 2 --keys 0,9 --crf 28 --out "out/smoke/$p.mp4"
+            frames=$(ffprobe -v error -count_packets -select_streams v:0 -show_entries stream=nb_read_packets -of csv=p=0 "out/smoke/$p.mp4")
+            keys=$(ffprobe -v error -select_streams v:0 -show_entries frame=key_frame -of csv=p=0 "out/smoke/$p.mp4" \
+              | awk -F, '$1 == 1 { printf "%s%d", (n++ ? "," : ""), NR - 1 }')
+            echo "$p: $frames frames, keyframes at $keys"
+            [ "$frames" -eq 12 ] || { echo "::error::$p rendered $frames frames, expected 12"; exit 1; }
+            for k in 0 9; do
+              case ",$keys," in *",$k,"*) ;; *) echo "::error::$p: --keys 0,9 but frame $k is not a keyframe (keyframes: $keys)"; exit 1 ;; esac
+            done
+            node -e "const s = require('./out/smoke/$p.mp4.json'); process.exit(s.frames.rendered === 12 && s.keys.length === 2 && !/[\\\\/]/.test(s.song) ? 0 : 1)" \
+              || { echo "::error::$p: its sidecar out/smoke/$p.mp4.json is missing, wrong, or names a path"; exit 1; }
+            node tools/still.mjs "$p" --song "out/songs/$p.songpack.json" --cover all --size 400 --out out/smoke
+          done
+          ls -la out/smoke
+
+      - name: A page that reaches for the network fails its render
+        run: |
+          # The guard the step above relies on, shown working in a real Chromium: a built piece that
+          # requests a URL must not render (and does with --allow-page-errors, so it is the guard).
+          set -uo pipefail
+          sed 's#<script>#<script>new Image().src = "https://example.invalid/pixel.png";#' dist/minus.html > out/network.html
+          args=(minus --song out/songs/minus.songpack.json --html out/network.html --dur 0.25 --fps 12 --w 270 --h 480)
+          if node tools/render.mjs "${args[@]}" --out out/network.mp4; then
+            echo "::error::a page that requests https://example.invalid rendered anyway"; exit 1
+          fi
+          [ ! -e out/network.mp4 ] || { echo "::error::the refused render left out/network.mp4 behind"; exit 1; }
+          node tools/render.mjs "${args[@]}" --allow-page-errors --out out/network-allowed.mp4
+
+      - name: Upload the smoke renders for inspection
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: canvas-smoke
+          path: canvas/out/smoke/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # =========================================================================
   ci-ok:
     # One check to require in branch protection, so adding a matrix leg
     # later doesn't mean editing repository settings.
     name: CI
     if: always()
-    needs: [lint, test, guardrails, demo]
+    needs: [lint, test, guardrails, demo, canvas]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

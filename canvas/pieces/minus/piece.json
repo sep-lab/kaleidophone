@@ -1,0 +1,41 @@
+{
+  "title": "( - )",
+  "artist": "Sep The Concept",
+  "year": 2026,
+  "medium": "canvas 2D ink cartoon, Flash-style: on twos, boiling lines, flat fills, one red",
+  "summary": "An absence piece. A man's ordinary day, and in every scene the paper-shaped hole where she would be. She is never drawn: her silhouette is filled with paper last, so anything that enters it stops.",
+  "template": "template.html",
+  "src": "src",
+  "grid": {"bpm": 100, "downbeat": 5.95, "beatsPerBar": 4, "dur": 177.6},
+  "render": {"fps": 24, "w": 1080, "h": 1920, "crf": 18, "tune": "animation"},
+  "cuts": [
+    {
+      "name": "reel",
+      "t0": 77.95,
+      "dur": 62.4,
+      "card": true,
+      "note": "2.4 s signature card, then flower's last bar -> plates -> sofa -> gallery -> phone lock"
+    },
+    {"name": "story", "t0": 118.75, "dur": 58.85, "card": true},
+    {"name": "full", "t0": 0, "dur": 177.6}
+  ],
+  "covers": {
+    "mode": "cover",
+    "size": [3000, 3000],
+    "variants": [
+      {"name": "plates"},
+      {"name": "sunrise"},
+      {"name": "window"},
+      {"name": "title"}
+    ]
+  },
+  "gallery": {
+    "order": 2,
+    "t0": 126.5,
+    "dur": 6.0,
+    "fps": 12,
+    "poster": 5.0,
+    "cover": "plates",
+    "alt": "Flat ink cartoon on cream paper: a small man beside a blank, paper-white silhouette of a woman. A grid of photos scrolls by with the same empty shape beside him in every one, until one opens full screen."
+  }
+}

@@ -73,4 +73,6 @@ Concretely:
 
 `.gitignore`, `.github/workflows/scripts/check_no_media.sh`,
 `.github/workflows/scripts/check_no_personal_paths.py`, `AGENTS.md`,
-`docs/case-studies/love.md`.
+`docs/case-studies/love.md`; and, since 0.3,
+`.github/workflows/scripts/check_no_real_songpacks.py` (a real song pack is
+private like its audio — [ADR-0007](0007-three-engines-one-contract.md)).

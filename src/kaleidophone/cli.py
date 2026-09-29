@@ -1,19 +1,30 @@
 """
 kaleidophone's command-line entry point.
 
-    kaleidophone auto    <audio> <media_dir>      -> zero-config: brief + the whole pipeline
-    kaleidophone run     <brief.yaml>             -> the whole pipeline from a brief
+    kaleidophone auto         <audio> <media_dir>      -> zero-config: brief + the whole pipeline
+    kaleidophone run          <brief.yaml>             -> the whole pipeline from a brief
 
-    kaleidophone analyze <audio>                  -> AudioAnalysis JSON + a wave map PNG
-    kaleidophone curate  <media_dir> <brief.yaml> -> suggested station sort for an unsorted folder
-    kaleidophone compose <brief.yaml>             -> EDL JSON
-    kaleidophone preview <edl.json>               -> contact sheet, no ffmpeg
-    kaleidophone silent  <edl.json> <brief.yaml>  -> the visual cut only (expensive, reusable)
-    kaleidophone remux   <silent.mp4> <audio>     -> swap the audio in, no re-render (cheap)
-    kaleidophone render  <edl.json> <brief.yaml>  -> silent + remux + teasers + thumbnails
-    kaleidophone cover   <brief.yaml>             -> procedural cover art
-    kaleidophone promo   <brief.yaml>             -> promo pack markdown
-    kaleidophone kit     <brief.yaml>             -> per-platform release copy pack
+    kaleidophone analyze      <audio>                  -> AudioAnalysis JSON + a wave map PNG
+    kaleidophone curate       <media_dir> <brief.yaml> -> suggested station sort for an unsorted folder
+    kaleidophone compose      <brief.yaml>             -> EDL JSON
+    kaleidophone preview      <edl.json>               -> contact sheet, no ffmpeg
+    kaleidophone silent       <edl.json> <brief.yaml>  -> the visual cut only (expensive, reusable)
+    kaleidophone remux        <silent.mp4> <audio>     -> swap the audio in, no re-render (cheap)
+    kaleidophone render       <edl.json> <brief.yaml>  -> silent + remux + teasers + thumbnails
+    kaleidophone cover        <brief.yaml>             -> procedural cover art
+    kaleidophone promo        <brief.yaml>             -> promo pack markdown
+    kaleidophone kit          <brief.yaml>             -> per-platform release copy pack
+
+    kaleidophone envelope     <audio>                  -> 100 Hz song pack (JSON) for canvas pieces and frame effects
+    kaleidophone master-check <old.wav> <new.wav>      -> is a new master a drop-in for the picture?
+    kaleidophone deliver      <sheet.yaml>             -> every deliverable, cut from one silent render, audio muxed
+
+`master-check` answers in its exit code as well as in words: 0 remux, 3
+re-render the listed bars, 4 new grid, 5 offset (the same material starting
+earlier or later: set the delivery sheet's silent_start to the printed
+value). 2 keeps meaning what it means for every command: a failure -- bad
+usage (argparse's own exit code) or an error the command reported. 1 is
+kaleidophone run with no command at all.
 
 See docs/CONFIG-SCHEMA.md for the brief format and skills/ for the full
 per-stage methodology.
@@ -33,11 +44,22 @@ from pydantic import ValidationError
 from kaleidophone import __version__
 from kaleidophone.assets.curation import scan_media, suggest_stations
 from kaleidophone.audio.analysis import analyze
+from kaleidophone.audio.envelope import DEFAULT_BPM_RANGE, envelope, write_songpack
+from kaleidophone.audio.mastercheck import (
+    DELTA_THRESHOLD,
+    ENVELOPES,
+    NEW_VOICE_THRESHOLD,
+    SHAPE_THRESHOLD,
+    TOLERANCE,
+    format_report,
+    master_check,
+)
 from kaleidophone.audio.wavemap import render_wavemap
 from kaleidophone.cover.generate import generate_cover, pick_cover_station
 from kaleidophone.promo.plan import generate_promo_pack
 from kaleidophone.release import generate_release_pack
 from kaleidophone.render._ffmpeg_util import FfmpegNotFound
+from kaleidophone.render.deliver import deliver, delivery_script, format_table, load_sheet
 from kaleidophone.render.ffmpeg_pipeline import mux_audio, render_silent
 from kaleidophone.render.ffmpeg_pipeline import render as render_edl
 from kaleidophone.render.preview import generate_contact_sheet, generate_overlay_proof
@@ -196,6 +218,115 @@ def _build_parser() -> argparse.ArgumentParser:
         "--preview-only", action="store_true", help="Stop after the contact sheet -- skip the render."
     )
     p.set_defaults(func=_cmd_auto)
+
+    p = sub.add_parser(
+        "envelope",
+        help="Song pack: 100 Hz band, flux and beat envelopes (JSON) that drive canvas pieces "
+        "and frame effects.",
+    )
+    p.add_argument("audio_path")
+    p.add_argument("-o", "--out", default="songpack.json")
+    p.add_argument(
+        "--bpm-range",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        default=DEFAULT_BPM_RANGE,
+        help="Tempos the beat grid may take (default 60 200). Narrow it when the grid comes "
+        "back at double or half time -- the pack prints the other octave and its score; e.g. "
+        "50 100 for a ballad, 150 190 for drum and bass.",
+    )
+    p.add_argument(
+        "--downbeat",
+        type=float,
+        metavar="SECONDS",
+        help="Bar 1, in seconds, when you know it. Otherwise it is estimated (bass onsets and harmony "
+        "changes) and the pack says how sure that is.",
+    )
+    p.add_argument(
+        "--beats-per-bar",
+        type=int,
+        default=4,
+        help="Beats in a bar (default 4; 3 for a waltz): sets which beat can be bar 1, and the bars "
+        "`loudest` snaps to.",
+    )
+    p.set_defaults(func=_cmd_envelope)
+
+    p = sub.add_parser(
+        "master-check",
+        help="Is a new master a drop-in for the one the picture was cut to? "
+        "Exit 0 remux, 3 re-render some bars, 4 new grid, 5 offset (set silent_start and deliver).",
+    )
+    p.add_argument("old_path", help="The master the silent render was cut against.")
+    p.add_argument("new_path", help="The master that just arrived.")
+    p.add_argument("--bpm", type=float, help="The edit's tempo. Estimated from the old master if left out.")
+    p.add_argument(
+        "--downbeat",
+        type=float,
+        help="Seconds to the edit's bar 1. Estimated from the old master if left out.",
+    )
+    p.add_argument("--beats-per-bar", type=int, default=4)
+    p.add_argument(
+        "--tolerance-ms",
+        type=float,
+        default=round(TOLERANCE * 1000.0, 1),
+        help=f"A shift up to this many ms is the same grid (default {TOLERANCE * 1000:.1f}: half a frame "
+        "at 24 fps). Beyond it, the same material shifted is an offset (exit 5).",
+    )
+    p.add_argument(
+        "--silent-start",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="The delivery sheet's current silent_start (default 0); the report prints it plus the shift.",
+    )
+    p.add_argument(
+        "--envelopes",
+        type=lambda text: tuple(k.strip() for k in text.split(",") if k.strip()),
+        default=ENVELOPES,
+        metavar="KEY,KEY",
+        help="Compare only these song-pack envelopes per bar -- the ones the piece reads "
+        f"(default all: {','.join(ENVELOPES)}).",
+    )
+    p.add_argument(
+        "--max-delta",
+        type=float,
+        default=DELTA_THRESHOLD,
+        help="Flag a bar where an envelope's mean change, on the old master's 0..1 scale, exceeds this "
+        f"(default {DELTA_THRESHOLD}).",
+    )
+    p.add_argument(
+        "--min-r",
+        type=float,
+        default=SHAPE_THRESHOLD,
+        help=f"Flag a bar where an envelope's shape correlates below this (default {SHAPE_THRESHOLD}).",
+    )
+    p.add_argument(
+        "--max-new-voice",
+        type=float,
+        default=NEW_VOICE_THRESHOLD,
+        help=f"Flag a bar where more than this share is new sound (0..1, default {NEW_VOICE_THRESHOLD}).",
+    )
+    p.add_argument("--json", dest="json_out", help="Also write the full check (every window and bar) here.")
+    p.set_defaults(func=_cmd_master_check)
+
+    p = sub.add_parser(
+        "deliver",
+        help="Cut every deliverable in a delivery sheet from one silent render and mux the audio.",
+    )
+    p.add_argument("sheet_path")
+    p.add_argument(
+        "-o",
+        "--out",
+        help="Directory the sheet's `out:` names are written into (default: the sheet's own directory).",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print every ffmpeg command as a shell script instead of running them -- for the "
+        "machine the WAV lives on.",
+    )
+    p.set_defaults(func=_cmd_deliver)
 
     return parser
 
@@ -423,6 +554,142 @@ def _cmd_auto(args: argparse.Namespace) -> int:
 
     print(f"done -> {out}/")
     return 0
+
+
+def _cmd_envelope(args: argparse.Namespace) -> int:
+    pack = envelope(
+        args.audio_path,
+        bpm_range=tuple(args.bpm_range),
+        downbeat=args.downbeat,
+        beats_per_bar=args.beats_per_bar,
+    )
+    path = write_songpack(pack, args.out)
+    loudest = pack["loudest"]
+    print(
+        f"bpm={pack['bpm']:.2f} beats={len(pack['beats'])} downbeat={pack['downbeat']:.3f}s "
+        f"dur={pack['dur']:.1f}s loudest={loudest['start']:.2f}s+{loudest['len']}s "
+        f"voc={'yes' if 'voc' in pack else 'no (mono input)'}"
+    )
+    for line in _grid_check_lines(pack):
+        print(line)
+    print(
+        f"wrote {path} -- a piece reads frame round(t * {pack['fps']}) of each envelope. "
+        f"If the grid is at double or half time, re-run with --bpm-range."
+    )
+    return EXIT_OK
+
+
+def _grid_check_lines(pack: dict) -> list[str]:
+    """The pack's `grid_check`, as a person reads it: the other octave, how
+    sure bar 1 is, how well the fixed grid fits each 8-bar section, and any
+    warning. Nothing for a pack without one."""
+    check = pack.get("grid_check")
+    if not check:
+        return []
+    lines = []
+    octave = check.get("octave")
+    if octave:
+        lines.append(
+            f"tempo     {pack['bpm']:.2f} BPM; the other octave, {octave['bpm']:.2f} BPM, scores "
+            f"{octave['score']:.2f} of it"
+        )
+    bar1 = check.get("downbeat", {})
+    if bar1.get("source") == "given":
+        lines.append(f"downbeat  {pack['downbeat']:.3f} s (given)")
+    elif bar1:
+        runner = bar1.get("runner_up")
+        tail = "" if runner is None else f"; runner-up {runner:.3f} s"
+        lines.append(
+            f"downbeat  {pack['downbeat']:.3f} s (estimated, confidence {bar1['confidence']:.2f}{tail})"
+        )
+    measured = [s for s in check.get("sections", []) if s.get("max_ms") is not None]
+    if measured:
+        worst = max(s["max_ms"] for s in measured)
+        if worst <= 1000.0 / 48.0:
+            lines.append(
+                f"grid fit  within {worst} ms of the music in all {len(measured)} sections with a pulse"
+            )
+        else:
+            fits = ", ".join(
+                f"{s['bars'][0]}-{s['bars'][1]} {s['offset_ms']:+d} (worst {s['max_ms']})" for s in measured
+            )
+            lines.append(f"grid fit  ms from the music per 8 bars: {fits}")
+    lines.extend(f"warning: {text}" for text in check.get("warnings", []))
+    return lines
+
+
+def _cmd_master_check(args: argparse.Namespace) -> int:
+    check = master_check(
+        args.old_path,
+        args.new_path,
+        bpm=args.bpm,
+        downbeat=args.downbeat,
+        beats_per_bar=args.beats_per_bar,
+        max_delta=args.max_delta,
+        max_new_voice=args.max_new_voice,
+        min_r=args.min_r,
+        tolerance=args.tolerance_ms / 1000.0,
+        silent_start=args.silent_start,
+        envelopes=args.envelopes,
+    )
+    print(format_report(check))
+    if args.json_out:
+        out = Path(args.json_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(check.to_dict(), indent=2))
+        print(f"wrote {out}")
+    # The verdict is the exit code (0 remux, 3 rerender, 4 new grid, 5 offset),
+    # so a delivery script can stop itself before remuxing onto a grid that moved.
+    return check.exit_code
+
+
+def _cmd_deliver(args: argparse.Namespace) -> int:
+    if args.dry_run:
+        # Only the script goes to stdout, so `> deliver.sh` captures exactly it.
+        sys.stdout.write(delivery_script(args.sheet_path, out_dir=args.out))
+        if os.path.isabs(args.sheet_path) or (args.out and os.path.isabs(args.out)):
+            print(
+                "note: an absolute sheet or --out path makes the script's paths absolute, so it "
+                "only runs on this machine's layout. From the project folder, `kaleidophone "
+                "deliver <sheet> --dry-run` gives one that runs anywhere the folder does.",
+                file=sys.stderr,
+            )
+        return EXIT_OK
+    sheet = load_sheet(args.sheet_path)
+    results = deliver(args.sheet_path, out_dir=args.out, log=print)
+    for r in results:
+        how = "no audio"
+        if r.has_audio:
+            how = f"gain {r.gain_db:+.2f} dB"
+            if r.limiter_dbfs is not None:
+                how += f", limiter {r.limiter_dbfs:.2f} dBFS"
+            if r.source_lufs is not None:
+                how += f" on a {r.source_lufs:.1f} LUFS master"
+            if len(r.attempts) > 1:
+                how += f", after {len(r.attempts)} encodes"
+        print(f"wrote {r.out} ({r.frames_expected} frames, {how})")
+    if sheet.check:
+        print(format_table(results))
+    failed = [r for r in results if r.guard_failed]
+    if failed:
+        # One master, one gain, one ceiling: every failed cut shares them.
+        ceiling, mode = failed[0].ceiling_dbtp, failed[0].mode
+        files = ", ".join(f"{r.out} ({r.true_peak:+.1f} dBTP at {r.gain_db:+.2f} dB)" for r in failed)
+        if mode == "fixed":
+            raise RuntimeError(
+                f"{files}: over the {ceiling:g} dBTP ceiling at the fixed gain. The files are written; "
+                "lower gain.db, or use mode: auto, which steps the gain down until every file is under it."
+            )
+        fix = (
+            "raise gain.max_steps or lower gain.limiter_dbfs"
+            if mode == "loudness"
+            else "raise gain.max_steps or lower gain.start_db, or use mode: loudness, which limits before the encode"
+        )
+        raise RuntimeError(
+            f"the true-peak guard ran out of steps for {files} -- still over the {ceiling:g} dBTP "
+            f"ceiling. The files are written; {fix}."
+        )
+    return EXIT_OK
 
 
 def _write_yaml_brief(brief: CreativeBrief, path) -> None:

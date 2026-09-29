@@ -5,14 +5,24 @@ repository. `CLAUDE.md` points here. Read this before changing anything.
 
 ## What this project is
 
-kaleidophone turns a song plus your own photos/clips into a beat-synced,
-station-graded, loopish music video — plus cover art and a promo/captions
-pack from the same brief. It is **a deterministic edit-and-render engine**,
-not a generative-video product and not a hosting/publishing platform. If a
-task seems to require either of those, stop and ask.
+kaleidophone turns a song into a release — the music video, its vertical
+cuts, cover art and a promo/captions pack — either from your own photos and
+clips or drawn from nothing but the song. It is **a deterministic
+edit-and-render framework with three engines** (ADR-0007):
 
-See `skills/` for the full per-stage methodology and `docs/CREATIVE-GUIDE.md`
-for the visual/sonic design language this implements.
+| Engine | Where | For |
+|---|---|---|
+| filter graphs | `src/kaleidophone/render/` | footage, cut and graded by ffmpeg (the default) |
+| frame programs | `src/kaleidophone/frames/` | footage needing per-pixel, stateful effects (numpy, resumable) |
+| canvas pieces | `canvas/` (Node) | no footage: one self-contained HTML file per piece |
+
+It is not a generative-video product and not a hosting/publishing platform.
+If a task seems to require either of those, stop and ask.
+
+See `skills/` for the full per-stage methodology, `docs/CREATIVE-GUIDE.md`
+for the visual/sonic design language, and **`docs/TECHNIQUES.md` for every
+technique the releases taught, numbered, with where it lives** — check it
+before inventing something a release already solved.
 
 ## The one thing you must not get wrong
 
@@ -39,6 +49,42 @@ the commit even if `.gitignore` is bypassed locally. See
 fixtures are *generated in code* (`examples/demo/generate_fixtures.py`,
 `tests/factories/`) for exactly this reason — follow that pattern for any
 new fixture, don't add a real file "just this once."
+
+## The third thing you must not get wrong
+
+**All three engines keep one contract** (ADR-0007): the song is analysed once
+into a song pack (`kaleidophone envelope`); the picture is a deterministic
+function of time and that pack — seeded, never `Math.random()` or an unseeded
+generator in a render path; the render is silent and segmented; the audio is
+muxed last (`kaleidophone deliver`), and loudness and true peak are measured on
+the **delivered** file. Before re-rendering anything for a new master, run
+`kaleidophone master-check`.
+
+For `canvas/` specifically:
+
+- **The four shipped pieces (`canvas/pieces/{hamechi-manzor-dare,minus,
+  same-as-you,should-i}`) are frozen.** They are kept as they shipped and
+  verified against the delivered films; a change to their drawing code makes
+  the release unreproducible. Fix a real bug only with a measured before/after,
+  and record it (see how ( - )'s grain seeding is documented). New work goes in
+  `canvas/lib/` or a new piece started from `canvas/pieces/template`.
+- **Prefer a pure function of time.** State carried between frames means
+  warm-ups, one worker, and renders that can't be split (TECHNIQUES #30).
+- **A real song pack is private**, like the audio it came from: never commit
+  one, not even "a small excerpt". `.gitignore` refuses `*songpack*.json`, and
+  CI (`check_no_real_songpacks.py`) refuses a tracked pack under any name,
+  tagged `songpack/1` or just shaped like one, unless it is marked
+  `"synthetic": true`. Pieces in the repository ship a `synthetic.json` twin
+  (`node tools/synth.mjs --twin`) instead. It holds the tempo, the first
+  downbeat, rounded section levels and peaks, and, for a piece that needs them,
+  the timing windows it is choreographed to (SHOULD I ?'s vocal and stutter
+  windows, to the millisecond). Nothing else derived from the audio goes in.
+- **Never commit a render** — clip, still, cover or built HTML. The gallery is
+  built by `.github/workflows/pages.yml`.
+- **Lyrics, collaborator names and stems never enter the repository**, not in
+  code comments either. Real song titles are fine; they're credited.
+- Run `cd canvas && npm ci && npm test && node tools/build.mjs --all` before
+  pushing a canvas change; CI also renders one second of every piece.
 
 ## Rules for claims and numbers
 
@@ -76,6 +122,10 @@ number in `docs/` or an ADR:
   — see [ADR-0002](docs/decisions/0002-deterministic-edit-engine.md). Don't
   add `moviepy` or similar; if ffmpeg genuinely can't do something, that's
   worth a conversation, not a silent extra dependency.
+- Frame programs (`kaleidophone.frames`) are for what a filter graph can't
+  say; if ffmpeg's filter language can express an effect, it belongs in
+  `render/effects.py`. Every stateful effect implements
+  `state_dict()`/`load_state_dict()` and resumes bit-identically.
 - Effects that are simple single-input/output filters go in
   `render/effects.py`'s `LINEAR_EFFECT_BUILDERS`; effects that split the
   frame into multiple pads (kaleidoscope, halation) go in
@@ -95,6 +145,7 @@ number in `docs/` or an ADR:
 | Default mode (`kaleidophone auto`) writes a normal editable brief, not a black box | ADR-0004 |
 | The project is named `kaleidophone`, lowercase throughout | ADR-0005 |
 | The release pack is in scope; posting to a platform is not | ADR-0006 |
+| Three engines (filter graphs, frame programs, canvas pieces), one contract; real song packs are private | ADR-0007 |
 
 Each ADR lists what evidence would overturn it. Bring that evidence, or
 leave them alone.
@@ -106,6 +157,10 @@ composition, auto-sectioning, curation scoring) using synthetic in-code
 fixtures (`tests/factories/`) — never real media, per the rule above.
 Run with `python3 -m pytest tests/ -q`.
 
+`canvas/` has its own suite: `cd canvas && npm test` (the lib's math, the rig,
+the glyphs, the synthetic twins, and that every piece builds into one
+self-contained file with no network references and no personal paths).
+
 `examples/demo/run_demo.sh` is the closest thing to an integration test:
 generates fully synthetic fixtures and runs the real CLI (`analyze` through
 `run`) end to end. If you change the render pipeline, run it — it's the
@@ -113,8 +168,8 @@ only thing in this repo that actually calls `ffmpeg`.
 
 ## When to stop and ask
 
-- The task would commit or require real media (photos/audio/video) to this
-  repository.
+- The task would commit or require real media (photos/audio/video), a real
+  song pack, lyrics or a render to this repository.
 - The task pushes scope toward **posting**: an account system, an OAuth
   flow, a scheduler, or any API client for a social/streaming platform.
   kaleidophone generates release *files* — captions, packs, deliverables — and

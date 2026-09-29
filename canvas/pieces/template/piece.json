@@ -1,0 +1,32 @@
+{
+  "title": "TEMPLATE",
+  "artist": "kaleidophone",
+  "year": 2026,
+  "medium": "the starting point for a new piece: canvas lib (core, live, ink, rig, recursion) + a three-mode main",
+  "summary": "Copy this folder to start a piece. An 8-bar loop that exercises the lib: a hand-lettered title writing itself on, a figure seated on a chair built from its body (contacts logged, ?qa=1 draws them), a planted-feet walk on the beat, and a vector droste into the window that loops back to the title.",
+  "template": "template.html",
+  "src": "src",
+  "lib": ["core", "live", "ink", "rig", "recursion"],
+  "grid": {"bpm": 120, "downbeat": 0.0, "beatsPerBar": 4, "dur": 16.0},
+  "render": {"fps": 24, "w": 1080, "h": 1920, "crf": 18, "tune": "animation"},
+  "cuts": [
+    {"name": "loop", "t0": 0, "dur": 16}
+  ],
+  "covers": {
+    "mode": "cover",
+    "size": [2000, 2000],
+    "variants": [
+      {"name": "title"},
+      {"name": "seated"}
+    ]
+  },
+  "gallery": {
+    "order": 5,
+    "t0": 0,
+    "dur": 16.0,
+    "fps": 12,
+    "cover": "seated",
+    "role": "template",
+    "alt": "A plain ink line drawing on cream paper: a figure at a café table under a hanging lamp. A hand-lettered title writes itself on, the figure sits, gets up and walks away, and the view falls through the window back to the title."
+  }
+}

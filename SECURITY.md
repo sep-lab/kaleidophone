@@ -31,6 +31,16 @@ attack surface that matters:
   write files that may later be pasted into a public description or
   caption. They should never echo a raw filesystem path from the run
   environment into that output.
+- **The delivery sheet.** `kaleidophone deliver` refuses output paths that
+  leave the output folder, and `--dry-run` quotes every name in the script it
+  emits. A sheet value that reaches the shell unquoted is a bug.
+- **Canvas pieces** (`canvas/`) are self-contained HTML files: no external
+  scripts, stylesheets, fonts or requests (CI checks each build for them). In
+  live mode a piece decodes an audio file the viewer drops on it, locally, with
+  the browser's own decoder; it never uploads it. A piece that fetches
+  anything, or a build that inlines something other than the pinned fonts and
+  its own code, is a bug. The render tools run a local headless Chromium on
+  local files only.
 
 ## Explicitly out of scope
 
@@ -45,8 +55,9 @@ attack surface that matters:
 
 ## A note on your media
 
-kaleidophone is local-first: it never uploads or transmits your photos, audio, or
-video anywhere. If that ever changes, it will be opt-in, documented here,
+kaleidophone is local-first: it never uploads or transmits your photos, audio,
+video or song data anywhere. (The public gallery is built by this repository's
+CI from synthetic songs, not from anything of yours.) If that ever changes, it will be opt-in, documented here,
 and announced in the changelog — not enabled by default. See
 [ADR-0003](docs/decisions/0003-public-framework-private-assets.md).
 

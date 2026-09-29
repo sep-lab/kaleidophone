@@ -1,0 +1,45 @@
+{
+  "title": "SAME AS YOU",
+  "artist": "Sep The Concept",
+  "year": 2026,
+  "medium": "canvas 2D ink cartoon, characters on twos with boil",
+  "summary": "The sequel to ( - ). One page torn down the middle: his half-world on the left, hers on the right, mirrored, differing only in the people. The gap between the halves is the distance.",
+  "template": "template.html",
+  "src": "src",
+  "grid": {"bpm": 120, "downbeat": 0.255, "beatsPerBar": 4, "dur": 140.245},
+  "render": {"fps": 24, "w": 1080, "h": 1920, "crf": 18, "tune": "animation"},
+  "cuts": [
+    {
+      "name": "reel",
+      "t0": 0,
+      "dur": 72.25,
+      "note": "bars 0-36; ends on its own first frame (loop-continuity clocks)"
+    },
+    {"name": "story-drop", "t0": 26.25, "dur": 16},
+    {"name": "story-heart", "t0": 56.25, "dur": 16},
+    {"name": "story-dream", "t0": 80.25, "dur": 16},
+    {"name": "full", "t0": 0, "dur": 138.5}
+  ],
+  "keyframes": [0, 630, 1014, 1350, 1734, 1926, 2310],
+  "covers": {
+    "size": [3000, 5333],
+    "variants": [
+      {"name": "main", "t": 71.9, "noSpots": true},
+      {"name": "psychedelic", "t": 71.25, "title": true},
+      {"name": "cafe", "t": 36.855, "noSpots": true},
+      {"name": "bed", "t": 59.455, "noSpots": true},
+      {"name": "dream", "t": 91.855},
+      {"name": "drift", "t": 132.355, "noSpots": true},
+      {"name": "street", "t": 45.855, "noSpots": true}
+    ]
+  },
+  "gallery": {
+    "order": 3,
+    "t0": 85.5,
+    "dur": 6.0,
+    "fps": 12,
+    "poster": 5.0,
+    "cover": "main",
+    "alt": "Ink cartoon of a man and a woman, eyes closed, haloed by soft spots of colour. They sit side by side in a lit window at night under a red neon heart that holds the same scene again; the view falls into the heart and folds into a turning kaleidoscope of their faces."
+  }
+}

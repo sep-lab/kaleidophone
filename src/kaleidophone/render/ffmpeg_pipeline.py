@@ -18,6 +18,7 @@ import tempfile
 from kaleidophone.assets.curation import VIDEO_EXTS
 from kaleidophone.overlay.card import render_overlay_cards
 from kaleidophone.render import effects as fx
+from kaleidophone.render._ffmpeg_util import concat_quote as _concat_quote
 from kaleidophone.render._ffmpeg_util import probe_duration, require_ffmpeg, run
 from kaleidophone.timeline.model import EDL, Cut
 from kaleidophone.timeline.schema import (
@@ -193,23 +194,6 @@ def render_silent(
         )
 
     return silent_output_path
-
-
-def _concat_quote(path: str) -> str:
-    """Quote a path for ffmpeg's concat demuxer.
-
-    The demuxer's own escaping rules, not the shell's: inside a single-quoted
-    token a literal ' is written by closing the quote, emitting an escaped
-    quote, and reopening.
-
-    What passes through here is the *segment* paths, so the apostrophe that
-    breaks a render comes from the work directory -- an explicit work_dir, or
-    a TMPDIR under something like "/Users/me/Dad's scratch" -- not from the
-    user's media filenames, which reach ffmpeg as argv elements and never get
-    re-parsed. Narrow trigger, one-line fix, and it is what the concat format
-    actually specifies.
-    """
-    return "'" + path.replace("'", "'\\''") + "'"
 
 
 def _warn_if_streams_disagree(

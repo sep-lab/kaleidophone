@@ -13,9 +13,21 @@ Quick orientation:
 - No real photo, video, or audio file is ever committed here — not as a test
   fixture, not "just one". Generate synthetic fixtures instead; see
   `examples/demo/generate_fixtures.py` for the pattern.
-- `skills/` holds one `SKILL.md` per pipeline stage (audio analysis, asset
-  curation, timeline composition, render, cover art, promo pack) — read the
+- There are three engines (ADR-0007): filter graphs (`src/kaleidophone/render/`),
+  frame programs (`src/kaleidophone/frames/`), canvas pieces (`canvas/`, see
+  `canvas/README.md`). One contract: song pack in (`kaleidophone envelope`),
+  deterministic silent render, audio muxed and measured last
+  (`kaleidophone deliver`); `kaleidophone master-check` before re-rendering for
+  a new master.
+- `docs/TECHNIQUES.md` numbers every technique the real releases taught and
+  says where it lives. Read it before inventing something.
+- `skills/` holds one `SKILL.md` per stage: audio analysis, asset curation,
+  timeline composition, render, cover art, promo pack, creative direction, and
+  (0.3) canvas piece, release kit, master swap, footage effects. Read the
   relevant one before working on that stage, whether you're a person or an
   agent.
+- The four shipped canvas pieces are frozen (verified against their releases);
+  new canvas work starts from `canvas/pieces/template` and `canvas/lib/`. Real
+  song packs, lyrics and collaborator names never enter the repository.
 - Every number in `docs/` must be reproducible. Label claims measured /
   cited / inferred, per AGENTS.md.
