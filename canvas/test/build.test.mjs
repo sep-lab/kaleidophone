@@ -140,3 +140,41 @@ test('canvas/README.md lists the reserved names exactly as `node tools/build.mjs
   assert.equal(m[1].trim(), reservedText(),
     'canvas/README.md\'s reserved names are out of date: paste the output of `node tools/build.mjs --reserved` into the block under "Reserved names"');
 });
+
+// ---------------------------------------------------------------- "variants"
+// A piece that can end more ways than one declares them in piece.json (render.mjs --endings); the build
+// is where a piece is made, so it refuses a block the tools couldn't use, in one line naming piece and axis.
+function variantFixture(name, variants, grid = { bpm: 120, dur: 16 }) {
+  const dir = fixture(name, ['core'], 'const a = 1;\n');
+  const f = path.join(dir, 'piece.json');
+  fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(fs.readFileSync(f, 'utf8')), grid, variants }));
+  return dir;
+}
+const buildV = (name, variants, grid) => buildPiece(name, { dir: variantFixture(name, variants, grid), out: path.join(tmp, `${name}.html`), quiet: true });
+
+test('"variants": a piece that declares them builds; each thing wrong with them fails the build in one line', () => {
+  assert.doesNotThrow(() => buildV('ends', { ending: { at: 14, options: ['droste', 'lamp', 'exit'], default: 'droste', note: 'how the loop ends' } }));
+  const bad = (name, variants, re) => assert.throws(() => buildV(name, variants), err => {
+    assert.ok(err instanceof BuildError, err.stack);
+    assert.ok(!err.message.includes('\n'), `one line: ${err.message}`);
+    assert.match(err.message, re);
+    return true;
+  });
+  bad('v1', { ending: { at: 14, options: ['droste', 'lamp'], default: 'exit' } }, /^v1: piece\.json variants\.ending: "default" must be one of its options \(droste, lamp\), got "exit"$/);
+  bad('v2', { ending: { at: 20, options: ['a'], default: 'a' } }, /^v2: piece\.json variants\.ending: "at" 20 is outside the song \(0 to 16 s, grid\.dur\)$/);
+  bad('v3', { ending: { at: 1, options: ['a', 'a'], default: 'a' } }, /^v3: piece\.json variants\.ending: option "a" is listed twice$/);
+  bad('v4', { 'The End': { at: 1, options: ['a'], default: 'a' } }, /^v4: piece\.json variants\["The End"\]: an axis name must be a slug/);
+  bad('v5', { ending: { at: 1, options: [], default: 'a' } }, /^v5: piece\.json variants\.ending: "options" must be a non-empty list/);
+  bad('v6', { ending: { at: '1', options: ['a'], default: 'a' } }, /^v6: piece\.json variants\.ending: "at" must be a number of song seconds, got "1"$/);
+  bad('v7', ['ending'], /^v7: piece\.json "variants": must be an object of axes/);
+});
+
+// ---------------------------------------------------------------- covers
+test('every piece\'s covers are at least 3000 px a side: what Spotify and Apple Music take through a distributor (docs/PLATFORMS.md)', () => {
+  // the delivery covers matrix (src/kaleidophone/cover/matrix.py) draws every cover down from the master and never enlarges it
+  for (const id of pieces) {
+    const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', id, 'piece.json'), 'utf8'));
+    if (!spec.covers) continue;
+    assert.ok(Math.min(...spec.covers.size) >= 3000, `${id}: covers.size is ${spec.covers.size.join('x')}`);
+  }
+});

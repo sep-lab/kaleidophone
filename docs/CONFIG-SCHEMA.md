@@ -217,8 +217,8 @@ kaleidophone deliver sheet.yaml [-o DIR] [--dry-run]
 ```
 
 ```yaml
-silent: _work/full_silent.mp4    # required -- the ONE silent render every cut comes from.
-                                 #   t0, dur and video_from below are on its clock
+silent: _work/full_silent.mp4    # the ONE silent render every cut comes from -- required unless every
+                                 #   cut has `endings`. t0, dur, video_from and at are on its clock
 audio: Song.wav                  # the master -- required unless every cut is `audio: none`. Relative
                                  #   silent/audio/card paths resolve against this sheet's own directory
 silent_start: 0                  # song time (s) of the render's first frame (default 0; may be negative)
@@ -243,7 +243,36 @@ cuts:                            # at least one
     card: _work/card_silent.mp4  # optional -- a separately rendered card covering t0 .. video_from
     video_from: 53               # required with card -- the film resumes from its keyframe here
   - {out: SONG_canvas.mp4, t0: 51, dur: 8, audio: none}   # no audio stream: a Spotify Canvas
+  - {out: SONG_reel_e.mp4, t0: 51, dur: 16, endings: _work/reel.variants.json}
+                                 # one file per ending: SONG_reel_e.<ending>.mp4 -- see "Endings"
 check: true                      # count frames, duration and size of what was written (default true)
+```
+
+A sheet that delivers to platforms says so per cut, and names its files from
+the release's `title` -- see "Platforms", "Names", "Covers" and "The
+manifest" below:
+
+```yaml
+title: Same As You               # names the manifest, the covers and every cut without `out`
+slug: same-as-you                # optional: the title as file names start (default: the title,
+                                 #   lowercased, hyphens for everything but letters and digits)
+size: 1080x1920                  # the silent render's frame size, WxH -- required with platform(s)
+silent: _work/full_silent.mp4
+audio: Song.wav
+cuts:
+  - name: loop                   # with the title, names the files: same-as-you.loop.<platform>.mp4
+    t0: 51
+    dur: 8
+    platforms: [ig-reel, tiktok, youtube-short, canvas]   # one file per platform; ids or aliases
+  - {name: film, t0: 0, dur: 182, platform: youtube-video, reframe: pad-blur}
+                                 # reframe: pad-blur | pad-color (+ pad_color: '#rrggbb') | crop --
+                                 #   required when the platform's shape isn't the render's
+covers:                          # optional
+  master: _work/cover_3000.png   # a square image, as large as the largest cover drawn from it
+  portrait: _work/cover_9x16.png # optional: the 9:16 covers come from it
+  background: '#ffffff'          # optional: what real transparency is flattened onto (default white)
+  platforms: [distributor-cover, spotify-cover, apple-music-cover, soundcloud-artwork,
+              soundcloud-header, youtube-thumbnail, instagram-reel-cover]
 ```
 
 A render that doesn't start at the top of the song says where it does, and
@@ -320,6 +349,152 @@ a re-encode, and it must be exactly `round((video_from − t0) × fps)` frames:
 48 for the example above at 24 fps. Only the picture is concatenated; the
 audio runs on unbroken underneath.
 
+### Endings
+
+A cut with `endings` delivers one finished file per ending instead of one
+file: the body and that ending joined by stream copy (the concat demuxer, as
+the card is), the master muxed over the whole cut at the master's one gain,
+measured on every file. The artist chooses — or posts them all as trial reels
+and keeps the one people watch to the end. The picture comes from the
+endings, not from `silent`; `card` and `video_from` still put a card in
+front, the body resuming from its keyframe at `video_from`.
+
+```yaml
+# from render.mjs <piece> --endings <axis> (preferred): its manifest names the body and every ending
+- {out: SONG_reel.mp4, t0: 51, dur: 16, endings: _work/reel.variants.json}
+# or listed by hand: the body runs t0..at, every ending at..t0+dur
+- out: SONG_reel.mp4
+  t0: 51
+  dur: 16
+  body: _work/reel.body.mp4
+  at: 61                         # on the render's clock, on the frame grid
+  endings:
+    - {name: rain, file: _work/reel.ending-rain.mp4}
+    - {name: door, file: _work/reel.ending-door.mp4}
+```
+
+Each ending is written as `<out stem>.<name><suffix>` (`SONG_reel.rain.mp4`),
+and the cut's contact sheet as `<out stem>.endings.jpg`: one row per ending,
+top to bottom — the last body frame, a mark at the join, then 6 frames spread
+over the ending, its first and last included — labelled with the names where
+ffmpeg's `drawtext` works; where it doesn't, the sheet is unlabelled and the
+report says so. A manifest's `t0` and `at` are song seconds, so its `t0` must
+be the cut's song time (`silent_start + t0`, within half a frame), its `dur`
+the cut's, its `fps` the sheet's, its body `round((at − t0) × fps)` frames and
+every ending the rest of the cut; its files are names next to it, and keys
+beyond these (its `stream` block included) are ignored.
+
+### Platforms
+
+`platform: <id>` on a cut delivers it to that platform's spec;
+`platforms: [<id>, ...]` delivers one file per platform. The ids, their
+aliases (`ig-reel` for `instagram-reel`, `canvas` for `spotify-canvas`) and
+every number behind them are in [PLATFORMS.md](PLATFORMS.md), generated
+from `src/kaleidophone/render/platforms.py` -- `kaleidophone platforms`
+prints the table, `kaleidophone platforms <id>` one in full, with its
+sources, how sure they are and when they were checked. Each platform's file:
+
+- **The picture.** Stream-copied when the render (`size`) is a size the
+  platform documents -- 1080x1920 for a Reel, any of 2160p to 720p for a
+  YouTube video. Otherwise scaled once, with Lanczos, to the platform's size
+  in the render's shape (a square render to a 1080x1080 Short) and encoded
+  with x264 at CRF 18 under the platform's ceiling (Instagram's 25 Mbps;
+  YouTube gets its closed GOP of half the frame rate and two B-frames;
+  Apple's motion art, which asks for 45-100 Mbps, an average of 72.5 with no VBV
+  buffer, because x264 with one didn't repeat its bytes at 3840x3840) -- into
+  an intermediate that every round of the true-peak guard stream-copies, so
+  the picture is encoded once however many rounds the audio takes. A
+  platform of another shape needs `reframe`:
+
+  | `reframe` | the picture |
+  |---|---|
+  | `pad-blur` | whole, centred over a copy of itself that fills the frame -- the common "blurred sides" -- blurred by 6 % of the frame's longer side, darkened and half desaturated, so it reads as the picture's light around it rather than a second picture |
+  | `pad-color` | whole, on bars of `pad_color` (default `#000000`) |
+  | `crop` | scaled to cover the frame, the centre kept -- the report says how much of the render that is |
+
+  Without it the cut is refused, with the three to choose from; with it and
+  nothing to fit, too. A picture drawn larger than it was rendered is a
+  warning: a 1080x1920 render padded into YouTube's 3840x2160 is drawn
+  1216x2160, enlarged 1.13x.
+- **The length**, its frames at the sheet's `fps`, against the platform's
+  limits: past the most it takes (a Spotify Canvas, 8 s) or under the least
+  (3 s) is refused; past a softer limit it is delivered with a warning that
+  says why -- Instagram recommends only Reels under 3 min to non-followers
+  (it takes 15), YouTube blocks a Short over 1 min with an active Content ID
+  claim.
+- **The frame rate**, against the range the platform takes (Instagram and
+  TikTok: 23-60) or the rates (Apple's motion art: 23.976 to 30): refused
+  outside them; a rate YouTube doesn't list as common is noted.
+- **The audio.** A platform that takes none (`spotify-canvas`, Apple's motion
+  art) gets a file with no audio stream, whatever the cut says; the cut's
+  other platforms keep the master. Still one gain per master: every file
+  with audio shares it.
+- **After it is written**, the file itself is held to the platform: its size,
+  length, frame rate and audio as ffprobe reads them, its size on disk
+  against the platform's limit (refused over it -- the file is written and
+  `deliver` exits with an error; warned over a softer one, like the ~72 MB
+  third parties report for TikTok's Android app), its average bitrate
+  against the range the platform's codec notes give (a warning: Instagram's
+  25 Mbps, which a stream-copied render can exceed; Apple's 45 Mbps floor),
+  and its loudness against the level the platform plays at: "YouTube will
+  turn this down by ~5.0 dB". That last is information, not a gain.
+
+Every finding is one line -- `refuse`, `warn` or `info`, the file, the
+platform, the rule -- in the report and in the manifest.
+
+### Names
+
+A cut with `out` keeps it: with `platform`, the file is `out`; with a list
+of `platforms`, `<out stem>.<platform><suffix>` for each; an ending adds
+`.<ending>` after either. A cut without `out` gives `name`, and its files
+are `<title>.<name>[.<platform>][.<ending>].mp4` -- `same-as-you.loop.tiktok.mp4`
+-- with the title made a file name: lowercased, every run of anything but a
+letter or a digit one hyphen (a Persian title keeps its letters). A title
+with no letter or digit in it, `( - )`, needs `slug`.
+
+### Covers
+
+`covers` makes every cover in `platforms` from one square `master`, with
+Pillow -- no ffmpeg, so a sheet of covers alone (`title` and `covers`, no
+cuts) needs neither a render nor a master WAV:
+
+- each at its platform's size (`kaleidophone platforms <id>`), downscaled
+  with Lanczos and never enlarged: a master smaller than the largest size
+  it is drawn at is refused before anything is written (Spotify's rule: no
+  upscaling) -- 3000 px is enough for every cover in the registry;
+- a square platform's from the master; another shape's is the master
+  centred over a copy of itself, blurred, darkened and desaturated as
+  `reframe: pad-blur` does a video (a 16:9 YouTube thumbnail, a 9:16
+  Reel cover, a 3:4 carousel image) -- or, for the 9:16 covers, the
+  `portrait` scaled, when there is one (9:16, as large as its largest
+  cover); SoundCloud's 2480x520 header is the master's centre band, with a
+  warning to check the crop (SoundCloud crops it again on small screens);
+- sRGB, 8 bits a channel, with no embedded profile and no EXIF (Spotify's
+  rule): a profile is applied and removed, an EXIF orientation applied to
+  the pixels, real transparency flattened onto `background` (white unless
+  the sheet says) -- each said in the report. An alpha channel that is
+  opaque everywhere, as a canvas piece's cover has, is dropped without a
+  word: there is nothing to flatten;
+- a JPEG, 4:4:4, at quality 95 (100 for Spotify and Apple, which ask for
+  lossless or 100 %), stepped down by 5 until it is under the platform's
+  file limit (SoundCloud's 2 MB); still over it at quality 50, it is written
+  and refused.
+
+`<title>.cover.<platform>.jpg` each. An Instagram Reel cover brings
+`<title>.cover.instagram-grid-thumbnail.jpg` with it: what the 3:4 profile
+grid shows of it, the centre 1080x1440 -- a preview, not an upload.
+
+### The manifest
+
+Every delivery writes `<title>.delivery.json` (`delivery.json` with no
+title) next to its files: every artifact -- its file, cut, platform, ending,
+how its picture was made, what was planned (size, fps, frames, seconds,
+audio) and what was measured on the file (size, fps, frames, seconds,
+duration, audio, LUFS, dBTP, bytes; a cover's size, bytes and JPEG
+quality), and its findings -- the master's loudness, true peak, gain and
+ceiling, a count of the findings by level, and every platform's spec once,
+by id. `--dry-run`'s script writes it as planned, nothing measured.
+
 ### Validation
 
 When the sheet is read, before anything runs:
@@ -338,14 +513,45 @@ When the sheet is read, before anything runs:
 - `t0` and `video_from` must be on the `fps` frame grid (within 0.01 of a
   frame); the error names the two nearest frames. A stream-copied cut can
   only start on a frame — and on a keyframe at that.
-- `audio` is required unless every cut is `audio: none`; `silent_start` is
+- `endings` is a manifest path or a non-empty list of `{name, file}`; a list
+  needs `body` and `at` (`t0 < at < t0 + dur`, on the frame grid, after a
+  card's `video_from`), a manifest takes neither. A name is a plain name — no
+  `/` or `\`, no leading `.`, no surrounding spaces — and no two endings of a
+  cut may differ only by case. No ending's file or contact sheet may be one
+  another cut writes.
+- `silent` is required unless every cut has `endings`;
+  `audio` is required unless every cut is `audio: none` or goes only to
+  platforms that take no audio; `silent_start` is
   any finite number; `ceiling_dbtp` is `auto` or a number at or under 0;
   `audio_bitrate` must look like a bitrate, and there must be at least one
-  cut.
+  cut -- or `covers`.
+- A cut has `out` or `name` (a plain name, as an ending's); `title` is
+  required when a cut has no `out` or there are `covers`, and `slug` when the
+  title has no letter or digit to start a file name with.
+- `platform` and `platforms` don't go together; each id or alias is a video
+  platform the registry has (an unknown one is refused with the nearest, an
+  image one pointed at `covers`), listed once. `size` (`WxH`) is required
+  when a cut goes to a platform. `reframe` needs a platform, and `pad_color`
+  (`#rrggbb`) needs `reframe: pad-color`; fades on a cut whose platforms
+  take no audio are refused, as they are with `audio: none`.
+- `covers.platforms` are image platforms, listed once; `portrait` needs a
+  9:16 one among them; `background` is `#rrggbb`.
+- Then every file is held to its platform as planned, and all that one won't
+  take is refused at once: a shape with no `reframe` (or a `reframe` with
+  nothing to fit), a length past its limits, a frame rate it doesn't take.
+  `--dry-run` refuses the same.
 
 When `deliver` runs, before any encoding, reporting every problem at once:
 
-- every input exists (the master only if a cut has audio);
+- every input exists (the master only if a cut has audio; the covers' master
+  and portrait);
+- the silent render, a card and an ending's body are the sheet's `size`, when
+  it gives one;
+- the covers' master is square and as large as the largest cover drawn from
+  it, and the portrait 9:16 and as large as its largest cover -- and each is
+  an image Pillow opens: one over its 178,956,970-pixel limit (where it
+  suspects a decompression bomb) is refused in a line, like a file that
+  isn't an image;
 - no cut ends past the end of the silent render (by more than a frame), no
   cut's audio — at `silent_start + t0 + dur` — past the end of the master (by
   more than 0.05 s), and no cut's audio lies entirely before the song;
@@ -356,7 +562,15 @@ When `deliver` runs, before any encoding, reporting every problem at once:
   film off its audio;
 - a cut that ends between keyframes is delivered with a warning: `-frames:v`
   counts packets in decode order, so its last frame can come out of order. A
-  keyframe forced at the end too makes it exact.
+  keyframe forced at the end too makes it exact;
+- a cut's endings fit it: a manifest that disagrees with its cut is refused,
+  one line per mismatch (frame rate, song time, length, the join, any part's
+  frame count), and so is a part whose file has the wrong number of frames,
+  doesn't start on a keyframe (nor the body at `video_from`, behind a card),
+  or isn't the same encode as the rest — codec, profile, level, pixel format,
+  size, frame rate, time base, aspect — or isn't at the sheet's `fps`. Parts
+  whose stream headers differ (another encoder setting, an x264 CRF) are
+  joined with a warning: ffmpeg decodes the join, a strict player may not.
 
 Without ffprobe these checks are best-effort.
 
@@ -368,23 +582,39 @@ Without ffprobe these checks are best-effort.
   `-frames:v`, never `-t`; the audio windowed, gained (limited), faded and
   encoded to AAC; and on every file,
   `-dn -sn -map_metadata -1 -map_chapters -1 -movflags +faststart`. A cut with
-  `audio: none` has no audio stream. Card cuts' intermediates go in
+  `audio: none` has no audio stream. A cut with endings writes each ending
+  and its contact sheet instead; a cut with platforms, a file per platform
+  (per ending) -- the contact sheet from its first platform's. Card, endings
+  and reframed-picture intermediates go in
   `.kaleidophone-cache/deliver/` under it and are removed afterwards.
+- Each cover, `wrote <file> (<size>, <MB>, JPEG quality <q>; <platform>)`.
 - With `check: true`, a table measured on the files themselves: frames counted
   against frames expected, duration, integrated LUFS, true peak, size and the
-  gain (and limiter) used. `!frames` and `!peak` flag a row. The true peak is
-  guarded whatever `check` says.
+  gain (and limiter) used — a row per ending, then a line per contact sheet.
+  `!frames` and `!peak` flag a row. The true peak is guarded whatever `check`
+  says. Then every finding, `<level>: <file> (<platform>): <what>`; a file a
+  platform won't take as written (`refuse`) makes `deliver` exit with an
+  error after writing everything, the way a peak over the ceiling does.
+- The manifest, `<title>.delivery.json` (above), last.
 - With `--dry-run`, nothing is run: the same delivery is printed as a POSIX sh
   script — the master measured once, the guard's rounds, the ceiling worked
   out the same way, and the limiter's delay taken back whichever ffmpeg it
   finds — with the `-force_key_frames` list in its header. Run where the
   master is, it writes the same files as `deliver` (byte-identical, measured
   with ffmpeg 6.1 and 4.2.2 on synthetic masters). It needs neither the render
-  nor the WAV to print, so it is also how to plan a render's keyframes. From
+  nor the WAV to print, so it is also how to plan a render's keyframes — but
+  a cut with endings reads its variants manifest (not the render). From
   a relative sheet path the script holds no absolute paths; run it from the
   directory kaleidophone ran in. No path in the sheet can expand or run
   anything in it, and no ffmpeg in it reads the terminal (`-nostdin`), so it
-  can run inside a `while read` loop.
+  can run inside a `while read` loop. A platform's reframed picture is the
+  same x264 command line in both (measured with ffmpeg 6.1 on a synthetic
+  render: a 4K pad-blur YouTube cut and four stream-copied platform files,
+  byte-identical to `deliver`'s). The script writes the planned manifest
+  (a quoted here-document: nothing in it expands) and checks each file
+  against its platform's file limit; the covers are Pillow's work, so it
+  lists them in the manifest and leaves them to `kaleidophone deliver` -- a
+  sheet of covers alone needs neither the render nor the master.
 
 ## Song packs (`kaleidophone envelope`, canvas/)
 
@@ -397,6 +627,8 @@ back and refuses anything without the format tag.
 
 ```
 kaleidophone envelope Song.wav -o songpack.json [--bpm-range 60 200] [--downbeat 0.255] [--beats-per-bar 4]
+kaleidophone envelope Song.wav --midi Song.mid [--midi-offset S] [--downbeat S] \
+    [--stem NAME=path ...] [--stem-offset NAME=S ...] [--voc-stem NAME] -o song.songpack.json
 ```
 
 `--bpm-range LO HI` (default 60 200) bounds the tempos the grid may take:
@@ -407,7 +639,11 @@ ballad that came back at 140, `135 200` for drum and bass that came back
 at 87. `--downbeat SECONDS` is bar 1 when you know it; left out, it is
 estimated and `grid_check` says how sure. `--beats-per-bar N` (default 4;
 3 for a waltz) says which beats can be bar 1 and how long the bars are
-that `loudest` snaps to.
+that `loudest` snaps to. Given the session's MIDI (`--midi`), the grid is the
+session's instead, and its notes, chords and stems join the pack — see
+[Session in](#session-in-midi-and-stems---midi---stem) below. Every time and
+tempo on the command line must be a finite number: `inf` and `nan` are usage
+errors.
 
 **A real song pack is private**, exactly like the master it was derived from.
 Keep it next to the release — a `private/` folder is gitignored — never in
@@ -428,7 +664,8 @@ this repository. The repository holds synthetic twins, below.
 | `rmsdb` | dB, per frame | the overall level, un-normalised, floored at −100 |
 | `flux`, `bflux`, `hflux` | 0..1.5, per frame | spectral flux (the rise in log magnitude) over 20–16000, 20–150 and 2000–16000 Hz, divided by its own 99.5th percentile and clipped at 1.5, so the biggest hit still stands out from an ordinary strong one |
 | `cent` | 0..1, per frame | the spectral centroid / 8000 Hz; 0 on silent frames |
-| `voc` | 0..1, per frame | stereo input only (absent for mono): centre-panned 250–3500 Hz energy — how far the band's centre stands out from its sides, which rises when a centred voice comes in. A vocal proxy, not a voice detector: a doubled vocal panned hard left and right reads low, and a synth lead parked in the centre reads high. All zeros for a dual-mono file |
+| `voc` | 0..1, per frame | stereo input only (absent for mono): centre-panned 250–3500 Hz energy — how far the band's centre stands out from its sides, which rises when a centred voice comes in. A vocal proxy, not a voice detector: a doubled vocal panned hard left and right reads low, and a synth lead parked in the centre reads high. All zeros for a dual-mono file. With a vocal stem (`--stem vocals=…`), that stem's level instead, for mono input too |
+| `voc_source` | `"mid-side proxy"` or `"stem"` | where `voc` came from; present whenever `voc` is |
 | `loudest` | `{start, len}`, s | the loudest 60 s, starting on the bar line nearest it (bars counted from `downbeat`) — a default reel window that opens where a phrase does. A song of 60 s or less gets `{start: 0, len: dur}` |
 | `grid_check` | object | what the analysis is unsure of — see below. Not an envelope; pieces don't read it |
 
@@ -439,9 +676,9 @@ before cutting to it (`kaleidophone envelope` prints it too):
 |---|---|
 | `beats_per_bar` | the bar length the downbeat and `loudest` used |
 | `octave` | `{bpm, score}`: the half- or double-time grid the tempo search weighed and didn't choose, and its score over the chosen one's (the 120 BPM prior included). Near 1 is a coin toss; above 1, off-beat evidence overruled the prior. `null` when neither octave is inside `--bpm-range` |
-| `downbeat` | `{source: "given"}`, or `{source: "estimated", confidence, runner_up}`: the share of 4-bar blocks whose own evidence picks the same beat, and the first beat of the next-best choice |
+| `downbeat` | `{source: "given"}`, or `{source: "estimated", confidence, runner_up}`: the share of 4-bar blocks whose own evidence picks the same beat, and the first beat of the next-best choice. With `--midi`, `{source: "midi", confidence: 1, runner_up: null, session_bar}`: bar 1 is a bar line of the MIDI's, `session_bar` its number in the session — or `{source: "given"}` when `--downbeat` put it elsewhere |
 | `sections` | one entry per 8 bars from bar 1 (bars before it are one pickup entry): `bars`, `start`, `end`, and where the music's pulse sits against the fixed grid — `offset_ms` at the section's middle beat (> 0: the music is late), `max_ms` at its worst beat, `bpm` the section's own tempo, `off` how many of its `beats` are more than 21 ms (half a frame at 24 fps) from the grid. All `null` where the section has no pulse to measure (a beatless intro) |
-| `warnings` | sentences: a close octave call (with the `--bpm-range` that selects the other), a tempo that drifts off the fixed grid (with the share of beats off, the worst section and its own tempo), a guessed bar 1, a given downbeat that sits off the grid |
+| `warnings` | sentences: a close octave call (with the `--bpm-range` that selects the other), a tempo that drifts off the fixed grid (with the share of beats off, the worst section and its own tempo), a guessed bar 1, a given downbeat that sits off the grid. With `--midi`: an offset that is a guess, a given offset away from where the notes fit near it, a given downbeat off the MIDI's 16th notes, a tempo or time-signature change inside the song, the master's pulse off the MIDI's beats, every note outside the song. With `--stem`: a given `--stem-offset` away from where the stem plainly fits |
 
 A fixed grid can't follow a tempo that moves. On a synthetic click track
 gliding from 88 to 92 BPM over a minute (`tempo_ramp` in
@@ -458,11 +695,149 @@ harness does (`sampleLinear` in `canvas/tools/lib/common.mjs`, `envAt` in
 `canvas/lib/core.js`).
 
 **Events.** A piece that reacts to specific onsets — SHOULD I ?'s vocal
-stutters — reads them from `events`, which `kaleidophone envelope` doesn't
-write: `{name: {key: [[t, strength], ...]}}`, added from a separate analysis
-([TECHNIQUES #48](TECHNIQUES.md#48-lyric-map-from-stem)) and baked into the
+stutters — reads them from `events`: `{name: {key: [[t, strength, ...], ...]}}`,
+every entry opening with its time in seconds and a strength, each list sorted
+by time. `kaleidophone envelope --midi` writes two of them, `events.midi` and
+`events.chords` (below); any other comes from a separate analysis
+([TECHNIQUES #48](TECHNIQUES.md#48-lyric-map-from-stem)) and is baked into the
 piece at build time through `piece.json`'s `bake`
 (`"__STUTTER__": "events.stutter"`).
+
+### Session in: MIDI and stems (`--midi`, `--stem`)
+
+The session knows what the master can only be guessed from
+([TECHNIQUES #55](TECHNIQUES.md#55-session-in-midi-and-stems)). `--midi` takes
+the session's MIDI export, a Standard MIDI File of format 0 or 1
+(`src/kaleidophone/audio/midi.py` reads it); `--stem NAME=path`, once per
+stem, takes a stem bounced over one range with the others, which is lined up
+with the master (below). Both are as private as the master, and so is a pack
+made from them: `midi.tracks` holds the session's track names.
+
+**The offset.** A DAW's MIDI export starts at the session's start; the bounce
+may not — pre-roll, a trimmed head, a bounce from bar 5. Master time = MIDI
+time + `offset`. Left out, the offset is found: the notes become an onset train
+(weighted by velocity; drum tracks — MIDI channel 10, or a name such as kick,
+snare, hats or drums — counted double; a chord counted once) that is
+cross-correlated with the master's onset envelope over ±30 s and refined below
+a frame. Only notes that can reach the song somewhere in that window are in the
+train, so a note parked far down the session's timeline costs nothing.
+`--midi-offset S` sets it instead: positive for pre-roll (0.5 when the
+bounce opens with half a second before the session's start), negative for a
+bounce that starts later (−8 for one from bar 5 at 120 BPM in 4/4). A found
+offset is called a guess, in the warnings, when its correlation `r` is under
+0.25 — the notes hardly match — or within 0.05 of the runner-up, the best
+alignment more than 50 ms away — the song repeats itself, and the offset could
+be a beat or a bar out. A given offset is used as given: the notes are only
+checked within ±0.5 s of it, and a warning says where they fit best there if
+that is more than 21 ms off. Measured on the tests' synthetic 16-bar session
+and a master rendered from it (`tests/test_envelope.py`; not representative of
+real mixes): found within +1.4 ms with 0.5 s of pre-roll and +1.3 ms with the
+first 1.25 s trimmed (r 0.94 and 0.93, margins 0.087 and 0.090); one bar looped
+sixteen times still lines up right, but only 0.02–0.04 over a runner-up a beat
+or a bar away — a warning; the MIDI at 117 BPM against a 120 BPM master reads
+r 0.08 — a warning.
+
+What no song holds is refused as a corrupt file, with the reason: a tempo
+outside 10–1000 BPM, a file over 64 MB, a last event more than a day past the
+song's end, and a grid of more than 100,000 bars, beats or pulses inside the
+song (a bar of 1/64 at a tempo no one plays).
+
+**The grid comes from the MIDI.** `beats` is every quarter note of its tempo
+map inside the song (the quarter note is what MIDI's tempo and every DAW's
+tempo display count), counted from each bar line, so a tempo change is followed
+exactly and a 3/8 bar in a 4/4 song leaves the next bar starting on a beat
+(counted from the file's start instead, every bar after it sat half a beat off
+the beats); the grid runs on into pre-roll at the first tempo and past the
+MIDI's last event at the last. `pulses` is the felt beat, from each bar line
+too: the time signature's metronome click when it divides the bar (its
+default of a quarter note says nothing, and is ignored), else the dotted
+quarter in 6/8, 9/8 and 12/8 (and 6/16, 12/16 ...), else the denominator's
+note — the quarter in 4/4, so `pulses` is `beats` there; the eighth in 7/8 and
+3/8; the half in 2/2. `bpm` and `period` are the tempo at `downbeat`, `beat0`
+the first beat, and `downbeat` the first bar line of the MIDI's at or after
+0 s: the session's bar 1 for a bounce with pre-roll, bar 2 for one trimmed into
+bar 1. Bars follow the time signatures — 4/4 until the first; a 6/8 bar is
+three beats and two pulses, a 7/8 bar three and a half beats (the last an
+eighth) and seven pulses — and `--beats-per-bar N` stands in, as N/4, only for
+a file that has none. `--downbeat S` puts bar 1 at S s on the master when the
+MIDI's tick 0 isn't a bar line — a clip exported from a pickup — and the bars
+follow the MIDI's time signatures from there, with a warning if S is more than
+21 ms from the MIDI's nearest 16th note. `loudest` snaps to those bar lines. In
+`grid_check`, `octave` is `null`, `beats_per_bar` is the quarter notes in bar
+1's bar, `downbeat` is `{source: "given"}` when `--downbeat` set it, and
+`sections` measures how well the master's pulse sits on the MIDI's beats —
+off, the MIDI isn't this bounce's: another version, a time-stretched bounce,
+or a wrong offset. A tempo change inside the song is warned about with where a
+piece that assumes one BPM falls more than 21 ms off the beats; a
+time-signature change, with where the bars change length.
+
+**The notes.** Every note is an event, its duration as it sounded: a note
+released while its track's channel holds the sustain pedal down (CC64 at 64 or
+more) sounds until the pedal comes up or the key is struck again, so a
+pedalled arpeggio of short notes is the chord it sounds like, in
+`events.midi` and `events.chords` alike.
+
+**The stems are lined up.** A mastered bounce is often trimmed or padded at the
+head, and the stems aren't: a master with 0.30 s cut from its head put the
+vocal stem's `voc` 300 ms late (the 0.4 review's case). Each stem's lag on the
+master (master time = stem time + lag) is found by correlating its levels and
+onsets in 1/6-octave bands with the master's over ±2 s, refined below a frame
+and kept to the millisecond; the stem is moved by it, then measured. A lag is
+trusted when its correlation `r` is 0.2 or more and beats the best other lag
+more than 50 ms away by 0.05. A stem that repeats itself — a loop fits about as
+well a beat or a bar away — takes its own best lag near the lag most trusted
+stems agree on (stems bounced together share one); a stem that can't be
+trusted, or that surely lines up somewhere the others don't, is refused,
+naming the lag the other stems agree on, until `--stem-offset NAME=S` gives
+its lag. A stem with nothing to line up by (silence, a drone) stays where it
+starts. Once lined up, a stem must end where the master does to within 0.5 s;
+within that its tail is padded or trimmed. Measured on synthetic stems in a
+synthetic mix (`tests/test_envelope.py`; not representative of real mixes):
+drums, bass, keys and voices lined up within 3 ms with the master trimmed
+0.3 s, padded 0.4 s, or trimmed 1.234 s and soft-clipped, r 0.37–1.0, the voice
+10 dB down included; a stem from elsewhere scored 0.08–0.12 with margins under
+0.03, a pad swelling in over 1.5 s 0.16–0.23 with margins under 0.01 where it
+reached 0.2, and a strict click loop 0.95 with margins of 0.024–0.026 — 500 ms
+out on its own, right with the other stems. The review's case lines up at
+−0.300 s (r 0.99), and `voc` rises at 3.73 s where the master's voice comes in
+(3.70), not 4.03. Why levels and onsets both, and how they combine, is in
+`envelope.py`'s `_align_stems`. Nothing checks a stem for drift: one from
+another version at another tempo can line up where its start does.
+
+| Key | What it is |
+|---|---|
+| `pulses` | s, a list: every felt beat (above) in [0, `dur`), from each bar line — dotted quarters in 6/8, so two a bar where `beats` has three; `beats` itself in 4/4. Only with `--midi`: without it, the tempo search's beat is the pulse |
+| `pulses_per_bar` | how many pulses fill the bar `downbeat` opens: 2 in 6/8, 4 in 12/8, 7 in 7/8, 4 in 4/4 |
+| `midi` | `{file, ppq, offset, offset_source, confidence, tempo_map, time_signatures, tracks, dropped}`: the MIDI file's basename; ticks per quarter note (`null` for a file in SMPTE time); the offset in s; `"auto"` or `"given"`; `{r, margin, runner_up}` — the correlation at the offset, its margin over the runner-up and the runner-up's offset in s (`margin` and `runner_up` are `null` for a given offset, and the whole object for a file with no notes); `[[t, bpm], ...]`, the tempo at 0 s and every change inside the song; `[[t, num, den], ...]`, the same for time signatures; the tracks with notes, by name (`track-<n>` for an unnamed one), in the order of `events.midi`; how many notes fell outside the song and were dropped |
+| `events.midi.<track>` | `[[t, velocity, duration, pitch], ...]`: every note of the track inside the song, `t` and `duration` in s on the master's clock (the duration as the sustain pedal holds it), `velocity` 0..1 (the MIDI velocity / 127), `pitch` a MIDI note number (60 is middle C). The key is the track's name slugged — lowercase a–z, 0–9 and `-` (`Hi Hat` → `hi-hat`); `track-<n>` for a track with no name, or none in Latin letters (n is its place among the file's tracks); `-2`, `-3` on a repeat. A format-0 file is split by channel: `channel-1`, `channel-10` |
+| `events.chords.<track>` | `[[t, 1, "Am"], ...]` for each track that plays chords (not a drum track, and at least a fifth of its onsets sound three or more pitch classes or a power chord): an event where the pitch classes sounding change and then hold for an 8th note or more, so a passing chord doesn't count; the chord already sounding at 0 s opens the list at 0 s. Named by pitch class over the lowest note: triads (`C`, `Am`, `Bdim`, `Caug`, `Dsus4`, `Gsus2`), power chords (`E5`), sevenths (`G7`, `Cmaj7`, `Am7`, `Bm7b5`, `Bdim7`, `CmMaj7`, `G7sus4`, and the first three without their fifth), `6`, `m6`, `add9`, `madd9`, `9`, `m9`, `maj9`, `6/9`, `m11`, `maj7#11`, `7#9`; `"?"` for a chord outside that list. When the lowest note isn't the root it follows a slash: an inversion is the chord over it (`C/E`, `G7/B`), and a chord over a bass note of its own is that chord over it — `F/G`, not `Fadd9`; `C/B`, not `Cmaj7` — unless the bass has its own third and fifth in the set, when it is the root. Where one set has two names (C6 and Am7, Dsus4 and Gsus2) the one rooted on the lowest note wins. Notes are spelled for the file's key signature: with flats in a flat key; in a sharp key with its own sharps and a chart's usual spelling otherwise (`Bb` in G major, not `A#`); without one, C# Eb F# Ab Bb |
+| `stems.<name>` | per stem, the master's envelopes — `bass`, `lowmid`, `mid`, `high`, `air`, `rms`, `rmsdb`, `flux`, `bflux`, `hflux`, `cent` — measured with the stem lined up (`stems_alignment`), at the master's length and frame rate, normalised as the master's are except that the stem's digital silence stays out of the percentiles and reads 0. A piece reads one as `envAt('stems.drums.rms', t)` |
+| `stems_alignment.<name>` | `{lag, r, source}`: where the stem's 0 s falls on the master, in s to the millisecond (− for a master trimmed at the head); its correlation with the master there (`null` for a stem with nothing to line up by); `"auto"`, `"given"` (`--stem-offset`) or `"none"` (silence, a drone: left at 0). `kaleidophone envelope` prints it as `stem lag` |
+| `voc`, `voc_source` | with a stem named `vocals`, `vocal`, `vox` or `voice` (any case), or the one `--voc-stem NAME` names, `voc` is that stem's `rms` and `voc_source` is `"stem"`, for a mono master too; otherwise both are as above |
+
+Abridged, from the tests' session with its first 1.25 s trimmed, and its keys
+rendered from the session's start as a stem:
+
+```json
+{
+  "bpm": 120.0, "beat0": 0.2513, "period": 0.5, "beats": [0.2513, 0.7513, 1.2513], "downbeat": 0.7513,
+  "pulses": [0.2513, 0.7513, 1.2513], "pulses_per_bar": 4,
+  "midi": {"file": "Song.mid", "ppq": 480, "offset": -1.2487, "offset_source": "auto",
+           "confidence": {"r": 0.934, "margin": 0.09, "runner_up": -0.75},
+           "tempo_map": [[0.0, 120.0]], "time_signatures": [[0.0, 4, 4]],
+           "tracks": ["Kick", "Snare", "Hats", "Keys"], "dropped": 3},
+  "events": {"midi": {"kick": [[0.7513, 0.929, 0.0625, 36], [1.5013, 0.984, 0.0625, 36]],
+                      "keys": [[0.7513, 0.63, 1.9896, 53], [0.7513, 0.63, 1.9896, 57]]},
+             "chords": {"keys": [[0.0, 1, "Am"], [0.7513, 1, "F"], [2.7513, 1, "C"]]}},
+  "stems": {"keys": {"rms": [0.0, 0.0, 0.0]}},
+  "stems_alignment": {"keys": {"lag": -1.25, "r": 0.351, "source": "auto"}},
+  "grid_check": {"downbeat": {"source": "midi", "confidence": 1.0, "runner_up": null, "session_bar": 2}}
+}
+```
+
+A 0.3 reader reads this pack unchanged: every earlier key keeps its meaning,
+and the grid is still `beats`, `bpm` and `downbeat` — only now `beats` can
+follow a tempo change that `bpm` alone can't.
 
 ### Synthetic twins (`canvas/tools/synth.mjs`)
 
@@ -501,7 +876,8 @@ is `canvas/pieces/<id>/synthetic.json` — this one abridged from SHOULD I ?'s:
 | `keys` | all twelve | which arrays to write: `bass`, `lowmid`, `mid`, `high`, `air`, `rms`, `rmsdb`, `flux`, `bflux`, `hflux`, `cent`, `voc` |
 | `quantize` | off | store `round(v × quantize)` integers instead of floats rounded to 0.001 (255, like the toolkit-era packs) |
 | `voc` | none | `[[from, to, amp], ...]` (`amp` default 0.8): windows of syllable-like bursts, 4–7 a second, in `voc` and the mid band |
-| `events` | none | `{name: {key: [[from, to, rate_hz, strength], ...]}}` (defaults 6 and 0.9) → onsets `[[t, s], ...]` on the song's 16th grid, humanised by at most 20 ms; a rate above the grid's adds a 32nd to some steps, one below it rests on some |
+| `events` | none | `{name: {key: [[from, to, rate_hz, strength], ...]}}` (defaults 6 and 0.9) → onsets `[[t, s], ...]` on the song's 16th grid, humanised by at most 20 ms; a rate above the grid's adds a 32nd to some steps, one below it rests on some. A group can't be named `midi`: that is the drums' (below) |
+| `stems` | off | `true`: the pack gets `stems.drums`, `.bass`, `.vocals` and `.other` too, as the Session engine writes a real pack's (above) — below |
 | `sections` | one section at `rms` 0.5 | the song's shape, each entry owning its frames from its `from` until the next one's |
 
 Each `sections[]` entry:
@@ -526,6 +902,28 @@ way; the three fluxes run to 1.5, like a real pack's. Every array has
 60 s, snapped to a bar line as `kaleidophone envelope` snaps it — plus the
 arrays in `keys` and any `events`. Pieces take their own grid from their code
 (`makeGrid`), not from the pack.
+
+**The drums, as MIDI.** Every twin pack also carries the hits its envelopes
+were built from, the way a Session pack carries a MIDI part:
+`events.midi.kick`, `.snare`, `.hat` and `.crash`, each `[[t, velocity, 0.05,
+pitch], ...]` sorted by time — `t` rounded to 0.1 ms like `beats`, `velocity`
+0..1 (ghost notes and off-beat hats softer), General MIDI's kick 36, snare 38,
+closed hat 42 and open hat 46 (both in `hat`) and crash 49. So a piece that
+reacts to `midi.kick` runs on its twin in CI and in the gallery. They are
+written for every spec; nothing else in a pack changed with them, byte for
+byte — `npm test` holds each piece's twin to its 0.3 hashes.
+
+**Stems** (`"stems": true`) are the master's envelopes per part, as a real
+pack's are: the arrays in `keys` (`voc` aside) for each of `drums`, `bass`,
+`vocals` and `other`, each normalised on its own — its 5th percentile → 0 and
+99.5th → 1, the fluxes divided by their 99.5th and clipped at 1.5 — with
+digital silence kept out of the percentiles and read as 0; `rmsdb` is in dB,
+never above the master's. Where they come from: the generator knows what made
+every frame of every band (the drums' hits, the bassline, the chords and the
+bed under them, the syllables), so before it is normalised a stem's band is the
+master's band times that part's share of it — loud where the master is loud and
+the part is playing, and silent where it doesn't play: a spec with no `voc`
+windows has silent vocals. A piece reads one as `envAt('stems.drums.rms', t)`.
 
 ```bash
 node tools/synth.mjs --twin private/songpack.json --sections 0,32.26,42.26,72.25 \

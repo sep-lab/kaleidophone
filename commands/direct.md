@@ -1,6 +1,7 @@
 ---
 description: Art-direct a music video from a song and a folder of media, ending in an editable brief.
 argument-hint: "[song file] [media folder]"
+model: best
 ---
 
 # Direct a video

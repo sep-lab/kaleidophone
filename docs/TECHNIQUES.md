@@ -24,7 +24,7 @@ Numbers are measured on the release named unless marked otherwise, per
 
 | | |
 |---|---|
-| The grid and the song | [3](#3-bar-fit) · [11](#11-outro-splice) · [16](#16-signature-card) · [30](#30-pure-function-of-time) · [40](#40-loop-continuity-clocks) · [47](#47-grid-arithmetic) · [48](#48-lyric-map-from-stem) · [49](#49-master-drop-in-check) · [52](#52-what-the-new-master-added) · [53](#53-one-past-the-count) |
+| The grid and the song | [3](#3-bar-fit) · [11](#11-outro-splice) · [16](#16-signature-card) · [30](#30-pure-function-of-time) · [40](#40-loop-continuity-clocks) · [47](#47-grid-arithmetic) · [48](#48-lyric-map-from-stem) · [49](#49-master-drop-in-check) · [52](#52-what-the-new-master-added) · [53](#53-one-past-the-count) · [55](#55-session-in-midi-and-stems) |
 | Rendering and delivery | [5](#5-on-device-rendering) · [10](#10-grain-bank) · [18](#18-aac-true-peak-guard) · [21](#21-deterministic-render-harness) · [27](#27-jpeg-capture) · [41](#41-forced-keyframes) · [42](#42-float-pre-master-check) · [50](#50-aac-guard-per-master) |
 | Canvas: the piece | [19](#19-three-mode-piece) · [20](#20-live-web-audio-fallback) · [22](#22-stroke-scaling) · [26](#26-canvas-rtl) · [31](#31-square-cover-crop) |
 | Canvas: drawing | [23](#23-sprite-fire) · [24](#24-pressure-ring-swarm) · [25](#25-mask-state-machine) · [28](#28-paper-cut-out) · [29](#29-on-twos-and-boil) · [32](#32-rig-primitives) · [33](#33-floor-up-seating) · [34](#34-sill-up-poses) · [35](#35-contact-qa) |
@@ -207,6 +207,42 @@ When the concept is a count, the strongest ending is the frame that can't exist:
 a roll has 36 frames, so on the last vocal line the counter rolls "?" → 37 and
 the door is open with her in it. Put it in the near-silence before the voice so
 image and words arrive together. It doubles as a cover.
+
+### 55. Session in: MIDI and stems
+*From:* 0.4 ([#56](https://github.com/sep-lab/kaleidophone/issues/56)), after four canvas releases that read their hits off the mixed master — or, for SHOULD I ?'s voice, off a stem separated from it ([48](#48-lyric-map-from-stem)). *Where:* `kaleidophone envelope --midi Song.mid --stem NAME=path` (`src/kaleidophone/audio/midi.py`, `envelope.py`); the keys in [CONFIG-SCHEMA.md](CONFIG-SCHEMA.md#session-in-midi-and-stems---midi---stem).
+Onsets guessed from a mixed master are the contract's weakest link: the kick,
+the bass and a synth's attack land in the same bins, the grid is one tempo
+extrapolated across the song, and bar 1 is a guess wherever nothing in the
+audio marks the bar (a downbeat confidence of 0.0–0.4 on clicks, measured in
+`envelope.py`). The artist's session already knows all of it. Export its MIDI
+and stems, and the pack takes its grid from the tempo map and time signatures,
+following a tempo change beat by beat and counting its beats from every bar
+line, so an odd 3/8 bar doesn't throw the rest of the song half a beat off;
+`pulses` is the felt beat beside them — the dotted quarter of a 6/8 groove,
+from the time signature's metronome click or its meter. Every note becomes an
+event with its velocity, length (as the sustain pedal holds it) and pitch
+(`events.midi.<track>`), every harmonic track's chord changes are named over
+their bass (`F/G`, `C/E`; `events.chords.<track>`), each stem gets the master's
+envelopes, and the vocal stem's level replaces the mid-side `voc` proxy. What
+is left to find is where the session sits on the bounce — pre-roll, a trimmed
+head, a bounce from bar 5. The MIDI: its notes as an onset train,
+cross-correlated with the master's onset envelope over ±30 s and refined below
+a frame, with a confidence that calls a loop's offset a guess, because a song
+that repeats itself fits nearly as well a bar away; a clip that opens on a
+pickup takes `--downbeat` for its bar 1. The stems: each one's band levels and
+onsets against the master's over ±2 s, because a mastered bounce is often
+trimmed at the head and its stems aren't — the 0.4 review's master, 0.30 s
+short at the head, had put its vocal stem's `voc` 300 ms late without a word.
+A stem that can't be lined up is refused until `--stem-offset` gives its lag.
+Measured on the tests' synthetic session and stems (not representative of
+real mixes): the MIDI's offset within +1.4 ms with 0.5 s of pre-roll and
++1.3 ms with 1.25 s trimmed, a strict loop and a MIDI file at the wrong tempo
+both warned about; every stem within 3 ms of its lag, and a stem from another
+song, a pad with no attack and a click loop alone all refused. A drum kit on
+one MIDI track stays one track: name the session's tracks the way the piece
+will read them — `kick`, `snare`, `hat` — as the synthetic twins' events are
+named, and commit the DAW's groove before exporting, or the notes are straight
+where the bounce swings.
 
 ---
 

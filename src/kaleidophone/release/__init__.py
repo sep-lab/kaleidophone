@@ -11,8 +11,12 @@ the strongest detected energy jump, mood words from station descriptions,
 credits and links from `release`. It is a scaffold with every number right and
 the voice left open -- deliberately, because a caption is writing, and a
 template that tried to be writing would produce the thing everyone can smell.
+
+The one exception is opt-in and local: `kaleidophone kit --llm ollama:<model>` asks a model
+running on this machine for caption *drafts* (`local_llm.py`), labelled as drafts, so a release
+can still get written with no tokens and no network.
 """
 
-from kaleidophone.release.copy import generate_release_pack
+from kaleidophone.release.copy import generate_release_pack, minimal_brief, mood_line, release_facts
 
-__all__ = ["generate_release_pack"]
+__all__ = ["generate_release_pack", "minimal_brief", "mood_line", "release_facts"]

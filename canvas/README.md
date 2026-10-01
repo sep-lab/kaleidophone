@@ -30,7 +30,7 @@ and one live-mode fix aside, below) plus a driver and a synthetic song.
 | [( - )](pieces/minus/) | ink-on-paper Flash cartoon; she is never drawn, only the paper where she'd be | [→](../docs/case-studies/minus.md) |
 | [SAME AS YOU](pieces/same-as-you/) | the sequel: one page torn in two mirrored half-worlds; rig v2, chromatography, vector droste | [→](../docs/case-studies/same-as-you.md) |
 | [SHOULD I ?](pieces/should-i/) | the whole film through his camera's viewfinder: 36 frames on 36 snares, a 37th | [→](../docs/case-studies/should-i.md) |
-| [template](pieces/template/) | **start here**: the lib in one 8-bar loop — title write-on, a chair built from the body, a planted walk, a droste | — |
+| [template](pieces/template/) | **start here**: the lib in one 8-bar loop — title write-on, a chair built from the body, a planted walk, a droste; a bulb that pops on the snare, a nod on the kick and the droste's turn on the chord change, from the song's events. Variants: three endings from bar 7, `droste` (the default), `lamp` and `exit` (`--variant ending=lamp`; live, `?variant=ending:lamp`) | — |
 
 ## Quick start
 
@@ -47,8 +47,10 @@ open dist/should-i.html                       # live mode: click, or drop a trac
 # a silent, deterministic render from a song pack (synthetic here), and what it was: out/say_heart.mp4.json
 node tools/render.mjs same-as-you --song out/songs/same-as-you.songpack.json \
      --t0 62.255 --dur 10 --out out/say_heart.mp4
-node tools/still.mjs minus --song out/songs/minus.songpack.json --t 30,90 --w 540    # QA stills (PNG)
+node tools/still.mjs minus --song out/songs/minus.songpack.json --t 30,90 --w 540    # QA stills (PNG), in out/stills/
 node tools/still.mjs should-i --song out/songs/should-i.songpack.json --cover all      # every cover
+node tools/render.mjs template --song out/songs/template.songpack.json --t0 12 --dur 4 \
+     --endings ending --out out/tpl.mp4     # a body + one file per ending, joinable by stream copy (Variants, below)
 node tools/gallery.mjs --out ../site          # the whole gallery site, as CI builds it
 node tools/render.mjs --help                  # every flag (still.mjs and build.mjs too)
 ```
@@ -60,8 +62,11 @@ they are given before opening it (into `out/build/`, deleted when they finish);
 stops the command with the list of valid flags instead of being ignored. A
 request that can't be rendered — `--to` past the window, a size H.264 can't
 encode, a key time off the frame grid — is refused in one line with exit status
-2, before ffmpeg or Chromium start. A failure while rendering exits 1 and leaves
-no `_parts/` and no half-written video behind.
+2, before ffmpeg or Chromium start. A render works in a folder made for the run
+next to its output (`<out stem>.parts-XXXXXX`, deleted when it ends) and deletes
+nothing else; a failure exits 1 and leaves no work folder and no half-written
+video behind. Stills go in `--out`, by default this folder's `out/stills/`, which
+git ignores wherever the command is run from.
 
 ## The piece contract
 
@@ -94,6 +99,34 @@ A pure function of time is the thing to aim for
 ([#30](../docs/TECHNIQUES.md#30-pure-function-of-time)): any window renders on its
 own, workers split it freely, and a new master that keeps the grid is a
 constants change.
+
+### Events
+
+A song pack's `events` are what the song *played*, as lists sorted by time:
+`events.midi.<track>` = `[[t, velocity 0..1, duration, pitch], ...]` (a Session's MIDI
+parts; a synthetic twin's drums, `midi.kick`, `.snare`, `.hat`, `.crash`),
+`events.chords.<track>` = `[[t, 1, "Am"], ...]` (a synthetic twin plays a made-up progression
+on its bar lines when its spec has `"chords"`: the template's droste turns on the change), and an older pack's onsets,
+`events.<name>.<key>` = `[[t, s], ...]` (SHOULD I ?'s stutter). `core.js` reads any of them
+by binary search, so a piece that reacts to a hit is still a pure function of time:
+
+```js
+const snare = evList(EV, 'midi.snare');      // [] when the song has none: never null
+evPulse(snare, tq, 0, 0.1)                   // the hits as an envelope: velocity x attack/decay, the strongest recent one
+evNth(snare, tq)                             // how many so far (SHOULD I ?'s frame counter); evLast: the index of the last
+evSince(snare, tq)                           // seconds since the last (Infinity before the first)
+evCount(snare, G.bt(3), G.bt(4))             // how many in bar 3: [t0, t1)
+evChord(evList(EV, 'chords.keys'), tq)       // the chord sounding at tq, or null
+envAt('stems.drums.rms', tq)                 // a stem's envelope reads like the master's
+```
+
+`EV` (`live.js`) holds the events in every mode: the pack's, from `window.__init` (render and
+cover), and live the procedural fallback's own kicks, snares and hats, pushed into
+`EV.events.midi.kick` / `.snare` / `.hat` as it schedules them — a piece that reacts to
+`midi.kick` reacts when clicked, too. A dropped track has no MIDI: those lists stay empty, so
+keep an envelope fallback (the template's lamp follows `env.hflux` then). Read them at the
+drawing's time `tq`, like everything drawn on twos, and look a list up in `draw`: `__init`
+replaces them.
 
 ### The gallery entry
 
@@ -133,7 +166,10 @@ audio: keep it next to the release, never in this repository. The repository
 only holds **synthetic twins** — the real tempo, first downbeat and section
 boundaries, and each section's level per envelope as `[mean, p95, max]` rounded
 to 0.05, with every hit generated (SHOULD I ?'s also keeps the hand-placed vocal
-and stutter windows it needs). Enough to run, test and show a piece — the
+and stutter windows it needs). A twin can also play a chord progression on its
+bar lines — `"chords": {"track": "keys", "progression": ["Am", "F", "C", "G"],
+"every": "bar"}` writes `events.chords.keys` — made up like its drums, never the
+song's own harmony (the template's droste turns on it). Enough to run, test and show a piece — the
 biggest hit still lands where it should — and nothing about the sound
 ([ADR-0007](../docs/decisions/0007-three-engines-one-contract.md)). CI refuses any
 tracked pack that isn't marked `"synthetic": true`.
@@ -182,20 +218,76 @@ A new master for an existing film: `kaleidophone master-check old.wav new.wav`
 first — it says re-mux, offset (with the `silent_start` to use), re-render these bars, or new grid
 ([#49](../docs/TECHNIQUES.md#49-master-drop-in-check)).
 
+### Variants
+
+A piece that can end (or look) more than one way declares each choice as an axis in `piece.json`:
+
+```json
+"variants": {"ending": {"at": 14.0, "options": ["droste", "lamp", "exit"], "default": "droste", "note": "..."}}
+```
+
+`at` is the song time where the options start to differ (0 for an axis that changes the whole
+piece); axis and option names are slugs, because they name files; `default` is one of the options.
+`build.mjs` refuses a block the tools couldn't use, in one line naming the piece and the axis. The
+page gets the choice on every frame as `p.variant = {ending: "lamp"}`, every axis in it (the
+default where none was asked for); live mode reads `?variant=ending:lamp`. Before `at`, every
+option must draw exactly the same frames: that is what lets one body serve every ending. (A driver
+with its own `draw()` must pass `p.variant` on; the harness adds it after `frame()`.)
+
+**Render one option** with `--variant axis=option` (repeat it, or comma-separate, for several axes;
+an axis not given is its default). `still.mjs` takes it too, and puts it in the file name
+(`template.ending-lamp_15.000.png`). The sidecar records the choice as `variant`. A piece without
+`variants` refuses the flag, and an unknown axis or option is refused with the valid ones (exit 2).
+
+**Render every ending at once** with `--endings <axis>`: the window's body once, with the default,
+and one file per option from the join on, all with one encoder setting:
+
+```bash
+node tools/render.mjs template --song private/songpack.json --t0 0 --dur 16 --endings ending --out out/tpl.mp4
+#   out/tpl.body.mp4            frames 0-335 (0-14 s): the body every ending shares
+#   out/tpl.ending-droste.mp4   frames 336-383, one file per option, each starting on a keyframe
+#   out/tpl.ending-lamp.mp4
+#   out/tpl.ending-exit.mp4
+#   out/tpl.variants.json       the manifest: the files, their frames, the join, the stream they share
+```
+
+The join is the first frame at or after `at`; the window must start before it and end after it.
+`--keys` / `--key-times` are forced in whichever file they fall in, on its own clock; `--png-frames`
+saves each file's own; every file gets its sidecar (`part`: body or ending). A stateful piece
+renders every file from its warm-up, so an ending continues the body's state exactly. Nothing is
+moved into place until the whole set checks out (with ffprobe, which comes with ffmpeg): every
+option draws the frame before the join as the default does (a piece whose option starts early is
+refused before anything renders, naming the frame), every file has the frames planned and starts
+on a keyframe, all of them share one stream (codec, profile, level, pixel format, size, frame rate,
+time base, SAR and the SPS/PPS), and body + each ending, joined by the concat demuxer, run one frame
+apart with no gap. The manifest goes in last, and a set rendered again loses its old one before
+anything renders: whatever a failed run leaves, no manifest sits beside parts that aren't its own.
+
+A render of a piece with `variants` restarts its encoder at every join inside its window, so the
+whole window rendered once is the same encodes as body + default ending. With the same flags
+(`--workers` included) the two decode to identical frames: measured on the template, 16 s at 24 fps,
+384 of 384 decoded frames, and CI checks it on every push.
+
+**Delivery** joins them: a cut whose `endings:` names the manifest gets one file per ending,
+`<out stem>.<option>.mp4`, the body and that ending stream-copied together (`-c copy`, no second
+encode) and muxed from the manifest's `t0` (its `silent_start`) like any render. Next to them,
+`<out stem>.endings.jpg` is the contact sheet: one row per ending, the last body frame and then six
+frames of the ending, its first and last included, with a red mark at the join.
+
 ## Start a new piece
 
 ```bash
 cp -r pieces/template pieces/my-piece      # rename it in piece.json and template.html, and set TITLE in src/main.js
 node tools/synth.mjs my-piece && node tools/build.mjs my-piece --song out/songs/my-piece.songpack.json
-node tools/still.mjs my-piece --song out/songs/my-piece.songpack.json --t 1,4,9 --qa
+node tools/still.mjs my-piece --song out/songs/my-piece.songpack.json --t 1,4,9 --qa   # into out/stills/
 ```
 
 `piece.json` `"lib"` lists the reusable modules to inline ahead of your own, in order:
 
 | Module | What it gives you |
 |---|---|
-| `core.js` | math and easing, keyframes (`kf`), deterministic hashes and noise, the grid (`makeGrid`: bars, beats, backbeats, on twos), the envelope sampler (`envAt`), sprites and grain tiles, `strokeScale` |
-| `live.js` | the stage (a 1080×1920 virtual frame) and `boot()`: the three modes; the live analyser, scaled per band from a pre-scan of the dropped track and delayed by the output latency so picture and sound agree; `voc` measured the way a song pack measures it; the procedural fallback (a just-tuned pad, half-time below 90 BPM); `coverCrop`; the 9:16 safe frame drawn with `?qa=1` (`SAFE_FRAME`) |
+| `core.js` | math and easing, keyframes (`kf`), deterministic hashes and noise, the grid (`makeGrid`: bars, beats, backbeats, on twos), the envelope sampler (`envAt`, stems too), the song's events (`evList`, `evLast`, `evNth`, `evCount`, `evSince`, `evPulse`, `evChord`: [Events](#events)), sprites and grain tiles, `strokeScale` |
+| `live.js` | the stage (a 1080×1920 virtual frame) and `boot()`: the three modes; the live analyser, scaled per band from a pre-scan of the dropped track and delayed by the output latency so picture and sound agree; `voc` measured the way a song pack measures it; the procedural fallback (a just-tuned pad, half-time below 90 BPM); `EV`, the song's events in every mode (live, the fallback's own beat); variants: `boot({ variants })` checks what it is asked for and hands `draw` `flags.variant` (render: `p.variant`, an unknown option stops the render; live: `?variant=axis:option`, an unknown one warns and plays the default); `coverCrop`; the 9:16 safe frame drawn with `?qa=1` (`SAFE_FRAME`, x 65–940, y 269–1248: what Reels, TikTok and Shorts all leave clear, from their margins in `SAFE_MARGINS` — [docs/PLATFORMS.md](../docs/PLATFORMS.md)) |
 | `ink.js` | the Flash look: boil on twos, the envelope held on twos (`heldEnv`), stroke-by-stroke draw-on (and erase), a sketchier hand, dry runs, the contact log for `?qa=1`, a hand-lettered alphabet with per-glyph widths and `wordFit` (a title fitted to the frame, one line or two), `glow` |
 | `rig.js` | rig v2: two-bone IK, seated bodies built from the floor up, chairs built from the body, planted-feet walks |
 | `recursion.js` | vector droste and vector kaleidoscope: recursion by redrawing, crisp at any depth |
@@ -220,9 +312,9 @@ initialization". The names, as `node tools/build.mjs --reserved` prints them
 
 <!-- reserved names: generated by `node tools/build.mjs --reserved`; npm test checks this block -->
 ```text
-146 top-level names in canvas/lib, by file (a piece that lists the file in "lib" must not declare them):
-core.js (37): TAU rad clamp lerp invLerp remap fract ease easeIn easeOut easeInOut step smooth pulse kf hsh hash HS hash2 vnoise fbm mulberry32 makeGrid ENV envInit envAt envAvg mkCanvas rrectPath curvePath rgba strokeScale SPR glowSprite drawSprite noiseTile overlayTile
-live.js (34): Q MODE QA cv ctx MAINCTX withCtx W H S PXW PXH setSize base coverCrop ENV_KEYS envFrom SAFE_FRAME drawSafeFrame afterDraw boot LIVE_FPS LIVE_FFT LIVE_SMOOTH LIVE_GAIN_KEYS LIVE_VOC liveMeasure liveVocPower liveVocContrast livePercentile LIVE_FFT_TABLES liveFFT livePrescan liveMode
+158 top-level names in canvas/lib, by file (a piece that lists the file in "lib" must not declare them):
+core.js (45): TAU rad clamp lerp invLerp remap fract ease easeIn easeOut easeInOut step smooth pulse kf hsh hash HS hash2 vnoise fbm mulberry32 makeGrid ENV envInit envAt envAvg evList evBisect evLast evNth evCount evSince evChord evPulse mkCanvas rrectPath curvePath rgba strokeScale SPR glowSprite drawSprite noiseTile overlayTile
+live.js (38): Q MODE QA cv ctx MAINCTX withCtx W H S PXW PXH setSize base coverCrop ENV_KEYS envFrom EV variantParse variantResolve SAFE_MARGINS SAFE_FRAME drawSafeFrame afterDraw boot LIVE_FPS LIVE_FFT LIVE_SMOOTH LIVE_GAIN_KEYS LIVE_VOC liveMeasure liveVocPower liveVocContrast livePercentile LIVE_FFT_TABLES liveFFT livePrescan liveMode
 ink.js (49): C seed amp ji J boilFrame heldEnv LW DRAWON revealU noDraw drawOn SKETCH DRY measure ink jit trace stroke poly circPts circ ellPts ell rectPts rect rrPts rrect flat arcPts capsulePts glow withAlpha INK_GRAINS paperGrain CONTACTS contact drawContacts contactReport E_ GLYPH GLYPH_TRACK GLYPH_SPACE GLYPH_NONE glyphSpan GLYPH_MISSING word wordW wordFit
 rig.js (15): RG ik hairFrontCap hairBack face headSide hand figure item seated seatedLegs chairFor tableSide standPelvisY walkLegs
 recursion.js (3): drosteRedraw KALEIDO_BUF kaleidoRedraw

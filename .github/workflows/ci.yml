@@ -39,20 +39,20 @@ env:
   # ---------------------------------------------------------------------
   # THE COVERAGE FLOOR. One number, deliberately in one obvious place.
   #
-  # Honest status (0.3.0): 816 tests exercising src/kaleidophone at ~96%,
-  # measured on Python 3.11 with no ffmpeg on PATH (0.2.0: 143 at ~89%). The
-  # ffmpeg-facing modules are unit-tested by monkeypatching `run()`/
-  # `require_ffmpeg()` and asserting on the argv they build
-  # (tests/test_ffmpeg_pipeline.py, test_variants.py, test_ffmpeg_util.py,
-  # test_deliver.py, test_frames_engine.py). pytest still never invokes
-  # ffmpeg; the `demo` job remains the only thing that does, per
-  # docs/decisions/0002 and AGENTS.md.
+  # Honest status (0.4.0): 1448 tests exercising src/kaleidophone at ~98%,
+  # measured on Python 3.11 with no ffmpeg on PATH (0.3.0: 816 at ~96%;
+  # 0.2.0: 143 at ~89%). The ffmpeg-facing modules are unit-tested by
+  # monkeypatching `run()`/`require_ffmpeg()` and asserting on the argv they
+  # build (tests/test_ffmpeg_pipeline.py, test_variants.py, test_ffmpeg_util.py,
+  # test_deliver.py, test_deliver_platforms.py, test_frames_engine.py). pytest
+  # still never invokes ffmpeg; the `demo` job remains the only thing that
+  # does, per docs/decisions/0002 and AGENTS.md.
   #
-  # The floor is 92, a few points under the measured number. It is a ratchet
+  # The floor is 95, a few points under the measured number. It is a ratchet
   # against regression, not a target: raise it as coverage genuinely climbs,
   # and do not lower it to make a build green -- a drop is itself the finding.
   # ---------------------------------------------------------------------
-  COVERAGE_FLOOR: "92"
+  COVERAGE_FLOOR: "95"
 
   # Pinned so a lint upgrade lands as a reviewable dependency bump rather
   # than a surprise failure on someone else's unrelated change.
@@ -324,6 +324,59 @@ jobs:
             node tools/still.mjs "$p" --song "out/songs/$p.songpack.json" --cover all --size 400 --out out/smoke
           done
           ls -la out/smoke
+
+      - name: Render the template's endings, and join the default one by stream copy
+        run: |
+          # A body and one ending per option, one encoder setting for all of them, so a delivery can join
+          # them with -c copy (issue #58) -- checked the way `kaleidophone deliver` uses them: each file has
+          # the frames planned and starts on a keyframe, all of them share one stream, and body + default
+          # ending, joined by the concat demuxer, decode to exactly the frames of the same window rendered
+          # whole, one frame apart, with a keyframe at the join. The axis and its options come from piece.json.
+          set -euo pipefail
+          p=template
+          read -r axis at < <(node -e "
+            const v = require('./pieces/$p/piece.json').variants || {};
+            const a = Object.keys(v).find(k => v[k].at > 0);
+            if (!a) { console.error('pieces/$p/piece.json declares no variant axis that starts after 0 s: no endings to render'); process.exit(1); }
+            console.log(a, v[a].at);")
+          t0=$(node -e "console.log(Math.max(0, $at - 1))")
+          dur=$(node -e "console.log($at - $t0 + 1)")
+          win=("$p" --song "out/songs/$p.songpack.json" --t0 "$t0" --dur "$dur" --w 270 --h 480 --fps 12 --workers 2 --crf 28)
+          node tools/render.mjs "${win[@]}" --endings "$axis" --out out/smoke/endings.mp4
+          node tools/render.mjs "${win[@]}" --out out/smoke/endings-whole.mp4
+          m=out/smoke/endings.variants.json
+          J=$(node -e "console.log(require('./$m').join.frame)")
+          N=$(node -e "console.log(require('./$m').frames.window)")
+          def=$(node -e "console.log(require('./$m').default)")
+          files=$(node -e "const m = require('./$m'); console.log([m.body, ...m.endings].map(e => e.file).join(' '))")
+          stream() { ffprobe -v error -select_streams v:0 -show_data_hash sha256 -of csv=p=0 \
+            -show_entries stream=codec_name,profile,level,pix_fmt,width,height,sample_aspect_ratio,r_frame_rate,time_base,extradata_hash "$1"; }
+          ref=$(stream out/smoke/endings.body.mp4)
+          for f in $files; do
+            frames=$(ffprobe -v error -count_packets -select_streams v:0 -show_entries stream=nb_read_packets -of csv=p=0 "out/smoke/$f")
+            first=$(ffprobe -v error -select_streams v:0 -read_intervals %+#1 -show_entries frame=key_frame -of csv=p=0 "out/smoke/$f" | head -n 1)
+            want=$([ "$f" = endings.body.mp4 ] && echo "$J" || echo $((N - J)))
+            echo "$f: $frames frames (want $want), first frame key_frame=$first"
+            [ "$frames" -eq "$want" ] || { echo "::error::$f has $frames frames, the manifest says $want"; exit 1; }
+            [ "${first%%,*}" = 1 ] || { echo "::error::$f does not start on a keyframe: it can't be joined by stream copy"; exit 1; }
+            [ "$(stream "out/smoke/$f")" = "$ref" ] || { echo "::error::$f's stream ($(stream "out/smoke/$f")) differs from the body's ($ref)"; exit 1; }
+            node -e "const s = require('./out/smoke/$f.json'); process.exit(s.part && s.variant && !/[\\\\/]/.test(s.song) ? 0 : 1)" \
+              || { echo "::error::$f's sidecar is missing its part or variant, or names a path"; exit 1; }
+          done
+          printf "file '%s'\nfile '%s'\n" endings.body.mp4 "endings.$axis-$def.mp4" > out/smoke/endings.join.txt
+          ffmpeg -v error -y -f concat -safe 0 -i out/smoke/endings.join.txt -c copy out/smoke/endings-joined.mp4
+          decoded() { ffmpeg -v error -i "$1" -f framemd5 - | grep -v '^#' | awk -F, '{ print $2 "," $6 }'; }
+          decoded out/smoke/endings-whole.mp4 > out/smoke/endings-whole.md5
+          decoded out/smoke/endings-joined.mp4 > out/smoke/endings-joined.md5
+          [ "$(wc -l < out/smoke/endings-joined.md5)" -eq "$N" ] || { echo "::error::body + $def decodes to $(wc -l < out/smoke/endings-joined.md5) frames, not $N"; exit 1; }
+          cmp -s out/smoke/endings-whole.md5 out/smoke/endings-joined.md5 \
+            || { echo "::error::body + $def, joined by stream copy, doesn't decode to the frames of the window rendered whole"; diff out/smoke/endings-whole.md5 out/smoke/endings-joined.md5 | head; exit 1; }
+          ffprobe -v error -select_streams v:0 -show_entries frame=pts,key_frame -of csv=p=0 out/smoke/endings-joined.mp4 | awk -F, -v J="$J" '
+            { key[NR - 1] = $1; pts[NR - 1] = $2 }
+            END { step = pts[1] - pts[0]; for (i = 1; i < NR; i++) if (pts[i] - pts[i - 1] != step) { print "::error::a timestamp gap in the joined film at frame " i; exit 1 }
+                  if (pts[0] != 0 || key[J] != 1) { print "::error::the joined film starts at pts " pts[0] " / frame " J " is not a keyframe"; exit 1 }
+                  print "joined: " NR " frames, one every " step " ticks from 0, keyframe at the join (frame " J ")" }'
+          echo "endings: $files -- body + $def decodes to the whole window's $N frames exactly"
 
       - name: A page that reaches for the network fails its render
         run: |

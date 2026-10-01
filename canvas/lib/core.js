@@ -2,7 +2,8 @@
 /* ============================================================================
    kaleidophone canvas lib -- core.js
    The helpers every piece re-derived: math and easing, keyframes, deterministic
-   hashes and noise, the bar grid, the song-pack envelope sampler, sprites.
+   hashes and noise, the bar grid, the song-pack envelope sampler, the song's
+   events (MIDI notes, chords, onsets), sprites.
 
    No DOM access at load time (so node can test it); canvas helpers only touch
    the DOM when called. Plain script, not a module: a piece is one <script>, and
@@ -77,16 +78,59 @@ function makeGrid({ bpm, downbeat = 0, beatsPerBar = 4 }) {
 // A song pack (kaleidophone envelope / tools/synth.mjs): 100 Hz arrays, values ~0..1.
 // Render mode passes the whole pack once (window.__init) or one sample per frame (__frame(p));
 // both end up here, so a piece's draw code reads envelopes the same way in every mode.
+// A dotted name reads a nested array the same way: envAt('stems.drums.rms', t), a stem's envelope.
 const ENV = { fps: 100, off: 0, pack: null, now: {} };
 function envInit(pack, { off = 0 } = {}) { ENV.pack = pack; ENV.fps = pack.fps || pack.sr || 100; ENV.off = off; }
 function envAt(name, t) {
-  const a = ENV.pack && ENV.pack[name];
+  let a = ENV.pack && ENV.pack[name];
+  if (a === undefined && ENV.pack && name.includes('.')) { a = ENV.pack; for (const k of name.split('.')) a = a == null ? undefined : a[k]; }
   if (!a || !a.length) return ENV.now[name] || 0;
   const x = (t - ENV.off) * ENV.fps; if (x <= 0) return a[0];
   const i = Math.floor(x); if (i >= a.length - 1) return a[a.length - 1];
   const f = x - i; return a[i] * (1 - f) + a[i + 1] * f;
 }
 function envAvg(name, t, w) { let s = 0, n = 0; for (let d = -w; d <= w + 1e-9; d += 0.02) { s += envAt(name, t + d); n++; } return s / n; }
+
+// ---------------------------------------------------------------- events
+// What the song PLAYED, not how loud it was: a song pack's `events` are lists sorted by time, one per
+// track, each entry [t, strength, ...] in song seconds:
+//   events.midi.<track>    [[t, velocity 0..1, duration, pitch], ...]   a MIDI track (a Session's parts; a synthetic
+//                                                                        twin's drums: midi.kick, .snare, .hat, .crash)
+//   events.chords.<track>  [[t, 1, "Am"], ...]                            the chord changes
+//   events.<name>.<key>    [[t, s], ...]                                  onsets from an analysis (SHOULD I ?'s stutter)
+// These read any of them: a binary search, never a scan of the song, and pure -- the same list and t give
+// the same answer, so a piece that reacts to events is still a pure function of time. An event up to a
+// microsecond after t counts as at t: a MIDI tick's time and a frame's rarely agree to the last bit.
+// Live, the page fills a pack-shaped EV (live.js) with what is playing: evList(EV, 'midi.kick').
+function evList(pack, name) {              // the list at pack.events.<name> ('midi.kick'), or [] -- never null
+  let v = pack && pack.events;
+  for (const k of String(name).split('.')) v = v == null ? undefined : v[k];
+  return Array.isArray(v) ? v : [];
+}
+function evBisect(list, t, before = false) {   // how many events are at or before t (before: strictly before it)
+  const x = before ? t - 1e-6 : t + 1e-6;
+  let lo = 0, hi = list.length;
+  while (lo < hi) { const m = (lo + hi) >>> 1; if (before ? list[m][0] < x : list[m][0] <= x) lo = m + 1; else hi = m; }
+  return lo;
+}
+const evLast = (list, t) => evBisect(list, t) - 1;                        // index of the last event at or before t; -1: none yet
+const evNth = (list, t) => evBisect(list, t);                             // how many so far: SHOULD I ?'s frame counter, 1..36
+const evCount = (list, t0, t1) => Math.max(0, evBisect(list, t1, true) - evBisect(list, t0, true));   // how many in [t0, t1)
+function evSince(list, t) { const i = evLast(list, t); return i < 0 ? Infinity : Math.max(0, t - list[i][0]); }
+function evChord(list, t) { const i = evLast(list, t); return i < 0 ? null : list[i][2]; }   // the chord sounding at t
+// The hits as an envelope: each event's strength times pulse() -- a linear attack over `attack` s, then
+// exponential decay with time constant `decay` -- and the strongest of them wins, so a flurry of hits
+// reads as one bright hit instead of a sum that clips. 0 before the first event.
+function evPulse(list, t, attack = 0.005, decay = 0.12) {
+  let m = 0;
+  for (let i = evLast(list, t); i >= 0; i--) {
+    const e = list[i];
+    if (t - e[0] > attack + 10 * decay) break;                            // e^-10: nothing left of it
+    const v = (e[1] ?? 1) * pulse(Math.max(t, e[0]), e[0], attack, decay);
+    if (v > m) m = v;
+  }
+  return m;
+}
 
 // ---------------------------------------------------------------- canvas helpers
 function mkCanvas(w, h) {

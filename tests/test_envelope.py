@@ -19,12 +19,15 @@ lost, and a drifting tempo with no warning.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
 import numpy as np
 import pytest
+from test_midi import conductor, eot, mtrk, note_track, q, smf
 
 from kaleidophone.audio import envelope as env
+from kaleidophone.audio import midi as M
 from kaleidophone.render import _ffmpeg_util as fu
 
 SR = 48000
@@ -885,3 +888,712 @@ def test_probe_stream_degrades_to_none(monkeypatch, which, proc):
     monkeypatch.setattr(fu.shutil, "which", lambda name: which)
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: proc)
     assert fu.probe_stream("song.wav", "a:0", "channels") is None
+
+
+# --------------------------------------------------------------------------
+# session in: the DAW's MIDI and stems (TECHNIQUES #55)
+# --------------------------------------------------------------------------
+# A session written byte by byte (test_midi.py's helpers) and a master
+# rendered from it with the synthetic sounds above, placed as a bounce would
+# be: with pre-roll, or with its head trimmed. Nothing here is from a session.
+CHORDS = ([57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62])  # Am F C G, one a bar
+
+
+def session_song(bars: int = 16, *, loop: bool = False, bpm: float = 120.0, seed: int = 4) -> bytes:
+    """Kick, snare, hats and keys: a bar of keys alone, a verse with a
+    syncopated kick, a break, a chorus with four on the floor and 16th hats
+    -- or, with `loop`, the same verse bar at one velocity throughout."""
+    rng = np.random.default_rng(seed)
+    kick, snare, hats, keys = [], [], [], []
+
+    def vel(lo: int, hi: int) -> int:
+        return 100 if loop else int(rng.integers(lo, hi))
+
+    for b in range(bars):
+        start = 4 * b
+        keys.extend((q(start), q(start + 4) - 10, pitch, 80) for pitch in CHORDS[b % 4])
+        part = "verse"
+        if not loop:
+            part = (
+                "intro"
+                if b == 0
+                else "break"
+                if b == bars // 2 - 1
+                else "chorus"
+                if b >= bars // 2
+                else "verse"
+            )
+        if part == "verse":
+            kick.extend((q(start + at), q(start + at) + 60, 36, vel(95, 127)) for at in (0, 1.5, 2.5))
+        if part == "chorus":
+            kick.extend((q(start + at), q(start + at) + 60, 36, vel(95, 127)) for at in range(4))
+        if part in ("verse", "chorus"):
+            snare.extend((q(start + at), q(start + at) + 60, 38, vel(85, 120)) for at in (1, 3))
+            step = 0.5 if part == "verse" else 0.25
+            hats.extend(
+                (q(start + k * step), q(start + k * step) + 30, 42, vel(40, 90)) for k in range(int(4 / step))
+            )
+    return smf(
+        [
+            conductor(tempos=((0, bpm),)),
+            note_track(kick, "Kick", 9),
+            note_track(snare, "Snare", 9),
+            note_track(hats, "Hats", 9),
+            note_track(keys, "Keys"),
+        ]
+    )
+
+
+def click_session(tempos=((0, 120.0),), meters=((0, 4, 4),), quarters: int = 32) -> bytes:
+    """A click on every quarter note of a tempo map and a meter."""
+    clicks = [(q(k), q(k) + 60, 37, 100) for k in range(quarters)]
+    return smf([conductor(tempos, meters), note_track(clicks, "Click", 9)])
+
+
+def render_session(data: bytes, offset: float, dur: float, *, stretch: float = 1.0) -> np.ndarray:
+    """The session's notes as a master: every note at its MIDI time (times
+    `stretch`) plus `offset` -- a kick for 36, a snare for 38, a hat-like
+    click for 37 and 42, a soft-edged tone for anything else."""
+    x = np.zeros(int(dur * SR))
+    k = 0
+    for track in M.parse_midi(data).tracks:
+        for note in track.notes:
+            t = note.t * stretch + offset
+            if t < 0:
+                continue
+            gain = note.velocity / 127
+            if note.pitch == 36:
+                _place(x, _kick(), t, 0.8 * gain)
+            elif note.pitch == 38:
+                _place(x, _snare(k), t, 0.5 * gain)
+            elif note.pitch in (37, 42):
+                _place(x, _hat(k), t, 0.15 * gain)
+            else:
+                _place(x, _tone([440.0 * 2 ** ((note.pitch - 69) / 12)], max(note.dur, 0.06), 0.08 * gain), t)
+            k += 1
+    return x.astype(np.float32)
+
+
+@pytest.fixture(scope="module", params=[0.5, -1.25], ids=["pre-roll", "trimmed-head"])
+def session_pack(request):
+    data = session_song()
+    midi = M.parse_midi(data, name="Song.mid")
+    return env.analyze_signal(render_session(data, request.param, 33.0), SR, midi=midi), midi, request.param
+
+
+def test_the_midi_is_found_on_the_master_to_within_5_ms(session_pack):
+    """A bounce with 0.5 s of pre-roll, and one with its first 1.25 s
+    trimmed, rendered from the same MIDI: measured +1.4 and +1.3 ms."""
+    pack, _, offset = session_pack
+    found = pack["midi"]
+    assert found["offset"] == pytest.approx(offset, abs=0.005)
+    assert found["offset_source"] == "auto" and found["file"] == "Song.mid" and found["ppq"] == 480
+    assert found["confidence"]["r"] >= M.ALIGN_MIN_R and found["confidence"]["margin"] >= M.ALIGN_MIN_MARGIN
+    assert not any("is a guess" in w for w in pack["grid_check"]["warnings"])
+
+
+def test_with_midi_the_grid_is_the_sessions_not_an_estimate(session_pack):
+    pack, _, offset = session_pack
+    beats = np.array(pack["beats"])
+    assert pack["bpm"] == 120.0 and pack["period"] == 0.5
+    assert np.allclose(np.diff(beats), 0.5, atol=2e-4) and beats[0] == pack["beat0"] and 0.0 <= beats[0] < 0.5
+    assert pack["downbeat"] == pytest.approx(
+        offset if offset >= 0 else offset + 2.0, abs=0.005
+    )  # the first whole bar
+    assert pack["grid_check"]["downbeat"] == {
+        "source": "midi",
+        "confidence": 1.0,
+        "runner_up": None,
+        "session_bar": 1 if offset >= 0 else 2,
+    }
+    assert pack["grid_check"]["octave"] is None and pack["grid_check"]["beats_per_bar"] == 4
+    assert pack["midi"]["tempo_map"] == [[0.0, 120.0]] and pack["midi"]["time_signatures"] == [[0.0, 4, 4]]
+    measured = [s for s in pack["grid_check"]["sections"] if s["max_ms"] is not None]
+    assert measured and all(s["max_ms"] <= 10 and s["bpm"] == pytest.approx(120.0, abs=0.5) for s in measured)
+
+
+def test_every_note_is_an_event_on_the_masters_clock(session_pack):
+    pack, midi, offset = session_pack
+    events = pack["events"]["midi"]
+    assert list(events) == ["kick", "snare", "hats", "keys"]
+    assert pack["midi"]["tracks"] == ["Kick", "Snare", "Hats", "Keys"]
+    dropped = 0
+    for track in midi.tracks:
+        rows = events[track.slug]
+        inside = [n for n in track.notes if n.t + offset >= 0]
+        first = inside[0]
+        assert len(rows) == len(inside) and [r[0] for r in rows] == sorted(r[0] for r in rows)
+        assert rows[0] == [
+            pytest.approx(first.t + pack["midi"]["offset"], abs=1e-4),  # where the MIDI was found
+            round(first.velocity / 127, 3),
+            pytest.approx(first.dur, abs=1e-4),
+            first.pitch,
+        ]
+        dropped += len(track.notes) - len(inside)
+    assert pack["midi"]["dropped"] == dropped and (dropped > 0) == (offset < 0)
+
+
+def test_the_keys_chord_changes_are_named_and_the_chord_sounding_at_0_s_opens_them(session_pack):
+    pack, _, offset = session_pack
+    chords = pack["events"]["chords"]
+    assert list(chords) == ["keys"]  # drums are never harmonic
+    rows = chords["keys"]
+    assert len(rows) == 16 and [row[2] for row in rows[:5]] == ["Am", "F", "C", "G", "Am"]
+    assert rows[0][0] == pytest.approx(max(offset, 0.0), abs=0.005) and rows[0][1] == 1
+    assert rows[1][0] == pytest.approx(2.0 + offset, abs=0.005)
+
+
+def test_a_session_pack_round_trips_through_json_exactly(session_pack, tmp_path):
+    pack, _, _ = session_pack
+    path = env.write_songpack(pack, str(tmp_path / "song.songpack.json"))
+    assert env.load_songpack(path) == pack
+
+
+def test_a_loop_fits_nearly_as_well_elsewhere_and_the_pack_says_the_offset_is_a_guess():
+    data = session_song(loop=True)
+    pack = env.analyze_signal(render_session(data, 0.5, 33.0), SR, midi=M.parse_midi(data))
+    assert pack["midi"]["confidence"]["margin"] < M.ALIGN_MIN_MARGIN
+    warning = next(w for w in pack["grid_check"]["warnings"] if "is a guess" in w)
+    assert "repeats itself" in warning and "--midi-offset" in warning
+
+
+def test_a_midi_at_another_tempo_hardly_matches_and_the_pack_says_so():
+    x = render_session(session_song(), 0.5, 33.0)
+    pack = env.analyze_signal(x, SR, midi=M.parse_midi(session_song(bpm=117.0), name="Old.mid"))
+    assert pack["midi"]["confidence"]["r"] < M.ALIGN_MIN_R
+    assert any("Old.mid's notes hardly match" in w for w in pack["grid_check"]["warnings"])
+
+
+def test_a_given_offset_is_used_as_given_and_checked_against_the_notes():
+    data = session_song()
+    x = render_session(data, 0.5, 33.0)
+    midi = M.parse_midi(data, name="Song.mid")
+    given = env.analyze_signal(x, SR, midi=midi, midi_offset=0.5)
+    assert given["midi"]["offset"] == 0.5 and given["midi"]["offset_source"] == "given"
+    assert given["midi"]["confidence"]["r"] > 0.8 and given["midi"]["confidence"]["margin"] is None
+    assert given["grid_check"]["warnings"] == []
+    off = env.analyze_signal(x, SR, midi=midi, midi_offset=0.8)
+    assert any(
+        "given --midi-offset +0.800 s is" in w and "from where Song.mid's notes line up best" in w
+        for w in off["grid_check"]["warnings"]
+    )
+
+
+def test_the_grid_follows_a_tempo_change_and_says_where_a_one_bpm_piece_drifts():
+    """120 BPM for four bars (8 s), then 90."""
+    data = click_session(tempos=((0, 120.0), (q(16), 90.0)), quarters=40)
+    pack = env.analyze_signal(render_session(data, 0.0, 26.0), SR, midi=M.parse_midi(data), midi_offset=0.0)
+    beats = np.array(pack["beats"])
+    assert np.allclose(np.diff(beats[:17]), 0.5, atol=1e-4) and np.allclose(
+        np.diff(beats[16:]), 60 / 90, atol=1e-4
+    )
+    assert pack["bpm"] == 120.0 and pack["midi"]["tempo_map"] == [[0.0, 120.0], [8.0, 90.0]]
+    assert any(s["bpm"] == pytest.approx(90.0, abs=0.5) for s in pack["grid_check"]["sections"] if s["bpm"])
+    warning = next(w for w in pack["grid_check"]["warnings"] if "tempo changes" in w)
+    assert "90.00 BPM at 8.000 s (the session's bar 5)" in warning
+    assert "off the MIDI's beats from 8.667 s (the session's bar 5) on" in warning
+
+
+def test_small_tempo_changes_are_listed_and_a_one_bpm_piece_stays_close_to_them():
+    tempos = tuple((q(4 * k), 120.0 + 0.001 * k) for k in range(8))
+    data = click_session(tempos=tempos, quarters=36)
+    pack = env.analyze_signal(render_session(data, 0.0, 20.0), SR, midi=M.parse_midi(data), midi_offset=0.0)
+    warning = next(w for w in pack["grid_check"]["warnings"] if "tempo changes" in w)
+    assert "and 2 more" in warning and "stays within" in warning
+
+
+def test_a_3_4_start_before_4_4_bars_moves_the_bars_and_the_pack_says_so():
+    data = click_session(meters=((0, 3, 4), (q(12), 4, 4)), quarters=36)
+    pack = env.analyze_signal(render_session(data, 0.25, 20.0), SR, midi=M.parse_midi(data), midi_offset=0.25)
+    assert pack["downbeat"] == 0.25 and pack["grid_check"]["beats_per_bar"] == 3
+    assert pack["midi"]["time_signatures"] == [[0.0, 3, 4], [6.25, 4, 4]]
+    first = pack["grid_check"]["sections"][0]
+    assert first["bars"] == [1, 8] and first["beats"] == 4 * 3 + 4 * 4
+    warning = next(w for w in pack["grid_check"]["warnings"] if "time signature changes" in w)
+    assert "3/4, then 4/4 at 6.250 s (the session's bar 5)" in warning
+
+
+def test_a_bounce_time_stretched_against_its_midi_reads_as_drift():
+    data = session_song()
+    x = render_session(data, 0.5, 33.0, stretch=1 / 1.01)
+    pack = env.analyze_signal(x, SR, midi=M.parse_midi(data), midi_offset=0.5)
+    warning = next(w for w in pack["grid_check"]["warnings"] if "pulse sits off the MIDI's beats" in w)
+    assert "Is the MIDI from this bounce" in warning
+
+
+def test_a_midi_with_no_notes_needs_an_offset_and_then_gives_the_grid():
+    tempo_only = M.parse_midi(smf([conductor(tempos=((0, 100.0),))]))
+    x, _ = click_track(100.0, 12.0, offset=0.3)
+    with pytest.raises(ValueError, match="pass --midi-offset"):
+        env.analyze_signal(x, SR, midi=tempo_only)
+    pack = env.analyze_signal(x, SR, midi=tempo_only, midi_offset=0.3)
+    assert pack["bpm"] == 100.0 and pack["downbeat"] == 0.3 and pack["midi"]["confidence"] is None
+    assert pack["events"] == {"midi": {}, "chords": {}} and pack["midi"]["tracks"] == []
+
+
+def test_notes_that_all_fall_outside_the_song_are_warned_about():
+    x, _ = click_track(120.0, 10.0)
+    pack = env.analyze_signal(
+        x, SR, midi=M.parse_midi(click_session(quarters=8), name="Song.mid"), midi_offset=-20.0
+    )
+    assert pack["events"]["midi"]["click"] == [] and pack["midi"]["dropped"] == 8
+    assert any(
+        "none of Song.mid's 8 notes falls inside the song" in w for w in pack["grid_check"]["warnings"]
+    )
+
+
+def test_beats_per_bar_stands_in_for_a_midi_without_a_time_signature():
+    x = render_session(click_session(quarters=24), 0.0, 14.0)
+    no_meter = M.parse_midi(click_session(meters=(), quarters=24))
+    pack = env.analyze_signal(x, SR, midi=no_meter, midi_offset=0.0, beats_per_bar=3)
+    assert pack["grid_check"]["beats_per_bar"] == 3 and pack["midi"]["time_signatures"] == [[0.0, 3, 4]]
+    pack = env.analyze_signal(
+        x, SR, midi=M.parse_midi(click_session(quarters=24)), midi_offset=0.0, beats_per_bar=3
+    )
+    assert pack["grid_check"]["beats_per_bar"] == 4
+    assert any("--beats-per-bar 3 is ignored" in w for w in pack["grid_check"]["warnings"])
+
+
+@pytest.mark.parametrize(
+    ("session", "says"),
+    [
+        ({"midi_offset": 0.5}, "needs --midi"),
+        ({"midi": "clicks", "midi_offset": float("inf")}, "--midi-offset must be a number of seconds, got inf"),
+        ({"midi": "clicks", "midi_offset": float("nan")}, "--midi-offset must be a number of seconds, got nan"),
+        ({"downbeat": float("nan")}, "--downbeat must be a number of seconds"),
+        ({"stems": {"lead vox": np.zeros(10)}}, "stem name 'lead vox'"),
+        ({"stems": {"vox": np.zeros(10)}, "stem_offsets": {"bass": 0.1}}, r"--stem-offset bass=\.\.\. names no stem"),
+        ({"stems": {"vox": np.zeros(10)}, "stem_offsets": {"vox": float("inf")}}, "--stem-offset vox must be a"),
+        ({"stems": {"vox": np.zeros(10)}, "voc_stem": "lead"}, "--voc-stem lead names no stem"),
+        ({"midi": "clicks", "silent": True}, "is the audio silent"),
+    ],
+)
+def test_session_inputs_that_cannot_work_are_refused_before_the_analysis(session, says):
+    session = dict(session)
+    x, _ = click_track(120.0, 6.0)
+    if session.pop("silent", False):
+        x = np.zeros_like(x)
+    if session.get("midi") == "clicks":
+        session["midi"] = M.parse_midi(click_session(quarters=4))
+    with pytest.raises(ValueError, match=says):
+        env.analyze_signal(x, SR, **session)
+
+
+def test_a_downbeat_given_with_the_midi_puts_bar_1_there_for_a_clip_that_opens_on_a_pickup():
+    """A clip exported a beat before bar 1: the MIDI's tick 0 is a pickup.
+    Given bar 1 on the master, the bars follow the MIDI's 4/4 from there."""
+    clicks = [(q(k), q(k) + 60, 37, 127 if k % 4 == 1 else 70) for k in range(33)]
+    data = smf([conductor(), note_track(clicks, "Click", 9)])
+    x = render_session(data, 0.5, 18.0)
+    pack = env.analyze_signal(x, SR, midi=M.parse_midi(data), midi_offset=0.5, downbeat=1.0)
+    assert pack["downbeat"] == 1.0 and pack["grid_check"]["downbeat"] == {"source": "given"}
+    assert pack["beats"][:3] == [0.0, 0.5, 1.0] and pack["grid_check"]["warnings"] == []
+    first = pack["grid_check"]["sections"][0]
+    assert first["bars"] == [0, 0] and first["start"] == 0.0  # the pickup bar, before bar 1
+    off = env.analyze_signal(x, SR, midi=M.parse_midi(data), midi_offset=0.5, downbeat=1.06)
+    assert any(
+        "the given --downbeat 1.060 s sits 60 ms from the MIDI's nearest 16th note (1.000 s)" in w
+        for w in off["grid_check"]["warnings"]
+    )
+
+
+def test_a_6_8_session_gives_its_dotted_quarter_pulse_beside_its_quarter_beats():
+    data = click_session(meters=((0, 6, 8),), quarters=36)
+    pack = env.analyze_signal(render_session(data, 0.0, 18.0), SR, midi=M.parse_midi(data), midi_offset=0.0)
+    assert np.allclose(np.diff(pack["beats"]), 0.5) and np.allclose(np.diff(pack["pulses"]), 0.75)
+    assert pack["pulses_per_bar"] == 2 and pack["grid_check"]["beats_per_bar"] == 3
+    keys = list(pack)
+    assert keys[keys.index("downbeat") + 1 : keys.index("downbeat") + 3] == ["pulses", "pulses_per_bar"]
+
+
+def test_a_given_offset_is_checked_only_near_itself(monkeypatch):
+    """The staff review's case: a given --midi-offset still ran the +-30 s
+    search. Now only +-0.5 s around it is looked at."""
+    data = session_song(bars=8)
+    seen = []
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs)
+        return M.align(*args, **kwargs)
+
+    monkeypatch.setattr(env, "align", spy)
+    env.analyze_signal(render_session(data, 0.5, 17.0), SR, midi=M.parse_midi(data), midi_offset=0.5)
+    assert seen == [{"search": 0.5, "center": 0.5}]
+
+
+def test_a_midi_file_running_on_far_past_the_song_is_refused():
+    """The staff review's 70-byte file: one note at the start, one 17 years later."""
+    body = b"\x00\x90\x3c\x40\x01\x80\x3c\x00" + b"\xff\xff\xff\x7f\xff\x01\x00" * 4 + b"\x00\x90\x3c\x40\x01\x80\x3c\x00"
+    midi = M.parse_midi(smf([mtrk(body, eot())], ppq=1), name="Far.mid")
+    x, _ = click_track(120.0, 8.0)
+    with pytest.raises(ValueError, match=r"Far.mid runs on until 536870911 s, 149131 hours past the end of the 8 s"):
+        env.analyze_signal(x, SR, midi=midi, midi_offset=0.0)
+
+
+def test_a_midi_whose_notes_all_lie_far_past_the_song_says_to_place_it():
+    late = note_track([(q(200 + k), q(200 + k) + 60, 37, 100) for k in range(8)], "Click", 9)
+    x, _ = click_track(120.0, 8.0)
+    with pytest.raises(ValueError, match=r"none of Late.mid's notes comes within 30 s of the 8.0 s song \(the first is"):
+        env.analyze_signal(x, SR, midi=M.parse_midi(smf([conductor(), late]), name="Late.mid"))
+
+
+def test_the_session_bar_before_the_songs_first_bar_line_is_the_one_before_it():
+    grid = M.session_grid(M.parse_midi(click_session()), 0.5, 10.0)
+    assert [env._session_bar(grid, t) for t in (0.2, 0.5, 3.0)] == [0, 1, 2]
+
+
+def test_the_loudest_window_snaps_to_a_bar_line_the_midi_gives():
+    rms = np.full(10001, -60.0)
+    rms[500:6500] = -6.0  # loudest from 5.0 s
+    assert env._loudest_window(rms, 0.0, 2.0, 100.0, bar_lines=[0.0, 3.0, 5.5, 9.0])["start"] == 5.5
+    assert (
+        env._loudest_window(rms, 30.0, 2.0, 100.0, bar_lines=[50.0])["start"] == 6.0
+    )  # none in reach: fixed bars
+
+
+def test_each_stem_gets_the_masters_envelopes_on_the_masters_frames():
+    clicks, _ = click_track(120.0, 8.0, offset=0.25)
+    t = np.arange(len(clicks)) / SR
+    voice = np.where(t >= 4.0, np.linspace(0.02, 0.4, len(t)) * np.sin(2 * np.pi * 220.0 * t), 0.0)
+    x = (clicks + voice).astype(np.float32)
+    decoded = []
+
+    def keys() -> np.ndarray:
+        decoded.append("keys")
+        return clicks[: len(x) - int(0.3 * SR)]  # 0.3 s short: padded
+
+    long_voice = np.concatenate([voice, np.zeros(int(0.2 * SR))]).astype(np.float32)  # 0.2 s long: trimmed
+    pack = env.analyze_signal(x, SR, stems={"drums": x, "keys": keys, "Vocals": long_voice})
+    assert {name: where["lag"] for name, where in pack["stems_alignment"].items()} == {
+        "drums": 0.0,
+        "keys": 0.0,
+        "Vocals": 0.0,
+    }
+    frames = len(pack["rms"])
+    for stem in pack["stems"].values():
+        assert list(stem) == [
+            "bass",
+            "lowmid",
+            "mid",
+            "high",
+            "air",
+            "rms",
+            "rmsdb",
+            "flux",
+            "bflux",
+            "hflux",
+            "cent",
+        ]
+        assert all(len(values) == frames for values in stem.values())
+    assert pack["stems"]["drums"]["rmsdb"] == pack["rmsdb"] and pack["stems"]["drums"]["flux"] == pack["flux"]
+    vocals = np.array(pack["stems"]["Vocals"]["rms"])
+    assert (
+        vocals[:390].max() == 0.0 and vocals[410:].max() == 1.0
+    )  # silence reads 0, not a share of the voice
+    assert (
+        pack["voc"] == pack["stems"]["Vocals"]["rms"] and pack["voc_source"] == "stem"
+    )  # a mono master gets a voc
+    assert decoded == ["keys"]
+
+
+@pytest.mark.parametrize(("extra", "word"), [(0.6, "longer"), (-0.6, "shorter")])
+def test_a_stem_more_than_half_a_second_off_the_masters_length_is_refused(extra, word):
+    x, _ = click_track(120.0, 6.0)
+    stem = np.zeros(len(x) + int(extra * SR), dtype=np.float32)
+    with pytest.raises(ValueError, match=rf"stem 'bass' is 0\.60 s {word} than the master"):
+        env.analyze_signal(x, SR, stems={"bass": stem})
+
+
+def test_a_stereo_master_without_a_vocal_stem_keeps_its_mid_side_voc():
+    stereo = _wide_mix_with_a_voice(8)
+    pack = env.analyze_signal(stereo, SR, stems={"voices": stereo.mean(axis=1)})
+    assert pack["voc_source"] == "mid-side proxy" and list(pack["stems"]) == ["voices"]
+
+
+def test_the_vocal_stem_can_be_named_whatever_it_is_called():
+    stereo = _wide_mix_with_a_voice(8)
+    pack = env.analyze_signal(stereo, SR, stems={"lead": stereo.mean(axis=1)}, voc_stem="lead")
+    assert pack["voc_source"] == "stem" and pack["voc"] == pack["stems"]["lead"]["rms"]
+
+
+# Stems lined up with the master (_align_stems). A mastered bounce is often
+# trimmed or padded at the head, and the stems bounced from the session
+# aren't: the 0.4 review's master had 0.30 s cut from its head, and its vocal
+# stem put `voc` 300 ms late without a word.
+def _voice(freq: float, length: float, gain: float, attack: float = 0.02) -> np.ndarray:
+    """A sung syllable or a held note: four harmonics, `attack` s in, 40 ms out."""
+    t = np.arange(int(length * SR)) / SR
+    edges = np.minimum(1.0, t / attack) * np.minimum(1.0, (t[-1] - t) / 0.04)
+    return gain * sum(np.sin(2 * np.pi * freq * h * t) / h for h in range(1, 5)) * edges
+
+
+def stem_session(dur: float = 20.0, *, seed: int = 1) -> dict[str, np.ndarray]:
+    """A song's stems, bounced from the session's start: drums (kick and
+    snare and 8th hats, a kick here and there), bass (8ths on the root),
+    keys (a chord struck on 1 and the and of 2) and vocals (phrases of sung
+    syllables in two bars of every four)."""
+    rng = np.random.default_rng(seed)
+    stems = {name: np.zeros(int(dur * SR)) for name in ("drums", "bass", "keys", "vocals")}
+    roots = [55.0, 43.65, 65.41, 49.0]
+    beat = 0.5
+    for b in range(int((dur - 0.5) / (4 * beat))):
+        t0 = 0.5 + 4 * beat * b
+        for k in range(4):
+            if k in (0, 2) or rng.random() < 0.3:
+                _place(stems["drums"], _kick(), t0 + k * beat, 0.8)
+            if k in (1, 3):
+                _place(stems["drums"], _snare(4 * b + k), t0 + k * beat, 0.5)
+            for half in (0.0, 0.5):
+                _place(stems["drums"], _hat(8 * b + 2 * k), t0 + (k + half) * beat, rng.uniform(0.08, 0.18))
+        for e in range(8):
+            if rng.random() < 0.7:
+                _place(stems["bass"], _voice(roots[b % 4], 0.45 * beat, 0.3, attack=0.008), t0 + e * beat / 2)
+        for at in (0.0, 1.5):
+            chord = sum(_voice(f, 1.4 * beat, 0.04, attack=0.005) for f in 2 * np.array(CHORD_HZ[b % 4]))
+            _place(stems["keys"], chord, t0 + at * beat)
+        if b % 4 in (1, 2):
+            t = t0 + rng.uniform(0.0, 0.5)
+            while t < t0 + 3 * beat:
+                length = rng.uniform(0.12, 0.35)
+                _place(stems["vocals"], _voice(220.0 * 2 ** (rng.integers(0, 8) / 12), length, 0.25), t)
+                t += length + rng.uniform(0.02, 0.1)
+    return {name: x.astype(np.float32) for name, x in stems.items()}
+
+
+CHORD_HZ = ([110.0, 130.8, 164.8], [87.3, 110.0, 130.8], [130.8, 164.8, 196.0], [98.0, 123.5, 146.8])  # Am F C G
+
+
+def master_of(stems: dict[str, np.ndarray], *, trim: float = 0.0, pad: float = 0.0, squash: bool = False):
+    """The stems' mix as a mastered bounce: `trim` s cut from its head, or
+    `pad` s of silence put before it; with `squash`, tilted bright and
+    soft-clipped, so the master is no longer the stems' plain sum."""
+    mix = sum(stems.values())
+    if squash:
+        mix = np.tanh(1.5 * (mix + 0.3 * np.concatenate([[0.0], np.diff(mix)]))) / 1.5
+    return np.concatenate([np.zeros(round(pad * SR)), mix[round(trim * SR) :]]).astype(np.float32)
+
+
+def _reviewer_session(seed: int = 3) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """The musician's case, as reviewed: 24 s of clicks on a third of the
+    16ths, four 1.5 s notes at 440 Hz for a voice (at 4, 9, 14 and 19 s of the
+    session), a stereo master with its first 0.30 s cut, and the vocal and
+    drum stems bounced from the session's start."""
+    rng = np.random.default_rng(seed)
+    n = int(24.0 * SR)
+    drums, voice = np.zeros(n, np.float32), np.zeros(n, np.float32)
+    hits = [k * 0.125 for k in range(int(24.0 / 0.125)) if rng.random() < 0.35]
+    hit = (rng.standard_normal(960) * np.exp(-np.arange(960) / 120)).astype(np.float32) * 0.6
+    for h in hits:
+        _place(drums, hit, h)
+    t = np.arange(n) / SR
+    for at in (4.0, 9.0, 14.0, 19.0):
+        sung = (t >= at) & (t < at + 1.5)
+        voice[sung] += 0.3 * np.sin(2 * np.pi * 440 * t[sung]) * np.minimum(1, (t[sung] - at) * 50)
+    mix = (drums + voice)[int(0.30 * SR) :]
+    return np.stack([mix, mix * 0.98], axis=1), {"vocals": np.stack([voice, voice], axis=1), "drums": drums}
+
+
+def test_a_vocal_stem_bounced_from_the_session_start_lines_up_with_a_master_trimmed_at_the_head():
+    """Measured: the vocal stem at -0.300 s (r 0.99), the drums at -0.300 s
+    (r 0.97); `voc` now rises at 3.73 s, where the master's voice comes in
+    (3.70), not at 4.03 s."""
+    master, stems = _reviewer_session()
+    pack = env.analyze_signal(master, SR, stems=stems)
+    vocals = pack["stems_alignment"]["vocals"]
+    assert vocals == {"lag": pytest.approx(-0.3, abs=0.003), "r": pytest.approx(0.99, abs=0.02), "source": "auto"}
+    assert pack["stems_alignment"]["drums"]["lag"] == pytest.approx(-0.3, abs=0.002)
+    voc = np.array(pack["voc"])
+    rises = (np.flatnonzero((voc[1:] > 0.5) & (voc[:-1] <= 0.5)) + 1) / 100.0
+    assert rises.tolist() == pytest.approx([3.7, 8.7, 13.7, 18.7], abs=0.04)
+    assert pack["grid_check"]["warnings"] == [] or not any("stem" in w for w in pack["grid_check"]["warnings"])
+
+
+@pytest.mark.parametrize(
+    ("place", "lag"),
+    [({"trim": 0.3}, -0.3), ({"pad": 0.4}, 0.4), ({"trim": 1.234, "squash": True}, -1.234)],
+    ids=["trimmed", "padded", "trimmed-and-squashed"],
+)
+def test_every_stem_of_a_mix_lines_up_with_a_master_trimmed_padded_or_squashed(place, lag):
+    """Measured: within 3 ms for every stem, r 0.37-0.93 (the keys lowest,
+    sharing their bands with the voice; the drums and the voice highest)."""
+    stems = stem_session()
+    pack = env.analyze_signal(master_of(stems, **place), SR, stems=stems)
+    for name, where in pack["stems_alignment"].items():
+        assert where["lag"] == pytest.approx(lag, abs=0.008), name
+        assert where["source"] == "auto" and where["r"] >= env.STEM_MIN_R, name
+    # A stem one second longer than the master (its head trimmed a second
+    # off) used to be refused for its length; lined up, it ends where the master does.
+    assert len(stems["drums"]) / SR - pack["dur"] == pytest.approx(-lag, abs=0.01)
+
+
+def _swell(dur: float = 20.0) -> np.ndarray:
+    """A pad of four-second chords, each swelling in over 1.5 s: no attack to line up by."""
+    x = np.zeros(int(dur * SR))
+    for k, at in enumerate(np.arange(0.5, dur - 4.0, 4.0)):
+        _place(x, sum(_voice(f, 4.0, 0.03, attack=1.5) for f in 2 * np.array(CHORD_HZ[k % 4])), at)
+    return x.astype(np.float32)
+
+
+def _foreign(dur: float = 20.0) -> np.ndarray:
+    """Four held notes this song never plays, at times it has nothing at."""
+    x = np.zeros(int(dur * SR))
+    for at, f in ((2.3, 440.0), (7.9, 392.0), (12.1, 523.3), (16.6, 349.2)):
+        _place(x, _voice(f, 1.2, 0.25), at)
+    return x.astype(np.float32)
+
+
+def test_a_stem_that_cant_be_lined_up_is_refused_with_the_lag_to_pass_and_then_used_as_given():
+    """Measured: the swelling pad r 0.18 at best, a stem from elsewhere 0.10,
+    against 0.2 for a stem of this master; the other stems agree on -0.300 s."""
+    stems = stem_session()
+    stems["pad"] = _swell()
+    master = master_of(stems, trim=0.3)
+    stems["other"] = _foreign()
+    with pytest.raises(ValueError) as exc:
+        env.analyze_signal(master, SR, stems=stems)
+    message = str(exc.value)
+    assert message.startswith("can't line up pad -- its levels and onsets hardly match the master's anywhere")
+    assert "; other -- its levels and onsets hardly match" in message
+    assert "--stem-offset NAME=S" in message and message.endswith("The other stems line up at -0.300 s.")
+    pack = env.analyze_signal(master, SR, stems=stems, stem_offsets={"pad": -0.3, "other": 0.0})
+    pad = pack["stems_alignment"]["pad"]
+    assert pad["lag"] == -0.3 and pad["source"] == "given" and pad["r"] == pytest.approx(0.1, abs=0.05)
+    assert pack["stems_alignment"]["vocals"]["source"] == "auto"
+    assert not any("stem-offset" in w for w in pack["grid_check"]["warnings"])  # no sure fit says otherwise
+
+
+def _strict_clicks(dur: float = 20.0) -> np.ndarray:
+    """One click on every beat, the same click every time: it fits a beat or
+    two away as well as where it belongs."""
+    x = np.zeros(int(dur * SR))
+    for at in np.arange(0.5, dur - 0.1, 0.5):
+        _place(x, _click(0), at, 0.3)
+    return x.astype(np.float32)
+
+
+def test_a_strict_loop_takes_the_lag_the_other_stems_agree_on_and_alone_is_refused():
+    """Measured, with the master trimmed 0.55 s: on its own the click loop
+    fits best 500 ms out (a beat), 0.025 over the right lag; the voice and
+    the bass agree on -0.550 s, and the loop's own peak there is taken."""
+    stems = stem_session()
+    stems = {"vocals": stems["vocals"], "clicks": _strict_clicks(), "bass": stems["bass"]}
+    master = master_of(stems, trim=0.55)
+    pack = env.analyze_signal(master, SR, stems=stems)
+    assert pack["stems_alignment"]["clicks"]["lag"] == pytest.approx(-0.55, abs=0.003)
+    with pytest.raises(ValueError, match=r"can't line up clicks -- it fits nearly as well at .* it repeats itself, and no other stem settles which"):
+        env.analyze_signal(master, SR, stems={"clicks": stems["clicks"]})
+
+
+def test_a_silent_stem_stays_where_it_starts_and_a_given_offset_far_from_the_fit_is_warned_about():
+    stems = stem_session()
+    master = master_of(stems, trim=0.3)
+    silent = np.zeros(len(stems["drums"]), np.float32)
+    pack = env.analyze_signal(
+        master, SR, stems={"drums": stems["drums"], "fx": silent}, stem_offsets={"drums": -0.25}
+    )
+    assert pack["stems_alignment"]["fx"] == {"lag": 0.0, "r": None, "source": "none"}
+    assert pack["stems_alignment"]["drums"]["source"] == "given"
+    assert any(
+        "the given --stem-offset drums=-0.250 s is 50 ms from where the stem lines up best with the master "
+        "(-0.300 s" in w
+        for w in pack["grid_check"]["warnings"]
+    )
+
+
+def test_a_stem_whose_lag_is_past_the_search_is_refused_and_can_be_given():
+    """A master with 3 s cut from its head: every stem's lag is past the
+    +-2 s search. Measured: the drums, bass and keys each fit about as well a
+    beat or two apart inside it (0.00-0.03), and nothing settles which; given
+    -3 s, every stem fits there (r 0.25-0.78)."""
+    stems = stem_session()
+    master = master_of(stems, trim=3.0)
+    with pytest.raises(ValueError, match=r"can't line up drums -- it fits nearly as well .* no other stem settles which"):
+        env.analyze_signal(master, SR, stems=stems)
+    pack = env.analyze_signal(master, SR, stems=stems, stem_offsets=dict.fromkeys(stems, -3.0))
+    assert all(where["lag"] == -3.0 and where["r"] > env.STEM_MIN_R for where in pack["stems_alignment"].values())
+
+
+def test_a_stem_that_lines_up_somewhere_the_others_dont_is_refused():
+    """Stems bounced together share one lag. A voice bounced 0.4 s later in
+    its file than the rest lines up, surely, 0.4 s away from them: with two
+    other stems agreeing it is the odd one out; with one, neither can be
+    trusted over the other."""
+    stems = stem_session()
+    master = master_of(stems, trim=0.3)
+    late = np.concatenate([np.zeros(int(0.4 * SR), np.float32), stems["vocals"]])[: len(stems["vocals"])]
+    with pytest.raises(ValueError) as exc:
+        env.analyze_signal(master, SR, stems={"drums": stems["drums"], "bass": stems["bass"], "vocals": late})
+    assert re.match(
+        r"can't line up vocals -- it lines up at -0\.70\d s \(r 0\.5\d\) and the other stems at -0\.300 s, while "
+        r"stems bounced together share one lag\.",
+        str(exc.value),
+    )
+    with pytest.raises(ValueError) as exc:
+        env.analyze_signal(master, SR, stems={"drums": stems["drums"], "vocals": late})
+    assert re.search(r"drums -- it lines up at -0\.300 s \(r 0\.9\d\) and vocals at -0\.70\d s", str(exc.value))
+    assert re.search(r"vocals -- it lines up at -0\.70\d s \(r 0\.5\d\) and drums at -0\.300 s", str(exc.value))
+
+
+def test_a_stem_with_only_one_feature_to_correlate_is_lined_up_by_that_one():
+    rng = np.random.default_rng(5)
+    frames, bands = 500, 3
+    master = (rng.random((frames, bands)), rng.random((frames, bands)))
+    flux = np.zeros((frames, bands), np.float32)
+    flux[[100, 260, 300], 1] = 1.0
+    silent_levels = np.zeros((frames, bands), np.float32)  # no band power to weigh: that feature has nothing
+    stem = env._Raw({}, np.zeros(frames), {}, None, np.zeros(frames), None, None, None, silent_levels, flux)
+    lags = np.arange(-5, 6)
+    r, at_given = env._stem_correlation(stem, master, np.append(lags, 40), len(lags))
+    _, onsets = env._align_features(stem)
+    alone = env._band_ncc(onsets, master[1], ((onsets - onsets.mean(axis=0)) ** 2).sum(axis=0), np.append(lags, 40))
+    assert np.allclose(r, alone[:-1]) and at_given == pytest.approx(alone[-1])
+
+
+def test_stem_lags_at_the_edge_or_unsettled_are_explained():
+    edge = env._stem_refusal("bass", 0.4, -2.0, 0.1, 0.5, True, None)
+    assert "at the edge of the +-2 s search (-2.000 s, r 0.40)" in edge
+    loop = env._stem_refusal("hats", 0.6, 0.5, 0.01, 0.0, False, 0.0)
+    assert "its fit near +0.000 s isn't one of them" in loop
+    peak = np.zeros(401)
+    peak[[0, 200]] = [1.0, 0.5]  # the best at the window's edge
+    assert env._stem_peak(peak, 200)[4] is True
+    assert env._near(np.linspace(0.0, 1.0, 401), 200, 0.0, 1.0) is None  # a slope: no peak near the agreed lag
+    assert env._near(peak, 200, 0.0, 1.0) is None  # a peak there, but far below the stem's best
+
+
+def test_envelope_reads_the_midi_and_decodes_each_stem_in_turn(monkeypatch, tmp_path):
+    data = session_song(bars=8)
+    master = render_session(data, 0.5, 17.0)
+    files = {}
+    for filename, samples in (("song.wav", master), ("drums.wav", master), ("vox.wav", 0.5 * master)):
+        (tmp_path / filename).write_bytes(b"not decoded")  # the decode is stubbed
+        files[str(tmp_path / filename)] = samples
+    (tmp_path / "Song.mid").write_bytes(data)
+    decoded = []
+
+    def decode(path, *, sample_rate, channels, **kwargs):
+        decoded.append(path.rsplit("/", 1)[-1])
+        return files[path].astype("<f4").tobytes()
+
+    monkeypatch.setattr(env, "decode_f32le", decode)
+    monkeypatch.setattr(env, "probe_stream", lambda path, stream, entry, **kwargs: "1")
+    pack = env.envelope(
+        str(tmp_path / "song.wav"),
+        midi=str(tmp_path / "Song.mid"),
+        stems={"drums": str(tmp_path / "drums.wav"), "vox": str(tmp_path / "vox.wav")},
+    )
+    assert decoded == ["song.wav", "drums.wav", "vox.wav"]
+    assert pack["midi"]["file"] == "Song.mid" and pack["midi"]["offset"] == pytest.approx(0.5, abs=0.005)
+    assert list(pack["stems"]) == ["drums", "vox"] and pack["voc_source"] == "stem"
+
+
+def test_envelope_names_a_missing_midi_or_stem_before_decoding_anything(monkeypatch, audio_file, tmp_path):
+    monkeypatch.setattr(env, "decode_f32le", lambda *a, **k: pytest.fail("nothing should be decoded"))
+    with pytest.raises(FileNotFoundError) as exc:
+        env.envelope(audio_file, midi=str(tmp_path / "nope.mid"))
+    assert exc.value.filename.endswith("nope.mid")
+    with pytest.raises(FileNotFoundError) as exc:
+        env.envelope(audio_file, stems={"bass": str(tmp_path / "bass.wav")})
+    assert exc.value.filename.endswith("bass.wav")
+    with pytest.raises(ValueError, match="needs --midi"):
+        env.envelope(audio_file, midi_offset=1.0)

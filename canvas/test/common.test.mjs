@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sampleLinear, pieceUrl, parseArgs, planParts, keyTimesToFrames, UsageError } from '../tools/lib/common.mjs';
+import { sampleLinear, pieceUrl, parseArgs, helpText, planParts, keyTimesToFrames, UsageError } from '../tools/lib/common.mjs';
 
 // ---------------------------------------------------------------- sampleLinear
 // The formula as it shipped (SAME AS YOU and ( - ) were rendered and verified with it). Inside the
@@ -133,6 +133,19 @@ test('parseArgs: bad values are usage errors, with the value quoted', () => {
   assert.throws(() => parseArgs(['p', '--card=maybe'], SPEC), usageError(/--card is a switch/));
   assert.throws(() => parseArgs(['p', '--flags', '{bad'], SPEC), usageError(/--flags is not valid JSON/));
   assert.throws(() => parseArgs(['p', '--mode', 'reeel'], SPEC), usageError(/--mode must be one of reel, story, none/));
+});
+
+test('parseArgs: a repeatable flag collects every value, given again or comma-separated', () => {
+  const R = { ...SPEC, flags: { ...SPEC.flags, variant: { type: 'list', repeat: true, arg: 'axis=option' } } };
+  const want = { _: ['p'], variant: ['ending=lamp', 'palette=night'] };
+  assert.deepEqual(parseArgs(['p', '--variant', 'ending=lamp', '--variant', 'palette=night'], R), want);
+  assert.deepEqual(parseArgs(['p', '--variant', 'ending=lamp,palette=night'], R), want);
+  assert.deepEqual(parseArgs(['p', '--variant=ending=lamp', '--variant=palette=night'], R), want, '--flag=value keeps the = in the value');
+  assert.deepEqual(parseArgs(['p', '--variant', 'ending=lamp'], R).variant, ['ending=lamp'], 'one is a list of one');
+  assert.equal(parseArgs(['p'], R).variant, undefined);
+  assert.equal(parseArgs(['p', '--t0', '1', '--t0', '2'], R).t0, 2, 'a flag that doesn\'t repeat: the last one wins, as before');
+  assert.throws(() => parseArgs(['p', '--variant', 'a=b,,c=d'], R), usageError(/--variant expects a comma-separated list with no empty items/));
+  assert.match(helpText({ usage: 'u', flags: R.flags }), /--variant axis=option +\(repeatable\)/);
 });
 
 test('parseArgs: the positional count is checked', () => {

@@ -22,8 +22,8 @@ keyframes go.
 | Full film | a cut from 0 to the end | it ends on the song's real ending |
 | Reel | a cut; the loudest minute is in the song pack (`loudest`) | its first frame is its cover, so it opens on a signature card, not text over a face (#16). Decide whether it loops (below) |
 | Stories | shorter cuts, whole phrases | SAME AS YOU: three 8-bar stories, 16 s each at 120 BPM |
-| Spotify Canvas (optional) | its own short render, delivered silent by a sheet of its own (`audio: none` on the cut; that sheet needs no `audio`) | SAME AS YOU's: an 8 s crossfaded loop of a separate state, 608×1080. Check the platform's current spec; the repo doesn't encode it |
-| Covers | the piece's own draw code (`still.mjs --cover all`), a frame-program still (a mean face, a slit-scan with the face held), or `kaleidophone cover` for a brief | square and portrait masters, an avatar, variants (#31, #51, #54) |
+| Spotify Canvas (optional) | a short cut with `platform: spotify-canvas` (3–8 s, 9:16, delivered with no audio stream) — or its own render | SAME AS YOU's: an 8 s crossfaded loop of a separate state, 608×1080 — under the 720 px short edge Spotify is usually read to ask for, so `deliver` would now scale it to 1080×1920, with a warning that it's enlarged (`kaleidophone platforms canvas`) |
+| Covers | the piece's own draw code (`still.mjs --cover all`), a frame-program still (a mean face, a slit-scan with the face held), or `kaleidophone cover` for a brief | square and portrait masters, an avatar, variants (#31, #51, #54); the sheet's `covers` sizes the square master for every platform |
 | Carousel | stills from the same draw code | the frame's own aspect, or a crop band in the cover code (#31) |
 | Captions | the copy pack, `kaleidophone kit`, then `/kaleido:caption` | the facts derived, the voice the artist's (ADR-0006) |
 
@@ -128,6 +128,68 @@ What it does, each rule paid for on a release (the measurements are in
 - the limiter's 4 ms lookahead delay taken back (`latency=1` on ffmpeg 5.1+,
   the same trim by hand before it), or the audio lands 4.0 ms late;
 - 5 ms / 15 ms click-guard fades unless the sheet sets its own.
+
+## Endings
+
+When the artist can't choose between endings, deliver all of them. A
+canvas piece renders them with `render.mjs <piece> --endings <axis>`: the body
+once, each ending after the join, one encoder setting, and a manifest. The
+cut names it:
+
+```yaml
+  - {out: SONG_reel.mp4, t0: 51, dur: 16, endings: _work/reel.variants.json}
+```
+
+(Another engine lists `body`, `at` and `endings: [{name, file}]` itself.)
+`deliver` checks every part first — frame counts against the manifest, a
+keyframe at each start, one encode — then writes `SONG_reel.<ending>.mp4` per
+ending: the body and that ending joined by stream copy, the card in front if
+the cut has one, the master under the whole cut at the master's one gain.
+`SONG_reel.endings.jpg` puts them side by side, one row per ending from the
+last body frame. Show the artist the sheet; or post every ending as a trial
+reel and keep the one people watch to the end — posting stays the artist's
+(ADR-0006).
+
+## Platforms
+
+One render and one cover, every platform: `kaleidophone platforms` is the
+table (`kaleidophone platforms tiktok` one in full -- its notes, its sources,
+how sure they are, the date they were checked), and the sheet delivers to it.
+
+```yaml
+title: SONG                          # names every file: song.<cut>.<platform>.mp4
+size: 1080x1920                      # the render's: copy or scale is planned from it
+silent: _work/full_silent.mp4
+audio: Song.wav
+gain: {mode: auto}
+cuts:
+  - {name: loop, t0: 51, dur: 8, platforms: [ig-reel, tiktok, youtube-short, canvas]}
+  - {name: film, t0: 0, dur: 182, platform: youtube-video, reframe: pad-blur}
+covers: {master: _work/cover_3000.png, platforms: [spotify-cover, soundcloud-artwork, youtube-thumbnail, ig-reel-cover]}
+```
+
+- A render already at a size the platform documents is stream-copied; one
+  of its shape at another size is scaled once (Lanczos). Another shape needs
+  `reframe` -- `pad-blur`, the picture centred over a blurred copy of itself,
+  is the usual one for a vertical piece on YouTube; `crop` loses the sides of
+  a vertical frame, `pad-color` gives it bars. Render at the largest size you
+  deliver: a 1080x1920 render padded into YouTube's 3840x2160 is enlarged
+  1.13x, and the report says so.
+- Length is the platform's to decide: a Canvas is 3-8 s, so it is usually
+  its own cut; a Short over 1 min is blocked if any Content ID claim is on
+  it (a distributed song can carry one); Instagram recommends only Reels
+  under 3 min to non-followers. Hard limits refuse the sheet; soft ones warn.
+- One gain per master still: the platform's loudness (YouTube's ~-14 LUFS,
+  third-party) is reported per file -- "YouTube will turn this down by ~5 dB"
+  -- never applied. A loud master is louder on Instagram and TikTok, which
+  document no normalisation, and turned down on YouTube.
+- Covers from one square master of 3000 px or more: never enlarged, sRGB with
+  nothing embedded, JPEG stepped down under SoundCloud's 2 MB; the 16:9 ones
+  are the square over a blurred copy of itself, and the 9:16 ones too unless a
+  `portrait` is given; the SoundCloud header is the master's centre band (check it);
+  the Reel cover comes with what the 3:4 profile grid will show of it.
+- `<title>.delivery.json` is the record: every file, its spec, what was
+  measured, every finding. Keep it with the release notes.
 
 ## Gain: measure the master, then pick the mode
 

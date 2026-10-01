@@ -85,6 +85,28 @@ def test_there_are_commands_at_all():
     assert COMMANDS, "commands/ is empty -- the plugin would install and do nothing"
 
 
+# Claude Code's model aliases (code.claude.com/docs/en/model-config, checked 2026-10-01). A command
+# that pins one of these runs on it when the account has it; when it doesn't, Claude Code ignores
+# the pin and the command runs on the session's model -- so a pin is a recommendation, not a lock.
+MODEL_ALIASES = {"default", "best", "fable", "opus", "sonnet", "haiku", "opus[1m]", "sonnet[1m]", "opusplan"}
+
+
+@pytest.mark.parametrize("path", COMMANDS, ids=lambda p: p.stem)
+def test_a_pinned_model_is_an_alias_not_a_dated_model_id(path):
+    """An alias keeps working when the next model ships; a full model ID would pin this plugin to
+    one model forever, and a typo would silently fall back to the session model."""
+    model = frontmatter(path).get("model")
+    if model is not None:
+        assert model in MODEL_ALIASES, f"{path.name} pins model {model!r}; use one of {sorted(MODEL_ALIASES)}"
+
+
+def test_the_long_creative_commands_ask_for_the_best_model():
+    """Directing an edit, building a canvas piece and running a whole release are the hours-long,
+    many-tool jobs; README.md "Which model" says why they ask for `best`."""
+    pinned = {p.stem: frontmatter(p).get("model") for p in COMMANDS}
+    assert {k for k, v in pinned.items() if v == "best"} == {"direct", "piece", "release"}
+
+
 @pytest.mark.parametrize("path", COMMANDS, ids=lambda p: p.stem)
 def test_every_command_has_a_description(path):
     """The description is what a user sees in the command list; without one the

@@ -340,6 +340,166 @@ def test_envelope_on_a_missing_file_is_one_clean_line(tmp_path, capsys):
     assert "Traceback" not in err
 
 
+def _session_pack(**overrides) -> dict:
+    """A pack made with --midi and --stem: the keys 0.4 adds (see
+    tests/test_envelope.py for how they are made)."""
+    session = {
+        "downbeat": 0.75,
+        "voc": [0.0, 1.0],
+        "voc_source": "stem",
+        "midi": {
+            "file": "Song.mid",
+            "ppq": 480,
+            "offset": -1.2486,
+            "offset_source": "auto",
+            "confidence": {"r": 0.934, "margin": 0.09, "runner_up": -0.75},
+            "tempo_map": [[0.0, 120.0], [64.0, 90.0]],
+            "time_signatures": [[0.0, 4, 4]],
+            "tracks": ["Kick", "Keys"],
+            "dropped": 3,
+        },
+        "events": {
+            "midi": {"kick": [[0.75, 0.9, 0.06, 36]] * 2, "keys": [[0.0, 0.6, 2.0, 57]] * 3},
+            "chords": {"keys": [[0.0, 1, "Am"]]},
+        },
+        "stems": {"vocals": {"rms": [0.0, 1.0]}, "drums": {"rms": [0.0, 1.0]}},
+        "stems_alignment": {
+            "vocals": {"lag": -0.3, "r": 0.991, "source": "auto"},
+            "drums": {"lag": -0.25, "r": 0.402, "source": "given"},
+        },
+        "grid_check": _grid_check(
+            octave=None,
+            downbeat={"source": "midi", "confidence": 1.0, "runner_up": None, "session_bar": 2},
+            sections=[],
+            warnings=[],
+        ),
+    }
+    session.update(overrides)
+    return _pack(**session)
+
+
+def test_envelope_passes_the_session_through(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr(cli, "envelope", lambda path, **kw: seen.update(kw) or _session_pack())
+    argv = ["envelope", "song.wav", "-o", str(tmp_path / "p.json"), "--midi", "Song.mid", "--midi-offset", "-1.25"]
+    argv += ["--stem", "vocals=stems/Vox.wav", "--stem", "drums=stems/Drums.wav"]
+    assert cli.main(argv) == cli.EXIT_OK
+    assert (seen["midi"], seen["midi_offset"]) == ("Song.mid", -1.25)
+    assert seen["stems"] == {"vocals": "stems/Vox.wav", "drums": "stems/Drums.wav"}
+
+
+def test_envelope_prints_what_came_in_from_the_session(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli, "envelope", lambda path, **kw: _session_pack())
+    cli.main(["envelope", "song.wav", "-o", str(tmp_path / "p.json"), "--midi", "Song.mid"])
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].endswith("voc=yes (stem)")
+    assert lines[1] == "midi      Song.mid (480 ppq): 2 tracks, 5 notes -- kick 2, keys 3; 3 outside the song dropped"
+    assert lines[2] == "offset    -1.249 s (found: r 0.93, 0.09 over the runner-up at -0.750 s)"
+    assert lines[3] == "tempo map 120.00 BPM, then 90.00 at 64.000 s"
+    assert lines[4] == "chords    keys 1 changes"
+    assert lines[5] == "stems     vocals, drums (voc is the vocal stem's level)"
+    assert lines[6] == "stem lag  vocals -0.300 s (r 0.99), drums -0.250 s (given; r 0.40 there)"
+    assert lines[7] == "downbeat  0.750 s (the MIDI's bar line: the session's bar 2)"
+    assert lines[-1].endswith("The grid is the MIDI's.")
+
+
+def test_envelope_prints_a_6_8_pulse_and_a_stem_with_nothing_to_line_up_by(monkeypatch, tmp_path, capsys):
+    pack = _session_pack(
+        pulses=[0.75 + 0.75 * k for k in range(40)],
+        pulses_per_bar=2,
+        stems_alignment={"fx": {"lag": 0.0, "r": None, "source": "none"}, "pad": {"lag": 0.1, "r": None, "source": "given"}},
+    )
+    monkeypatch.setattr(cli, "envelope", lambda path, **kw: pack)
+    cli.main(["envelope", "song.wav", "-o", str(tmp_path / "p.json"), "--midi", "Song.mid"])
+    printed = capsys.readouterr().out
+    assert "pulse     2 a bar, 0.750 s apart at the start -- the felt beat (`pulses`); `beats` count quarter notes" in printed
+    assert "stem lag  fx left at +0.000 s (nothing in it to line up by), pad +0.100 s (given)\n" in printed
+    pack["pulses"] = pack["beats"]  # 4/4: the pulse is the beat, and goes unsaid
+    cli.main(["envelope", "song.wav", "-o", str(tmp_path / "p.json"), "--midi", "Song.mid"])
+    assert "pulse " not in capsys.readouterr().out
+
+
+def test_envelope_says_when_the_offset_was_given_and_how_well_the_notes_match_there(monkeypatch, tmp_path, capsys):
+    given = {
+        **_session_pack()["midi"],
+        "offset": 0.5,
+        "offset_source": "given",
+        "confidence": {"r": 0.91, "margin": None, "runner_up": None},
+        "ppq": None,
+        "dropped": 0,
+        "tempo_map": [[0.0, 120.0]],
+    }
+    pack = _session_pack(midi=given)
+    del pack["stems"], pack["voc_source"]
+    monkeypatch.setattr(cli, "envelope", lambda path, **kw: pack)
+    cli.main(["envelope", "song.wav", "-o", str(tmp_path / "p.json"), "--midi", "Song.mid"])
+    printed = capsys.readouterr().out
+    assert "midi      Song.mid (SMPTE time): 2 tracks, 5 notes -- kick 2, keys 3\n" in printed
+    assert "offset    +0.500 s (given; the notes match the audio at r 0.91 there)" in printed
+    assert "voc=yes " not in printed and "tempo map" not in printed and "stems" not in printed
+    pack["midi"]["confidence"] = None
+    cli.main(["envelope", "song.wav", "-o", str(tmp_path / "p.json"), "--midi", "Song.mid"])
+    assert "offset    +0.500 s (given)\n" in capsys.readouterr().out
+
+
+def test_midi_offset_without_midi_and_a_stem_named_twice_are_one_clean_line(capsys):
+    assert cli.main(["envelope", "song.wav", "--midi-offset", "1.0"]) == cli.EXIT_ERROR
+    assert "--midi-offset places the MIDI on the master: it needs --midi" in capsys.readouterr().err
+    assert cli.main(["envelope", "song.wav", "--stem", "vox=a.wav", "--stem", "vox=b.wav"]) == cli.EXIT_ERROR
+    assert "--stem vox=... is given twice" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("bad", ["vocals", "=v.wav", "vocals="])
+def test_a_stem_that_is_not_name_equals_path_is_a_usage_error(bad, capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["envelope", "song.wav", "--stem", bad])
+    assert exc.value.code == 2 and "expected NAME=PATH" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("argv", "says"),
+    [
+        (["--midi", "Song.mid", "--midi-offset", "inf"], "expected a finite number, got 'inf'"),
+        (["--midi", "Song.mid", "--midi-offset", "nan"], "expected a finite number, got 'nan'"),
+        (["--midi", "Song.mid", "--midi-offset", "soon"], "expected a number, got 'soon'"),
+        (["--downbeat=-inf"], "expected a finite number, got '-inf'"),
+        (["--bpm-range", "60", "inf"], "expected a finite number, got 'inf'"),
+        (["--stem", "vox=v.wav", "--stem-offset", "vox=nan"], "expected NAME=SECONDS with a finite number"),
+        (["--stem", "vox=v.wav", "--stem-offset", "vox"], "expected NAME=SECONDS, e.g. vocals=-0.3"),
+        (["--stem", "vox=v.wav", "--stem-offset", "=0.3"], "expected NAME=SECONDS, e.g. vocals=-0.3"),
+    ],
+)
+def test_a_time_that_is_not_a_finite_number_is_a_usage_error_not_a_traceback(argv, says, capsys):
+    """The staff review's case: --midi-offset inf raised an OverflowError
+    from deep in the grid, and nan a ValueError about converting to an int."""
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["envelope", "song.wav", *argv])
+    err = capsys.readouterr().err
+    assert exc.value.code == 2 and says in err and "Traceback" not in err
+
+
+def test_envelope_passes_stem_offsets_and_the_vocal_stem_through(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr(cli, "envelope", lambda path, **kw: seen.update(kw) or _session_pack())
+    argv = ["envelope", "song.wav", "-o", str(tmp_path / "p.json"), "--stem", "lead=Lead.wav", "--stem", "fx=Fx.wav"]
+    argv += ["--stem-offset", "fx=-0.3", "--voc-stem", "lead", "--midi", "Song.mid", "--downbeat", "1.5"]
+    assert cli.main(argv) == cli.EXIT_OK
+    assert seen["stem_offsets"] == {"fx": -0.3} and seen["voc_stem"] == "lead" and seen["downbeat"] == 1.5
+
+
+@pytest.mark.parametrize(
+    ("argv", "says"),
+    [
+        (["--stem", "a=a.wav", "--stem-offset", "a=0.1", "--stem-offset", "a=0.2"], "--stem-offset a=... is given twice"),
+        (["--stem-offset", "a=0.1"], "--stem-offset names a stem: it needs --stem NAME=PATH"),
+        (["--voc-stem", "lead"], "--voc-stem names a stem: it needs --stem NAME=PATH"),
+    ],
+)
+def test_stem_offsets_and_a_vocal_stem_without_their_stems_are_one_clean_line(argv, says, capsys):
+    assert cli.main(["envelope", "song.wav", *argv]) == cli.EXIT_ERROR
+    assert says in capsys.readouterr().err
+
+
 # --- master-check ----------------------------------------------------------
 
 

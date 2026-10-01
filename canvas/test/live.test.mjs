@@ -67,8 +67,8 @@ const PIECE = extra => `boot({ bpm: 120, dur: 16, idleT: 1.5, ${extra || ''}
                  __draws.push({ at: __clock.now, t, env: { ...env } }); },
   cover(name) { ctx.fillStyle = '#222'; ctx.fillRect(0, 0, PXW, PXH); } });`;
 
-function page({ search = '', piece = PIECE(), audio = {}, fps = 60 } = {}) {
-  const clock = { now: 0 }, timers = [], rafs = [], ctxLog = [], draws = [], on = {}, onCanvas = {};
+function page({ search = '', piece = PIECE(), audio = {}, fps = 60, lib = LIB, exports = [] } = {}) {
+  const clock = { now: 0 }, timers = [], rafs = [], ctxLog = [], draws = [], on = {}, onCanvas = {}, warns = [];
   let tid = 0;
   const wa = webAudio(clock, audio);
   const ctx2d = new Proxy({}, {
@@ -77,7 +77,7 @@ function page({ search = '', piece = PIECE(), audio = {}, fps = 60 } = {}) {
   });
   const canvas = { style: {}, width: 0, height: 0, getContext: () => ctx2d, addEventListener: (ty, f) => { onCanvas[ty] = f; } };
   const g = {
-    console, Math, Promise, Float32Array, Float64Array, Map, URLSearchParams, Array, Object,
+    console: { log: console.log, error: console.error, warn: (...a) => warns.push(a.join(' ')) }, Math, Promise, Float32Array, Float64Array, Map, URLSearchParams, Array, Object,
     location: { search },
     document: { getElementById: id => (id === 'c' ? canvas : null), fonts: { load: () => Promise.resolve(), ready: Promise.resolve() } },
     innerWidth: 540, innerHeight: 960, addEventListener: (ty, f) => { on[ty] = f; },
@@ -88,10 +88,10 @@ function page({ search = '', piece = PIECE(), audio = {}, fps = 60 } = {}) {
   };
   g.window = g;
   vm.createContext(g);
-  vm.runInContext(`${LIB}\n${piece}\n;globalThis.__lib = { livePrescan, liveFFT, liveVocPower, liveVocContrast, SAFE_FRAME };`, g);
+  vm.runInContext(`${lib}\n${piece}\n;globalThis.__lib = { livePrescan, liveFFT, liveVocPower, liveVocContrast, SAFE_FRAME, ${exports.join(', ')} };`, g);
   const flush = async () => { for (let i = 0; i < 3; i++) await new Promise(r => setImmediate(r)); };
   const P = {
-    g, clock, wa, ctxLog, draws, lib: g.__lib,
+    g, clock, wa, ctxLog, draws, warns, lib: g.__lib,
     async run(until) {                                            // the clock, timers and animation frames, to `until` s
       await flush();
       const dt = 1 / fps;
@@ -300,8 +300,185 @@ test('?qa=1 draws the 9:16 safe frame after the piece, in every mode; without it
     assert.deepEqual(off, own, `${mode}: without qa, only the piece draws`);
     assert.deepEqual(on.slice(0, off.length), off, `${mode}: with qa, the piece draws the same...`);
     const overlay = on.slice(off.length);
-    assert.ok(overlay.some(c => c[0] === 'strokeRect' && c.slice(1).join() === '54,220,972,1260'), `${mode}: ...then the safe frame x 54-1026, y 220-1480`);
-    assert.ok(overlay.some(c => c[0] === 'setLineDash' && c[1].length) && overlay.some(c => c[0] === 'fillText' && /9:16 SAFE/.test(c[1])), `${mode}: dashed and labelled`);
+    assert.ok(overlay.some(c => c[0] === 'strokeRect' && c.slice(1).join() === '65,269,875,979'), `${mode}: ...then the safe frame x 65-940, y 269-1248`);
+    assert.ok(overlay.some(c => c[0] === 'setLineDash' && c[1].length) && overlay.some(c => c[0] === 'fillText' && c[1] === '9:16 SAFE  x 65-940  y 269-1248'), `${mode}: dashed and labelled`);
+    assert.ok(overlay.some(c => c[0] === 'fillText' && c[1] === 'Reels / TikTok / Shorts UI below: caption, buttons'), `${mode}: naming whose interface is under it`);
     assert.deepEqual([overlay[0][0], overlay.at(-1)[0]], ['save', 'restore'], `${mode}: and leaves the context as it found it`);
   }
+});
+
+// docs/PLATFORMS.md (generated from src/kaleidophone/render/platforms.py): the safe area of every 9:16
+// video platform, as {id: {top, bottom, left, right}} in px of 1080x1920
+function platformSafeAreas() {
+  const md = fs.readFileSync(path.join(CANVAS, '..', 'docs', 'PLATFORMS.md'), 'utf8'), out = {};
+  for (const sec of md.split(/^## /m).slice(1)) {
+    const id = sec.slice(0, sec.indexOf('\n')).trim();
+    const m = /\*\*safe area:\*\* keep clear of top (\d+), bottom (\d+), left (\d+), right (\d+) px/.exec(sec);
+    if (m && /\(video\)/.test(sec) && /\*\*size:\*\* 1080x1920 \(9:16/.test(sec)) out[id] = { top: +m[1], bottom: +m[2], left: +m[3], right: +m[4] };
+  }
+  return out;
+}
+
+test('SAFE_FRAME is what every 9:16 video platform in docs/PLATFORMS.md leaves clear: x 65-940, y 269-1248', () => {
+  const doc = platformSafeAreas(), { SAFE_FRAME, SAFE_MARGINS } = page({ exports: ['SAFE_MARGINS'] }).lib;
+  const plain = x => JSON.parse(JSON.stringify(x)), key = a => `top ${a.top}, bottom ${a.bottom}, left ${a.left}, right ${a.right}`;
+  assert.ok(['instagram-reel', 'tiktok', 'youtube-short'].every(id => doc[id]), `docs/PLATFORMS.md has Reels, TikTok and Shorts with safe areas (found: ${Object.keys(doc).join(', ')})`);
+  assert.deepEqual(Object.values(plain(SAFE_MARGINS)).map(key).sort(), [...new Set(Object.values(doc).map(key))].sort(),
+    'lib/live.js SAFE_MARGINS must be the safe areas docs/PLATFORMS.md gives the 9:16 video platforms: copy them from there');
+  const most = side => Math.max(...Object.values(doc).map(a => a[side]));
+  assert.deepEqual(plain(SAFE_FRAME), { x0: most('left'), y0: most('top'), x1: 1080 - most('right'), y1: 1920 - most('bottom') }, 'on each side, the widest margin');
+  // the numbers docs/CREATIVE-GUIDE.md quotes ("The frame, in numbers"): change both together
+  assert.deepEqual(plain(SAFE_FRAME), { x0: 65, y0: 269, x1: 940, y1: 1248 });
+});
+
+// ---------------------------------------------------------------- the song's events, live
+// A piece that records what EV holds each time it draws.
+const EVPIECE = extra => `boot({ bpm: 120, dur: 16, idleT: 1.5, ${extra || ''}
+  draw(t, env, flags) {
+    const K = evList(EV, 'midi.kick'), S = evList(EV, 'midi.snare'), Hh = evList(EV, 'midi.hat');
+    __draws.push({ at: __clock.now, t, flags: JSON.parse(JSON.stringify(flags)), kick: K.map(e => e[0]), snare: S.map(e => e[0]), hat: Hh.map(e => e[0]),
+      rows: [K[0], S[0], Hh[0]].map(e => e && e.slice(1)), nth: evNth(K, t), since: evSince(K, t), pulse: evPulse(K, t, 0, 0.1) });
+  } });`;
+const drawsOf = P => P.draws.map(d => JSON.parse(JSON.stringify(d)));      // out of the vm's realm; Infinity -> null
+const onGrid = (xs, step, phase = 0) => xs.every(x => near(((x - phase) / step) - Math.round((x - phase) / step), 0, 1e-6));
+const sorted = xs => xs.every((x, i) => !i || x >= xs[i - 1]);
+
+test('live fallback: the kicks, snares and hats it schedules are the piece\'s events, in its own time', async () => {
+  for (const [bpm, kickEvery] of [[120, 1], [80, 2]]) {
+    const P = page({ piece: EVPIECE('downbeat: 0,').replace('bpm: 120', `bpm: ${bpm}`) });
+    await P.run(0.5);
+    assert.deepEqual(drawsOf(P).at(-1).kick, [], `${bpm} BPM: nothing before the click`);
+    P.click(); await P.run(10);
+    const beat = 60 / bpm, k = kicks(P), draws = drawsOf(P), d = draws.at(-1);
+    // the audio's kicks, on the piece's clock (downbeat 0: the first kick is its 0) -- every one EV has, and no other
+    assert.deepEqual(d.kick.map(x => +x.toFixed(6)), k.map(x => +(x - k[0]).toFixed(6)).filter(x => x < 16), `${bpm} BPM: EV's kicks are the ones heard`);
+    assert.ok(onGrid(d.kick, kickEvery * beat) && onGrid(d.snare, 2 * beat, beat) && onGrid(d.hat, beat, beat / 2), `${bpm} BPM: kicks on ${kickEvery === 1 ? 'every beat' : '1 and 3'}, snares on 2 and 4, hats on the "and"s`);
+    assert.ok(sorted(d.kick) && sorted(d.snare) && sorted(d.hat));
+    assert.ok(draws.some(x => x.kick.length && x.kick.at(-1) > x.t), 'scheduled ahead, like a pack\'s future');
+    assert.deepEqual(d.rows, [[0.9, 0.05, 36], [0.9, 0.05, 38], [0.8, 0.05, 42]], 'velocity, duration, General MIDI pitch');
+    for (const x of draws.filter(x => x.at > 1.5)) assert.equal(x.nth, Math.floor(x.t / (kickEvery * beat) + 1e-6) + 1, `${bpm} BPM: kicks so far at t ${x.t}`);
+    const right = draws.filter(x => x.at > 1 && x.since < 1 / 24), away = draws.filter(x => x.at > 1 && x.since > 0.35);
+    assert.ok(right.length > 5 && right.every(x => x.pulse > 0.5) && away.every(x => x.pulse < 0.03), `${bpm} BPM: evPulse jumps on the kicks heard, and only on them`);
+  }
+});
+
+test('live fallback: EV holds this loop\'s hits, in loop time; a dropped track has no MIDI', async () => {
+  const P = page({ piece: EVPIECE('downbeat: 0,') });
+  P.click(); await P.run(20);
+  const second = drawsOf(P).filter(x => x.at > 17 && x.at < 20);
+  assert.ok(second.length > 30);
+  for (const d of second) {
+    assert.ok(d.kick[0] === 0 || near(d.kick[0], 0, 1e-6), 'the loop starts over at 0');
+    assert.ok(d.kick.every(x => x < 16) && d.kick.length <= 32, 'one loop: 8 bars, 32 kicks at most');
+    assert.equal(d.nth, Math.floor(d.t / 0.5 + 1e-6) + 1, `counted from this loop's start (t ${d.t})`);
+  }
+  const tone = new Float32Array(SR * 4);
+  await P.drop(P.buffer([tone, tone]));
+  const at = P.clock.now;
+  await P.run(at + 2);
+  const after = drawsOf(P).filter(x => x.at > at);
+  assert.ok(after.length > 10 && after.every(x => !x.kick.length && !x.snare.length && !x.hat.length && x.pulse === 0 && x.since === null), 'no events at all');
+});
+
+// ---------------------------------------------------------------- variants
+const ENDINGS = `variants: { ending: { at: 14, options: ['droste', 'lamp', 'exit'], default: 'droste' } },`;
+
+test('variantParse / variantResolve: axis:option pairs, checked against what the piece declares', () => {
+  const P = page({ exports: ['variantParse', 'variantResolve'] }), { variantParse, variantResolve } = P.lib;
+  const plain = x => JSON.parse(JSON.stringify(x));
+  assert.deepEqual(plain(variantParse('ending:lamp, palette : night')), { ending: 'lamp', palette: 'night' });
+  assert.deepEqual(plain(variantParse('')), {}); assert.deepEqual(plain(variantParse(null)), {});
+  assert.deepEqual(plain(variantParse('lamp,:x,a:,ending:exit')), { ending: 'exit' });
+  assert.equal(P.warns.length, 3, 'each malformed entry warns');
+  const D = { ending: { options: ['droste', 'lamp', 'exit'], default: 'droste' } };
+  assert.deepEqual(plain(variantResolve(D, undefined)), { ending: 'droste' }, 'the default when nothing is asked');
+  assert.deepEqual(plain(variantResolve(D, { ending: 'exit' }, true)), { ending: 'exit' });
+  assert.deepEqual(plain(variantResolve(D, 'ending:lamp', true)), { ending: 'lamp' }, 'the URL\'s form too');
+  P.warns.length = 0;
+  assert.deepEqual(plain(variantResolve(D, { ending: 'lmap' })), { ending: 'droste' });
+  assert.match(P.warns[0], /ending has no option "lmap" \(it has droste, lamp, exit\) -- playing droste/);
+  assert.deepEqual(plain(variantResolve(D, { palette: 'night' })), { ending: 'droste' });
+  assert.match(P.warns[1], /no variant axis "palette" \(it has ending\)/);
+  assert.throws(() => variantResolve(D, { ending: 'lmap' }, true), /variant: ending has no option "lmap" \(it has droste, lamp, exit\)$/);
+  assert.throws(() => variantResolve(D, { palette: 'night' }, true), /no variant axis "palette"/);
+  assert.deepEqual(plain(variantResolve(undefined, { any: 'thing' }, true)), { any: 'thing' }, 'a piece that declares none passes it on');
+  assert.deepEqual(plain(variantResolve(undefined, undefined, true)), {});
+  assert.deepEqual(plain(variantResolve({ a: { options: ['x', 'y'] } }, {})), { a: 'x' }, 'no default: the first option');
+  assert.throws(() => variantResolve({ a: { options: ['x'], default: 'z' } }, {}), /declares "a" with no options, or a default that isn't one/);
+});
+
+test('live mode: ?variant=ending:lamp reaches draw; a mistyped one warns and plays the default', async () => {
+  const drawn = async search => { const P = page({ search, piece: EVPIECE(ENDINGS) }); await P.run(0.3); return { flags: drawsOf(P).at(-1).flags, warns: P.warns }; };
+  const lamp = await drawn('?variant=ending:lamp');
+  assert.deepEqual([lamp.flags, lamp.warns.length], [{ live: true, variant: { ending: 'lamp' } }, 0]);
+  assert.deepEqual((await drawn('')).flags, { live: true, variant: { ending: 'droste' } });
+  const typo = await drawn('?variant=ending:lmap');
+  assert.deepEqual(typo.flags.variant, { ending: 'droste' });
+  assert.equal(typo.warns.length, 1); assert.match(typo.warns[0], /"lmap" \(it has droste, lamp, exit\) -- playing droste/);
+  const P = page({ search: '?variant=ending:lamp' }); await P.run(0.3);              // a piece with no variants: nothing to check against
+  assert.equal(P.warns.length, 0);
+});
+
+test('render mode: __init fills EV from the pack; p.variant is checked and completed, and an unknown option stops the render', async () => {
+  const P = page({ search: '?render=1&w=540&h=960', piece: EVPIECE(ENDINGS) });
+  await P.run(0.1);
+  P.g.__init({ fps: 100, rms: [0, 1], events: { midi: { kick: [[1, 1, 0.05, 36], [1.5, 0.5, 0.05, 36]] } } });
+  P.g.__frame({ t: 1.05, rms: 0.5 });
+  let d = drawsOf(P).at(-1);
+  assert.deepEqual(d.kick, [1, 1.5]); assert.equal(d.nth, 1); assert.ok(near(d.since, 0.05, 1e-9)); assert.ok(near(d.pulse, Math.exp(-0.5), 1e-9));
+  assert.deepEqual(d.flags, { t: 1.05, rms: 0.5, variant: { ending: 'droste' } }, 'the harness\'s flags, with the variant completed');
+  P.g.__frame({ t: 2, variant: { ending: 'exit' } });
+  assert.deepEqual(drawsOf(P).at(-1).flags.variant, { ending: 'exit' });
+  assert.throws(() => P.g.__frame({ t: 2, variant: { ending: 'lmap' } }), /variant: ending has no option "lmap" \(it has droste, lamp, exit\)/);
+  assert.throws(() => P.g.__frame({ t: 2, variant: { palette: 'x' } }), /no variant axis "palette"/);
+  P.g.__init({ fps: 100, rms: [0, 1] });                                               // a pack without events: empty lists
+  P.g.__frame({ t: 1.05 });
+  d = drawsOf(P).at(-1);
+  assert.deepEqual([d.kick, d.nth, d.since, d.pulse], [[], 0, null, 0]);
+  // a piece that declares no variants gets exactly what the harness sent, as before
+  const Q = page({ search: '?render=1&w=540&h=960', piece: EVPIECE() });
+  await Q.run(0.1);
+  Q.g.__frame({ t: 3, card: true });
+  assert.deepEqual(drawsOf(Q).at(-1).flags, { t: 3, card: true });
+  Q.g.__frame({ t: 3, variant: { ending: 'lamp' } });
+  assert.deepEqual(drawsOf(Q).at(-1).flags.variant, { ending: 'lamp' });
+});
+
+// ---------------------------------------------------------------- the pieces' variants
+const PIECES = path.join(CANVAS, 'pieces');
+const NAME = /^[a-z][a-z0-9-]*$/;                                    // safe in ?variant=a:b,c:d and --variant a=b
+
+test('every piece\'s "variants" is valid: axes and options named plainly, a start inside the song, a default among the options', () => {
+  let n = 0;
+  for (const id of fs.readdirSync(PIECES)) {
+    const f = path.join(PIECES, id, 'piece.json');
+    if (!fs.existsSync(f)) continue;
+    const spec = JSON.parse(fs.readFileSync(f, 'utf8'));
+    if (spec.variants === undefined) continue;
+    n++;
+    assert.ok(spec.variants && typeof spec.variants === 'object' && !Array.isArray(spec.variants) && Object.keys(spec.variants).length, `${id}: "variants" is {axis: {...}}`);
+    for (const [axis, v] of Object.entries(spec.variants)) {
+      assert.match(axis, NAME, `${id}: axis "${axis}"`);
+      assert.ok(typeof v.at === 'number' && v.at >= 0 && v.at < spec.grid.dur, `${id}.${axis}: "at" is song seconds inside the piece (got ${v.at})`);
+      assert.ok(Array.isArray(v.options) && v.options.length >= 2 && new Set(v.options).size === v.options.length, `${id}.${axis}: two or more options, each once`);
+      for (const o of v.options) assert.match(o, NAME, `${id}.${axis}: option "${o}"`);
+      assert.ok(v.options.includes(v.default), `${id}.${axis}: the default "${v.default}" is one of the options`);
+      assert.ok(v.note === undefined || (typeof v.note === 'string' && v.note.trim()), `${id}.${axis}: "note" is words`);
+    }
+  }
+  assert.ok(n >= 1, 'the template declares its endings');
+});
+
+test('the template: three endings from bar 7, and the page declares the same variants as piece.json', async () => {
+  const spec = JSON.parse(fs.readFileSync(path.join(PIECES, 'template', 'piece.json'), 'utf8'));
+  assert.deepEqual({ ...spec.variants.ending, note: undefined }, { at: 14, options: ['droste', 'lamp', 'exit'], default: 'droste', note: undefined });
+  const lib = [...spec.lib.map(n => path.join(CANVAS, 'lib', `${n}.js`)), ...fs.readdirSync(path.join(PIECES, 'template', 'src')).sort().map(f => path.join(PIECES, 'template', 'src', f))]
+    .map(f => fs.readFileSync(f, 'utf8')).join('\n');
+  const P = page({ lib, piece: '', exports: ['VARIANTS'], search: '?variant=ending:exit' });   // loads and boots; draws nothing yet
+  const onPage = JSON.parse(JSON.stringify(P.lib.VARIANTS));
+  for (const [axis, v] of Object.entries(spec.variants)) {
+    assert.deepEqual({ at: onPage[axis].at, options: onPage[axis].options, default: onPage[axis].default }, { at: v.at, options: v.options, default: v.default }, `the page's "${axis}" is piece.json's`);
+  }
+  assert.deepEqual(Object.keys(onPage), Object.keys(spec.variants));
+  assert.equal(P.warns.length, 0, 'the page knows ?variant=ending:exit');
 });

@@ -1,6 +1,6 @@
 {
   "name": "kaleidophone-canvas",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "The canvas engine: song-driven HTML canvas pieces that play live, render deterministic silent video, and draw their own covers.",
   "license": "Apache-2.0",
