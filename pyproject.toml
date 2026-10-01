@@ -54,7 +54,7 @@ dependencies = [
     # Not a direct import -- a constraint on librosa's own numba/llvmlite
     # chain. llvmlite >= 0.46 ships arm64-only macOS wheels, so on an Intel
     # Mac pip falls back to building LLVM from source and the install fails
-    # outright. numba < 0.63 pins llvmlite < 0.46, which still has the
+    # outright. numba < 0.68 pins llvmlite < 0.46, which still has the
     # x86_64 wheel. Scoped by marker so no other platform is held back.
     "numba<0.63; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
