@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { pathToFileURL } from 'node:url';
-import { DIST, CANVAS, RunError, UsageError, main, parseArgs, helpText, loadPiece, listPieces, loadSong } from './lib/common.mjs';
+import { DIST, CANVAS, RunError, UsageError, main, parseArgs, helpText, loadPiece, listPieces, loadSong, checkVariants } from './lib/common.mjs';
 import { songPath, synthFor } from './synth.mjs';
 
 export class BuildError extends RunError {
@@ -223,6 +223,9 @@ function readPiece(id, dir) {
 export function buildPiece(id, { song, pack, out, dir, quiet = false } = {}) {
   const piece = dir ? readPiece(id, dir) : loadPiece(id);
   const s = piece.spec;
+  // "variants" (render.mjs --variant / --endings): refused here, where a piece is made, as well as by
+  // the tools that read it -- one line naming the piece and the axis
+  try { checkVariants(id, s); } catch (e) { throw new BuildError(e.message); }
   const tplFile = path.join(piece.dir, s.template || 'template.html');
   if (!fs.existsSync(tplFile)) throw new BuildError(`${id}: no template (${path.relative(process.cwd(), tplFile)})`);
   let html = fs.readFileSync(tplFile, 'utf8');

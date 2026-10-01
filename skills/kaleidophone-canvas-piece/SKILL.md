@@ -61,6 +61,67 @@ magic.
   Persian vocals the transcription failed, so ask for the lyric text. Onsets
   are data the piece reads; the words never enter the repository.
 
+### Session in: the MIDI and the stems (#55)
+
+If the artist can export the session, take the grid and the hits from it
+instead of guessing them from the master:
+
+```bash
+kaleidophone envelope Song.wav --midi Song.mid --stem vocals=stems/Vocals.wav \
+     --stem drums=stems/Drums.wav -o private/song.songpack.json
+```
+
+- **Ask for** the MIDI as a Standard MIDI File (.mid) with the tempo map, and
+  stems bounced over one range, not normalised. Each stem is lined up with the
+  master — its band levels and onsets against the master's, within ±2 s — so a
+  master trimmed or padded at the head is fine; a stem that can't be lined up
+  (a swell with no attack, a part from another song) is refused until you pass
+  `--stem-offset NAME=S`, and the refusal says the lag the other stems agree on. Name the tracks as the piece will read them — `kick`,
+  `snare`, `hat`, `keys` — before exporting: a kit on one track arrives as one
+  list, its pads told apart only by `pitch`. A stem named `vocals`, `vocal`,
+  `vox` or `voice` becomes `voc`; for any other name, `--voc-stem NAME`.
+- **Commit the groove before exporting.** A DAW's swing and groove templates
+  are usually applied on playback, not written into the notes: export without
+  committing them, and the events are straight while the bounce swings — every
+  swung note off by its swing.
+- **Logic Pro** *(menu names inferred, Logic Pro 10–11; check the artist's
+  version)*: apply each region's Quantize and Q-Swing to the notes first
+  (the region inspector's settings, made permanent: MIDI › Region Parameters ›
+  Apply Quantization Settings Permanently, or Normalize Region Parameters);
+  then select every MIDI region, File › Export › Selection as MIDI File;
+  stems with File › Export › All Tracks as Audio Files over the master's range.
+- **Ableton Live** *(inferred, Live 11–12)*: commit any groove from the groove
+  pool first (the clip's Groove › Commit); export each MIDI clip with
+  right-click › Export MIDI Clip (consolidate a track's clips over the song
+  first, so its 0 s is the song's); stems with File › Export Audio/Video,
+  Rendered Track: All Individual Tracks, over the master's range. A clip
+  carries the set's tempo, not its tempo automation: a song whose tempo moves
+  needs the moves checked against the print's tempo map.
+- **FL Studio** *(inferred, FL Studio 20–21)*: File › Export › MIDI file from
+  the song (Song mode, not a pattern); stems with File › Export › WAV file and
+  "Split mixer tracks" ticked.
+- **MPC** *(inferred; the menus differ between models and software versions)*:
+  a song (a list of sequences) doesn't export as one MIDI file — convert it to
+  a sequence first (Song mode's Convert to Sequence), then export that
+  sequence as a MIDI file and its tracks as separate audio files from its
+  start. A drum program is one track with a note per pad, and the pad notes
+  are the program's, not General MIDI's drum numbers (36 is not a kick there
+  unless the program says so): name the tracks, or split the kit's pads onto
+  tracks named for what they play, before exporting.
+- **A clip that starts on a pickup**: its tick 0 isn't bar 1. Pass
+  `--downbeat S` with `--midi` (S: bar 1 on the master, in seconds) and the bars
+  follow the MIDI's time signatures from there.
+- **Read the print.** `offset` is where the MIDI's 0 s falls on the master
+  (+ pre-roll, − a bounce that starts later), found from the audio. If the pack
+  calls it a guess, check one event by ear and pass `--midi-offset`. `stem lag`
+  is where each stem's 0 s falls on the master (− for a master trimmed at the
+  head); the stems of one bounce share one. Across a tempo change, read `beats` or
+  `midi.tempo_map`, not `makeGrid({ bpm })`. In 6/8 or 12/8, `beats` are
+  quarter notes and the felt beat is `pulses` (dotted quarters): a 6/8 groove
+  is choreographed to `pulses`, two to the bar.
+- The MIDI, the stems and the pack made from them are as private as the
+  master: `private/`, never the repository.
+
 ## 3. Start from the template
 
 ```bash

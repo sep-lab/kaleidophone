@@ -20,7 +20,12 @@
      boot({ bpm: 100, dur: 24, draw(t, env, flags) {...}, cover(name, arg) {...},
             fonts: ['700 30px "Space Mono"'], hint: 'TITLE · click · or drop the wav' });
    Optional: downbeat (s; the fallback's first kick is the piece's beat 1), root (Hz;
-   the fallback pad, default 110), idleT (s; the frame shown before a click).
+   the fallback pad, default 110), idleT (s; the frame shown before a click), variants
+   (the piece's variant axes, as in piece.json: flags.variant, below).
+
+   The song's events (MIDI notes, chords, onsets) are in EV, for core.js's ev* functions:
+   evList(EV, 'midi.snare'). Render and cover mode: the song pack's. Live: the fallback's
+   own kicks, snares and hats as it schedules them; a dropped track has none.
 
    The live envelope against a song pack's (what render mode reads):
    - Bands, rms, fluxes and cent are measured on the analyser's mono downmix -- the
@@ -61,12 +66,76 @@ function coverCrop(topFraction) { ctx.setTransform(S, 0, 0, S, 0, -topFraction *
 const ENV_KEYS = ['bass', 'lowmid', 'mid', 'high', 'air', 'rms', 'flux', 'bflux', 'hflux', 'cent', 'voc'];
 function envFrom(p) { const e = {}; for (const k of ENV_KEYS) e[k] = +(p && p[k]) || 0; return e; }
 
+// ---------------------------------------------------------------- the song's events: EV
+// Pack-shaped ({ events }), so one call reads it and a song pack alike: evList(EV, 'midi.kick').
+//   render, cover  the events of the pack window.__init was given
+//   live           what is playing: the procedural fallback's own kicks, snares and hats, pushed into
+//                  EV.events.midi.kick / .snare / .hat as it schedules them -- [t, velocity, 0.05, pitch]
+//                  in the piece's time, this loop's only, the way a synthetic twin has its drums. A dropped
+//                  track has no MIDI: those lists stay empty (react to its envelope there: env.bflux, hflux).
+// Look a list up in draw, every frame (evList is two property reads): __init replaces the whole tree.
+const EV = { events: {} };
+
+// ---------------------------------------------------------------- variants
+// A piece's alternatives -- three endings, say -- are its variants: piece.json "variants": {axis: {at,
+// options, default, note}}, and the same axes given to boot({ variants }) so the page can check what it
+// is asked for. draw(t, env, flags) then always gets flags.variant = {axis: option}, every declared axis
+// in it (its default where none was asked for):
+//   render  from the harness: --variant ending=lamp -> window.__frame({ ..., variant: { ending: 'lamp' } })
+//   live    from the URL: ?variant=ending:lamp[,axis:option]
+// An axis or option the piece doesn't declare stops a render (the page throws, naming what it has); live,
+// it warns on the console and plays the default. A page that declares none passes on what it is given.
+function variantParse(s) {                  // "ending:lamp,palette:night" -> { ending: 'lamp', palette: 'night' }
+  const out = {};
+  for (const part of String(s || '').split(',')) {
+    const i = part.indexOf(':'), axis = part.slice(0, i).trim(), option = part.slice(i + 1).trim();
+    if (!part.trim()) continue;
+    if (i < 0 || !axis || !option) { console.warn(`live.js: ?variant=${s}: "${part}" is not axis:option -- ignored`); continue; }
+    out[axis] = option;
+  }
+  return out;
+}
+function variantResolve(declared, asked, strict = false) {
+  if (typeof asked === 'string') asked = variantParse(asked);
+  asked = asked && typeof asked === 'object' ? asked : {};
+  if (!declared) return { ...asked };
+  const out = {}, axes = Object.keys(declared);
+  const bad = (msg, fallback) => {
+    if (strict) throw new Error(`variant: ${msg}`);
+    console.warn(`live.js: variant: ${msg}${fallback ? ` -- playing ${fallback}` : ' -- ignored'}`);
+  };
+  for (const axis of axes) {
+    const options = declared[axis].options || [], dflt = declared[axis].default ?? options[0];
+    if (!options.includes(dflt)) throw new Error(`variant: the piece declares "${axis}" with no options, or a default that isn't one of them`);
+    const want = asked[axis];
+    if (want == null) out[axis] = dflt;
+    else if (options.includes(want)) out[axis] = want;
+    else { bad(`${axis} has no option "${want}" (it has ${options.join(', ')})`, dflt); out[axis] = dflt; }
+  }
+  for (const axis of Object.keys(asked)) if (!axes.includes(axis)) bad(`this piece has no variant axis "${axis}" (it has ${axes.join(', ') || 'none'})`);
+  return out;
+}
+
 // ---------------------------------------------------------------- ?qa=1: the 9:16 safe frame
-// The part of the stage no platform's interface covers: 54 px in from either side, 220 px
-// under the top, 440 px above the bottom (caption, buttons). Drawn over the finished frame,
-// in every mode, only with ?qa=1: a QA still shows at once whether a title or a face sits
-// under the UI. Stage units, so on a square cover only its top part is in frame.
-const SAFE_FRAME = { x0: 54, y0: 220, x1: 1026, y1: 1480 };
+// What each vertical-video player's interface covers of a 1080x1920 frame -- its header, the
+// caption and username, the like / comment / share column -- as the margins to keep clear of, in
+// stage px: docs/PLATFORMS.md (src/kaleidophone/render/platforms.py; cited, mostly third-party
+// measurements of overlays that change -- checked 2026-09-30). The Reels figure is Stories' too.
+// npm test checks these against docs/PLATFORMS.md.
+const SAFE_MARGINS = {
+  Reels: { top: 269, bottom: 672, left: 65, right: 65 },
+  TikTok: { top: 130, bottom: 484, left: 44, right: 140 },
+  Shorts: { top: 192, bottom: 480, left: 0, right: 108 },
+};
+// The safe frame is the part none of them covers -- on each side, the widest margin: x 65-940
+// (Reels on the left, TikTok's buttons on the right), y 269-1248 (Reels' header and caption).
+// Anything that must be read goes inside it; picture and texture can bleed past. Drawn over the
+// finished frame, in every mode, only with ?qa=1: a QA still shows at once whether a title or a
+// face sits under the UI. Stage units, so on a square cover only its top part is in frame.
+const SAFE_FRAME = (() => {
+  const m = Object.values(SAFE_MARGINS), most = side => Math.max(...m.map(a => a[side]));
+  return { x0: most('left'), y0: most('top'), x1: W - most('right'), y1: H - most('bottom') };
+})();
 function drawSafeFrame() {
   withCtx(MAINCTX, () => {
     const { x0, y0, x1, y1 } = SAFE_FRAME, ink = '#2fe3ff', shade = 'rgba(0,0,0,0.75)';
@@ -79,7 +148,7 @@ function drawSafeFrame() {
       ctx.textBaseline = baseline; ctx.strokeStyle = shade; ctx.strokeText(s, x, y); ctx.fillStyle = ink; ctx.fillText(s, x, y);
     };
     label(`9:16 SAFE  x ${x0}-${x1}  y ${y0}-${y1}`, x0 + 6, y0 - 8, 'bottom');
-    label('platform UI below: caption, buttons', x0 + 6, y1 + 8, 'top');
+    label(`${Object.keys(SAFE_MARGINS).join(' / ')} UI below: caption, buttons`, x0 + 6, y1 + 8, 'top');
     ctx.restore();
   });
 }
@@ -92,11 +161,14 @@ function afterDraw(r) {
 
 function boot(o) {
   const fontsReady = () => Promise.all((o.fonts || []).map(f => document.fonts.load(f))).then(() => document.fonts.ready);
+  const init = pack => { envInit(pack); EV.events = (pack && pack.events) || {}; if (o.init) o.init(pack); };
+  // the harness's flags, with the variant checked against the piece's and completed with its defaults
+  const flagsOf = p => (o.variants || (p && p.variant != null)) ? { ...p, variant: variantResolve(o.variants, p && p.variant, true) } : p;
 
   if (MODE === 'render') {
     setSize(+Q.get('w') || 1080, +Q.get('h') || 1920);
-    window.__init = pack => { envInit(pack); if (o.init) o.init(pack); };
-    window.__frame = p => { const e = envFrom(p); ENV.now = e; return afterDraw(o.draw(p.t, e, p) || null); };
+    window.__init = init;
+    window.__frame = p => { const e = envFrom(p); ENV.now = e; return afterDraw(o.draw(p.t, e, flagsOf(p)) || null); };
     window.__ready = false;
     fontsReady().then(() => { window.__ready = true; });
     return;
@@ -104,8 +176,8 @@ function boot(o) {
   if (MODE === 'cover') {
     const n = +Q.get('size') || 3000;
     setSize(+Q.get('w') || n, +Q.get('h') || n);
-    window.__init = pack => { envInit(pack); if (o.init) o.init(pack); };
-    window.__cover = (name, arg = {}) => afterDraw(o.cover ? o.cover(name, arg) : o.draw(+arg.t || 0, envFrom(arg), arg));
+    window.__init = init;
+    window.__cover = (name, arg = {}) => afterDraw(o.cover ? o.cover(name, arg) : o.draw(+arg.t || 0, envFrom(arg), flagsOf(arg)));
     window.__ready = false;
     fontsReady().then(() => { window.__ready = true; });
     return;
@@ -239,6 +311,28 @@ function liveMode(o, fontsReady) {
   let ac = null, bus = null, an = null, anMid = null, anSide = null, buf = null, src = null, pad = null;
   let t0 = 0, running = false, last = -1, lastTick = -1, scale = null;
   const env = envFrom(null), agc = {};
+  // ?variant=ending:lamp -- checked against the piece's axes: a mistyped one warns and plays the default
+  const variant = variantResolve(o.variants, variantParse(Q.get('variant')), false);
+
+  // The fallback's hits as MIDI events, the way a synthetic twin has its drums: [u, velocity, 0.05, pitch],
+  // u in the piece's time unwrapped (seconds since its 0, counting on across loops). Each frame, EV gets
+  // this loop's, in loop time; earlier loops' are dropped.
+  const HITS = { kick: [], snare: [], hat: [] }, HIT = { kick: [0.9, 36], snare: [0.9, 38], hat: [0.8, 42] };
+  let hitsLoop = null, hitsNew = false;
+  EV.events = { midi: { kick: [], snare: [], hat: [] } };
+  function liveHit(track, at) { HITS[track].push([at - t0, HIT[track][0], 0.05, HIT[track][1]]); hitsNew = true; }
+  function clearHits() { for (const k in HITS) HITS[k].length = 0; hitsNew = true; }
+  function liveEvents(u) {
+    const L = loopLen(), k = u > 0 ? Math.floor(u / L) : 0, off = k * L;
+    if (!hitsNew && k === hitsLoop) return;
+    hitsNew = false; hitsLoop = k;
+    for (const track in HITS) {
+      const H = HITS[track], out = EV.events.midi[track];
+      while (H.length && H[0][0] < off - 1e-6) H.shift();
+      out.length = 0;                                                // in place: a list looked up earlier stays live
+      for (const e of H) if (e[0] - off < L - 1e-6) out.push([e[0] - off, e[1], e[2], e[3]]);
+    }
+  }
 
   function audio() {
     if (ac) return;
@@ -303,7 +397,8 @@ function liveMode(o, fontsReady) {
   // root's own harmonics, so nothing beats against it, and it is neither major nor minor (an
   // equal-tempered major third beat at ~4 Hz against the root's 5th harmonic). A kick on every
   // beat, or on 1 and 3 below 90 BPM (half-time); a noise snare on 2 and 4; hats on the 8ths;
-  // scheduled ahead of the clock. All of it goes through one output, so a dropped track stops it.
+  // scheduled ahead of the clock, and each hit into EV as it is scheduled. All of it goes through
+  // one output, so a dropped track stops it.
   const PAD_LEVEL = 0.45, PAD_FADE = 0.04;
   function procedural() {
     audio(); if (ac.state === 'suspended') ac.resume();
@@ -320,7 +415,7 @@ function liveMode(o, fontsReady) {
     let next = ac.currentTime + 0.1, k = 0;
     t0 = next - (((o.downbeat || 0) % bar) + bar) % bar;           // the first kick is the piece's beat 1
     const p = pad = { out, oscs, timer: 0 };
-    resetAnalysis(); running = true;
+    resetAnalysis(); clearHits(); running = true;
     (function tick() {
       if (pad !== p) return;                                        // a track was dropped
       while (next < ac.currentTime + 0.4) {
@@ -329,10 +424,12 @@ function liveMode(o, fontsReady) {
           osc.frequency.setValueAtTime(110, next); osc.frequency.exponentialRampToValueAtTime(42, next + 0.22);
           g.gain.setValueAtTime(0.9, next); g.gain.exponentialRampToValueAtTime(0.001, next + 0.35);
           osc.connect(g).connect(out); osc.start(next); osc.stop(next + 0.4);
+          liveHit('kick', next);
         }
         for (const [off, hp, gain] of (k % 2 ? [[0, 1400, 0.45], [beat / 2, 7000, 0.12]] : [[beat / 2, 7000, 0.12]])) {
           const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g2 = ac.createGain();
           s.buffer = nb; f.type = 'highpass'; f.frequency.value = hp; g2.gain.value = gain; s.connect(f).connect(g2).connect(out); s.start(next + off);
+          liveHit(hp === 1400 ? 'snare' : 'hat', next + off);
         }
         next += beat; k++;
       }
@@ -352,23 +449,23 @@ function liveMode(o, fontsReady) {
   }
   function play() {
     audio(); if (ac.state === 'suspended') ac.resume();
-    stopPad();
+    stopPad(); clearHits();                                         // a dropped track has no MIDI: EV's lists go empty
     if (src) { try { src.stop(); } catch (_) { /* already stopped */ } src.disconnect(); }
     src = ac.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(bus);
     t0 = ac.currentTime + 0.05; src.start(t0); resetAnalysis(); running = true;
   }
   function frame() {
     requestAnimationFrame(frame);
-    let t = o.idleT || 0.1, heard = 0;
+    let t = o.idleT || 0.1, heard = 0, u = 0;
     if (running) {
       const tick = Math.floor(ac.currentTime * LIVE_FPS);
       if (tick !== lastTick) { lastTick = tick; analyse(); }        // at the analysis rate, whatever the display's
       heard = ac.currentTime - latency();
-      const u = heard - t0; t = u > 0 ? u % loopLen() : 0;
+      u = heard - t0; t = u > 0 ? u % loopLen() : 0;
     }
     const fi = Math.floor(t * LIVE_FPS); if (fi === last) return; last = fi;
-    if (running) { const e = recall(heard); if (e) Object.assign(env, e); ENV.now = env; }
-    o.draw(t, env, { live: true });
+    if (running) { const e = recall(heard); if (e) Object.assign(env, e); ENV.now = env; liveEvents(u); }
+    o.draw(t, env, { live: true, variant });
     if (QA) drawSafeFrame();
   }
   cv.addEventListener('click', () => { if (hint) hint.classList.add('off'); if (buf) play(); else if (!running) procedural(); });

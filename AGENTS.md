@@ -24,6 +24,19 @@ for the visual/sonic design language, and **`docs/TECHNIQUES.md` for every
 technique the releases taught, numbered, with where it lives** — check it
 before inventing something a release already solved.
 
+## Whichever agent you are
+
+This brief is for any coding agent — Claude Code, Codex, Copilot, Cursor, Gemini
+CLI (via `.gemini/settings.json`), Jules, Aider. The stage-by-stage skills are in
+`skills/` in the open Agent Skills format, linked from `.agents/skills`; the
+`commands/` are Claude Code slash commands that only point at those skills, so
+elsewhere, follow the skill by name. If the person is out of tokens or offline,
+almost everything still runs as plain commands — say which ones
+([docs/PORTABILITY.md](docs/PORTABILITY.md)) rather than stopping. The long
+creative jobs (a new canvas piece, directing an edit, a whole release, the
+review before one) want the strongest model available; README.md, "Which
+model", says which.
+
 ## The one thing you must not get wrong
 
 **kaleidophone versions the brief, not the render.** The `CreativeBrief` (a YAML
@@ -79,6 +92,10 @@ For `canvas/` specifically:
   downbeat, rounded section levels and peaks, and, for a piece that needs them,
   the timing windows it is choreographed to (SHOULD I ?'s vocal and stutter
   windows, to the millisecond). Nothing else derived from the audio goes in.
+  The pack `synth.mjs` makes from a twin plays its own drums, written as MIDI
+  (`events.midi`), and, when the twin asks, a chord progression
+  (`events.chords`) and stems — all invented for the twin, never the song's
+  own notes, harmony or parts.
 - **Never commit a render** — clip, still, cover or built HTML. The gallery is
   built by `.github/workflows/pages.yml`.
 - **Lyrics, collaborator names and stems never enter the repository**, not in

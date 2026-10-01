@@ -32,6 +32,9 @@ and Persian and Arabic shape correctly through it.
 
 ## Sizes
 
-3000×3000 is the distribution master. A release also wants 1080×1920 for a
-story card and 1280×720 for a video thumbnail; those are not emitted
-automatically yet (<https://github.com/sep-lab/kaleidophone/issues/27>).
+3000×3000 is the distribution master. Every other size a platform asks for --
+Spotify, Apple, your distributor, SoundCloud and its header, the YouTube thumbnails,
+the Instagram Reel cover and what the profile grid shows of it -- comes from
+it through the delivery sheet's `covers` (`docs/CONFIG-SCHEMA.md`, "Covers";
+the sizes are in `docs/PLATFORMS.md`): never enlarged, sRGB with no embedded
+profile, each under its platform's file limit.

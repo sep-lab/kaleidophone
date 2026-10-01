@@ -6,7 +6,7 @@
 //   node tools/synth.mjs --twin real.songpack.json --sections 0,32.26,42.26 [--bpm 120 --downbeat 0.255] > synthetic.json
 //   node tools/synth.mjs --twin real.songpack.json --piece <id> [--sections ...]
 //        re-measure a piece's twin in place: its grid, its section boundaries and everything written
-//        by hand (patterns, voc windows, events, beatGrid, keys, quantize) stay; its levels are replaced
+//        by hand (patterns, voc windows, events, chords, beatGrid, keys, quantize) stay; its levels are replaced
 //
 // Why this exists: a real song pack is derived from unreleased audio, so it never enters the
 // repository (docs/decisions/0003, 0007). But a piece is a function of (time, envelope), and to
@@ -29,11 +29,21 @@
 //   voc [[from, to, amp]]      vocal-ish syllables, 4-7 a second, into `voc` and the mid band
 //   events {name: {key: [[from, to, rate_hz, strength]]}}   onsets on the song's 16th grid, humanised by at
 //                              most 20 ms; above the grid's rate some steps add a 32nd, below it some rest
+//   chords {track, progression, every}   a chord progression on the grid, for a piece that moves on chord
+//                              changes: events.chords.<track> = [[t, 1, "Am"], ...], one chord on every bar
+//                              line ("every": "bar", the default; "beat"; or a number of bars), cycling
+//                              through "progression" from the first downbeat. Made up, like the drums:
+//                              never the song's own harmony (see chordEvents)
+//   stems true                 also write stems.drums / .bass / .vocals / .other, from what made each frame
+//                              of each band, normalised like a real pack's stems (see stemsOf)
 //
 // What gets played: kicks (and the odd syncopated one), snares on 2 and 4 with ghost notes, hats on
 // the 8ths with accented off-beats, pickups, drop-outs and an open hat into the bar, a crash on section
 // starts, bass notes and chords that move on the bar, phrase-long swells. Then every envelope is mapped,
 // section by section, onto its level (levelMap). The map keeps order: the biggest hit stays the biggest.
+// The drums it played are in the pack too, as MIDI: events.midi.kick / .snare / .hat / .crash; and with
+// "chords", the chord changes, events.chords.<track>. Neither touches the envelopes: a spec without
+// "chords" makes the same pack, byte for byte, as before there were any.
 //
 // `--twin` measures a real pack per section -- [mean, p95, max] of each envelope, rounded to 0.05 -- and
 // that spec is the only thing that crosses from private to public: coarse numbers, nothing per hit.
@@ -188,6 +198,38 @@ export function drumEvents(spec) {
   return ev;
 }
 
+// The drums as the Session engine writes a MIDI part, one track per drum: events.midi.<track> =
+// [[t, velocity 0..1, duration, pitch], ...] sorted by time. General MIDI's drum notes: kick 36, snare 38,
+// closed hat 42 and open hat 46 (both in `hat`), crash 49. Every hit lasts 0.05 s; times are rounded to
+// 0.1 ms, like the pack's beats.
+export const MIDI_DRUMS = { kick: 36, snare: 38, hat: 42, open: 46, crash: 49 };
+export function drumMidi(ev) {
+  const note = (pitch, dur = 0.05) => ([t, v]) => [+t.toFixed(4), +Math.min(1, v).toFixed(3), dur, pitch];
+  const hat = [...ev.hat.map(note(MIDI_DRUMS.hat)), ...ev.open.map(note(MIDI_DRUMS.open))].sort((a, b) => a[0] - b[0]);
+  return { kick: ev.kick.map(note(MIDI_DRUMS.kick)), snare: ev.snare.map(note(MIDI_DRUMS.snare)), hat, crash: ev.crash.map(note(MIDI_DRUMS.crash)) };
+}
+
+// The chord changes, as a Session writes a chord track: { <track>: [[t, 1, "Am"], ...] }, sorted by time.
+// spec.chords = { track (default "keys"), progression: ["Am", "F", "C", "G"], every: "bar" | "beat" | bars }:
+// a chord on every bar line of the song's grid (or beat, or every n bars) inside [0, dur), going round the
+// progression from the first downbeat -- a bar line before it plays the end of the progression, a pickup
+// into chord 1. Times are rounded to 0.1 ms, like the drums. It draws no random numbers and touches no
+// envelope. A progression is something to choreograph to (the template's droste turns on each change),
+// made up for the twin like its drums: never the real song's harmony, which says something about the sound.
+export function chordEvents(spec) {
+  const c = spec.chords, bad = msg => new Error(`a spec's "chords" ${msg}`);
+  if (!c || typeof c !== 'object' || Array.isArray(c)) throw bad('must be {"track": "keys", "progression": ["Am", "F", ...], "every": "bar"}');
+  const track = c.track ?? 'keys', prog = c.progression, every = c.every ?? 'bar';
+  if (typeof track !== 'string' || !/^[A-Za-z0-9_-]+$/.test(track)) throw bad(`"track" must be a name of letters, digits, - and _ (it is a key: events.chords.<track>), got ${JSON.stringify(track)}`);
+  if (!Array.isArray(prog) || !prog.length || !prog.every(x => typeof x === 'string' && x.trim())) throw bad(`"progression" must be a non-empty list of chord names, got ${JSON.stringify(prog)}`);
+  const beat = 60 / spec.bpm, bar = 4 * beat;
+  const P = every === 'bar' ? bar : every === 'beat' ? beat : typeof every === 'number' && every > 0 && Number.isFinite(every) ? every * bar : null;
+  if (!P) throw bad(`"every" must be "bar", "beat" or a number of bars, got ${JSON.stringify(every)}`);
+  const t0 = spec.downbeat ?? 0, n = prog.length, out = [];
+  for (let k = Math.ceil(-t0 / P - 1e-9); t0 + k * P < spec.dur - 1e-9; k++) out.push([+(t0 + k * P).toFixed(4), 1, prog[((k % n) + n) % n]]);
+  return { [track]: out };
+}
+
 // one decaying hit per event: flat for `hold` seconds, then exponential decay `decay`; it peaks on the
 // frame nearest its onset, the way an analysed pack's attack does
 function hits(n, fps, list, hold, decay) {
@@ -310,12 +352,92 @@ export function synthesize(spec) {
   };
   const q = spec.quantize; // e.g. 255 for the toolkit-era packs that stored bytes
   if (q) pack.quantize = q;
-  for (const k of spec.keys || PACK_KEYS) {
-    const a = arrays[k]; if (!a) continue;
-    pack[k] = Array.from(a, k === 'rmsdb' ? v => Math.round(v * 10) / 10 : q ? v => Math.round(clamp(v) * q) : v => Math.round(v * 1000) / 1000);
+  const store = k => Array.from(arrays[k], k === 'rmsdb' ? v => Math.round(v * 10) / 10 : q ? v => Math.round(clamp(v) * q) : v => Math.round(v * 1000) / 1000);
+  for (const k of spec.keys || PACK_KEYS) if (arrays[k]) pack[k] = store(k);
+  if (spec.events && spec.events.midi) throw new Error('a spec\'s "events" can\'t have a group named "midi": events.midi is the drums the twin plays');
+  if (spec.events && spec.events.chords) throw new Error('a spec\'s "events" can\'t have a group named "chords": events.chords is the chord progression (the spec\'s "chords")');
+  pack.events = { ...(spec.events ? synthEvents(spec) : {}), midi: drumMidi(ev), ...(spec.chords != null ? { chords: chordEvents(spec) } : {}) };
+  if (spec.stems) {
+    // the same parts the raw bands were summed from, kept apart
+    const P = Object.fromEntries(STEMS.map(s => [s, {}]));
+    for (const s of STEMS) for (const b of BANDS) P[s][b] = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const g = phrase[i], D = P.drums, O = P.other;
+      D.bass[i] = g * kB[i]; D.lowmid[i] = g * (0.45 * kL[i] + 0.55 * sL[i]); D.mid[i] = g * (0.12 * kM[i] + 0.8 * sM[i] + 0.25 * cM[i]);
+      D.high[i] = g * (0.75 * sH[i] + 0.35 * hH[i] + 0.55 * oH[i] + cH[i]); D.air[i] = g * (0.3 * sA[i] + 0.85 * hA[i] + 0.8 * oA[i] + cA[i]);
+      P.bass.bass[i] = g * 0.5 * bassline[i] * (1 + wob.bass[i]);
+      O.lowmid[i] = g * 0.5 * chords[i] * (1 + wob.lowmid[i]); O.mid[i] = g * 0.55 * chords[i] * (1 + wob.mid[i]);
+      O.high[i] = g * 0.2 * (1 + wob.high[i]); O.air[i] = g * 0.15 * (1 + wob.air[i]);
+      P.vocals.mid[i] = 0.6 * syl[i];
+    }
+    const S = stemsOf(P, Y, rms, rmsdb, flux, bflux, hflux);
+    pack.stems = {};
+    for (const s of STEMS) {
+      pack.stems[s] = {};
+      for (const k of (spec.keys || PACK_KEYS).filter(k => k !== 'voc')) {
+        pack.stems[s][k] = Array.from(S[s][k], k === 'rmsdb' ? v => Math.round(v * 10) / 10 : q ? v => Math.round(clamp(v) * q) : v => Math.round(v * 1000) / 1000);
+      }
+    }
   }
-  if (spec.events) pack.events = synthEvents(spec);
   return pack;
+}
+
+// Stems, as the Session engine writes them for real ones (docs/CONFIG-SCHEMA.md): per stem, the master's
+// envelopes (the spec's `keys`, voc aside), each normalised on its own like the master's -- its own 5th
+// percentile -> 0 and 99.5th -> 1, the fluxes divided by their 99.5th and clipped at 1.5 -- with digital
+// silence left out of the percentiles and reading 0. Where they come from: the generator knows what made
+// every frame (the drums' hits, the bassline, the chords and the bed under them, the syllables), so before
+// it is normalised a stem's band is the master's band times that stem's share of it -- loud where the master
+// is loud and that part is playing, silent where the part doesn't play (no voc windows: a silent vocals
+// stem). rms the same way, by the weighted bands the master's rms is made of; rmsdb the master's plus the
+// share in dB; the fluxes by each stem's share of the frame's rise; cent each stem's own centroid.
+export const STEMS = ['drums', 'bass', 'vocals', 'other'];
+const RMS_W = { bass: 0.32, lowmid: 0.22, mid: 0.3, high: 0.12, air: 0.04 };   // how the master's rms weighs the bands
+function stemsOf(parts, Y, rms, rmsdb, flux, bflux, hflux) {
+  const n = rms.length, out = {};
+  for (const s of STEMS) {
+    out[s] = {};
+    for (const k of [...BANDS, 'rms', 'rmsdb', 'flux', 'bflux', 'hflux', 'cent']) out[s][k] = new Float64Array(n);
+  }
+  for (const b of BANDS) for (let i = 0; i < n; i++) {
+    let tot = 0; for (const s of STEMS) tot += parts[s][b][i];
+    if (tot > 0) for (const s of STEMS) out[s][b][i] = Y[b][i] * parts[s][b][i] / tot;
+  }
+  const w = {}, up = {}, upB = {}, upH = {};
+  for (let i = 0; i < n; i++) {
+    let W = 0, U = 0, UB = 0, UH = 0;
+    for (const s of STEMS) {
+      const B = out[s], d = b => (i ? Math.max(0, B[b][i] - B[b][i - 1]) : 0);
+      w[s] = 0; for (const b of BANDS) w[s] += RMS_W[b] * B[b][i];
+      up[s] = d('bass') + d('lowmid') + d('mid') + d('high') + d('air'); upB[s] = d('bass'); upH[s] = d('high') + d('air');
+      W += w[s]; U += up[s]; UB += upB[s]; UH += upH[s];
+    }
+    for (const s of STEMS) {
+      const B = out[s], share = W > 0 ? w[s] / W : 0, den = B.bass[i] + B.mid[i] + B.high[i] + B.air[i];
+      B.rms[i] = rms[i] * share;
+      B.rmsdb[i] = share > 0 ? Math.max(-100, rmsdb[i] + 20 * Math.log10(share)) : -100;
+      B.flux[i] = U > 1e-12 ? flux[i] * up[s] / U : flux[i] * share;      // a frame with no rise: shared like the level
+      B.bflux[i] = UB > 1e-12 ? bflux[i] * upB[s] / UB : bflux[i] * share;
+      B.hflux[i] = UH > 1e-12 ? hflux[i] * upH[s] / UH : hflux[i] * share;
+      B.cent[i] = den > 1e-6 ? clamp((0.2 * B.mid[i] + 0.5 * B.high[i] + 0.9 * B.air[i]) / (den + 1e-6)) : 0;
+    }
+  }
+  for (const s of STEMS) {
+    for (const k of [...BANDS, 'rms']) stemNormalise(out[s][k], false);
+    for (const k of ['flux', 'bflux', 'hflux']) stemNormalise(out[s][k], true);
+  }
+  return out;
+}
+// in place: the sounding frames' 5th percentile -> 0 and 99.5th -> 1 (a flux: its 99.5th -> 1, up to 1.5); 0 stays 0
+function stemNormalise(a, isFlux) {
+  const on = Float64Array.from(a.filter(v => v > 0)).sort(), n = on.length;
+  if (!n) return a;
+  const at = q => on[Math.min(n - 1, Math.round(q * (n - 1)))], lo = isFlux ? 0 : at(0.05), hi = at(0.995);
+  for (let i = 0; i < a.length; i++) {
+    if (!(a[i] > 0)) { a[i] = 0; continue; }
+    a[i] = hi - lo > 1e-12 ? clamp((a[i] - lo) / (hi - lo), 0, isFlux ? FLUX_CEILING : 1) : 1;
+  }
+  return a;
 }
 
 // the loudest 60 s, starting on the bar line nearest it (envelope.py's `_loudest_window`: a default
@@ -401,7 +523,7 @@ export function readEnvelopes(P) {
 
 // Measure a real pack per section and write its twin's spec: [mean, p95, max] of each envelope the
 // piece reads (and rms), rounded to 0.05. With `base` (the piece's current spec) everything written by
-// hand survives -- per-section patterns, the voc windows and events, beatGrid, keys, quantize, the
+// hand survives -- per-section patterns, the voc windows, events and chords, beatGrid, keys, quantize, the
 // comment -- and so do its grid and its section boundaries unless new ones are given.
 export function twin(P, { sections, bpm, downbeat, base } = {}) {
   const B = base || {}, { fps, dur, env } = readEnvelopes(P);
@@ -422,7 +544,7 @@ export function twin(P, { sections, bpm, downbeat, base } = {}) {
   });
   const measured = { seed: 7, fps: 100, dur: +dur.toFixed(3), bpm: +(P.bpm || 120).toFixed(3), downbeat: +(P.downbeat ?? P.beat0 ?? P.t0 ?? P.beat_phase_s ?? 0) };
   const spec = {};
-  for (const k of ['_comment', 'seed', 'fps', 'dur', 'bpm', 'downbeat', 'beatGrid', 'keys', 'quantize', 'voc', 'events']) {
+  for (const k of ['_comment', 'seed', 'fps', 'dur', 'bpm', 'downbeat', 'beatGrid', 'keys', 'quantize', 'voc', 'events', 'chords', 'stems']) {
     const v = k in B ? B[k] : measured[k];
     if (v !== undefined) spec[k] = v;
   }

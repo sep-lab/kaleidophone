@@ -53,6 +53,98 @@ test('envAt interpolates the 100 Hz pack linearly and clamps at the ends', () =>
   assert.equal(L.envAt('missing', 0.01), 0);
 });
 
+test('envAt reads a nested envelope by its dotted name: a stem', () => {
+  L.envInit({ fps: 100, bass: [0, 1], stems: { drums: { rms: [0.2, 0.4, 0.6] } } });
+  assert.ok(Math.abs(L.envAt('stems.drums.rms', 0.015) - 0.5) < 1e-12);
+  assert.equal(L.envAt('stems.drums.rms', 9), 0.6);
+  assert.equal(L.envAt('stems.vocals.rms', 0.01), 0);                 // a stem the pack doesn't have
+  assert.equal(L.envAt('bass', 0.005), 0.5);
+});
+
+// ---- events: evList, evLast, evNth, evCount, evSince, evPulse, evChord --------------------------
+const EVL = loadLibWith(['core'], ['evList', 'evBisect', 'evLast', 'evNth', 'evCount', 'evSince', 'evPulse', 'evChord', 'pulse', 'mulberry32']);
+const kick = [[0.5, 1, 0.05, 36], [1, 0.8, 0.05, 36], [1.5, 0.6, 0.05, 36], [2, 1, 0.05, 36]];
+
+test('evList: a path into the pack\'s events, [] for anything that isn\'t a list', () => {
+  const pack = { events: { midi: { kick }, stutter: { s1: [[1, 0.9]] }, chords: { keys: [[0, 1, 'Am']] } } };
+  assert.equal(EVL.evList(pack, 'midi.kick'), kick, 'the list itself, not a copy');
+  assert.deepEqual(EVL.evList(pack, 'stutter.s1'), [[1, 0.9]]);
+  for (const [p, name] of [[pack, 'midi.snare'], [pack, 'midi'], [pack, 'nope.kick.x'], [{}, 'midi.kick'], [null, 'midi.kick'], [undefined, 'a'], [{ events: null }, 'midi.kick']]) {
+    const got = EVL.evList(p, name);
+    assert.ok(Array.isArray(got) && got.length === 0, `${JSON.stringify(p)} ${name}`);
+  }
+  assert.deepEqual(EVL.evList({ events: { midi: { kick: [] } } }, 'midi.kick'), []);   // live.js's EV is pack-shaped
+});
+
+test('evLast / evNth: the last event at or before t, and how many so far -- empty, before the first, on, between, after', () => {
+  const { evLast, evNth } = EVL;
+  assert.equal(evLast([], 5), -1); assert.equal(evNth([], 5), 0);
+  assert.equal(evLast(kick, 0.49), -1); assert.equal(evNth(kick, 0.49), 0);
+  assert.equal(evLast(kick, 0.5), 0); assert.equal(evNth(kick, 0.5), 1);          // at the event: it has happened
+  assert.equal(evLast(kick, 1.2), 1); assert.equal(evLast(kick, 99), 3); assert.equal(evNth(kick, 99), 4);
+  assert.equal(evLast(kick, -Infinity), -1); assert.equal(evLast(kick, Infinity), 3);
+  // ties (a chord's notes, two drums on one tick): the last of them, and all of them counted
+  const tie = [[1, 0.2], [2, 0.3], [2, 0.9], [2, 0.5], [3, 1]];
+  assert.equal(evLast(tie, 2), 3); assert.equal(evNth(tie, 2), 4); assert.equal(evLast(tie, 1.999), 0);
+  // float noise: 3 x 1.1 is 3.3000000000000003 -- still "at" 3.3
+  const noisy = [[1.1 * 3, 1]];
+  assert.ok(noisy[0][0] > 3.3);
+  assert.equal(evLast(noisy, 3.3), 0); assert.equal(evLast(noisy, 3.29999), -1);
+});
+
+test('evCount: events in [t0, t1) -- the start counts, the end doesn\'t, so bars add up', () => {
+  const { evCount, evNth } = EVL;
+  assert.equal(evCount(kick, 0.5, 1.5), 2); assert.equal(evCount(kick, 0, 0.5), 0); assert.equal(evCount(kick, 0, 0.5001), 1);
+  assert.equal(evCount(kick, 0, 2) + evCount(kick, 2, 4), kick.length);
+  assert.equal(evCount(kick, 1.5, 1.5), 0); assert.equal(evCount(kick, 3, 1), 0); assert.equal(evCount([], 0, 9), 0);
+  const tie = [[1, 0.2], [2, 0.3], [2, 0.9], [3, 1]];
+  assert.equal(evCount(tie, 2, 3), 2); assert.equal(evCount(tie, -Infinity, Infinity), 4);
+  for (const t of [0.2, 0.5, 1.25, 2, 7]) assert.equal(evCount(kick, -Infinity, t) + evCount(kick, t, t + 1e-4), evNth(kick, t), `t ${t}`);
+});
+
+test('evSince: seconds since the last event, Infinity before the first', () => {
+  assert.equal(EVL.evSince(kick, 0.2), Infinity); assert.equal(EVL.evSince([], 3), Infinity);
+  assert.equal(EVL.evSince(kick, 0.5), 0);
+  assert.ok(Math.abs(EVL.evSince(kick, 1.7) - 0.2) < 1e-12);
+  assert.equal(EVL.evSince([[1.1 * 3, 1]], 3.3), 0, 'never negative');
+});
+
+test('evPulse: velocity x (linear attack, exponential decay), the strongest recent hit -- not a sum', () => {
+  const { evPulse, pulse } = EVL;
+  assert.equal(evPulse([], 1), 0); assert.equal(evPulse(kick, 0.4), 0);
+  assert.equal(evPulse(kick, 0.5, 0, 0.1), 1);                                   // no attack: full on the hit
+  assert.ok(Math.abs(evPulse(kick, 1.1, 0, 0.1) - 0.8 * Math.exp(-1)) < 1e-12, 'scaled by velocity, decaying');
+  assert.ok(Math.abs(evPulse(kick, 1.005, 0.01, 0.1) - 0.4) < 1e-12, 'half-way up a 10 ms attack');
+  const loudThenSoft = [[1, 1], [1.05, 0.3]];
+  assert.ok(Math.abs(evPulse(loudThenSoft, 1.06, 0.02, 0.2) - pulse(1.06, 1, 0.02, 0.2)) < 1e-12,
+    'a loud hit still outshines a soft one that has just started to rise');
+  assert.equal(evPulse([[0, 0.5], [0.01, 0.5], [0.02, 0.5]], 0.02, 0, 1), 0.5, 'a flurry is as bright as its brightest hit');
+  assert.ok(evPulse(kick, 2 + 1.3, 0, 0.1) < 1e-5, 'long after: nothing left');
+  assert.equal(evPulse([[1, 0.9]], 1), 0, 'the default attack starts at 0');         // [t, s] onsets read the same way
+  assert.ok(evPulse([[1, 0.9]], 1.005) > 0.89);
+  assert.equal(evPulse([[1]], 1, 0), 1, 'no strength: 1');
+});
+
+test('evChord: the chord sounding at t, null before the first', () => {
+  const ch = [[0, 1, 'Am'], [2, 1, 'F'], [4, 1, 'C'], [4, 1, 'G']];
+  assert.equal(EVL.evChord(ch, -1), null); assert.equal(EVL.evChord([], 1), null);
+  assert.equal(EVL.evChord(ch, 0), 'Am'); assert.equal(EVL.evChord(ch, 3.99), 'F'); assert.equal(EVL.evChord(ch, 4), 'G');
+});
+
+test('the events API is a binary search: it agrees with a scan over 100k events, at any t', () => {
+  const R = EVL.mulberry32(3), list = [];
+  for (let i = 0, t = 0; i < 100000; i++) { t += R() < 0.1 ? 0 : R() * 0.05; list.push([+t.toFixed(4), R()]); }   // ties included
+  const scanLast = t => { let j = -1; for (let i = 0; i < list.length; i++) if (list[i][0] <= t + 1e-6) j = i; return j; };
+  const end = list[list.length - 1][0];
+  for (let k = 0; k < 100; k++) {
+    const t = R() < 0.2 ? list[Math.floor(R() * list.length)][0] : (R() * 1.1 - 0.05) * end;
+    assert.equal(EVL.evLast(list, t), scanLast(t), `t ${t}`);
+  }
+  const t0 = performance.now();
+  for (let k = 0; k < 20000; k++) EVL.evPulse(list, R() * end, 0.005, 0.12);
+  assert.ok(performance.now() - t0 < 1000, 'fast enough for every frame');
+});
+
 test('strokeScale keeps covers from going hairline', () => {
   assert.equal(L.strokeScale(100), 0.8);
   assert.equal(L.strokeScale(600), 3);

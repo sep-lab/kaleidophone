@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { synthesize, drumEvents, twin, formatSpec, distribution, levelMap, defaultPeaks, ENVELOPES, FLUX_CEILING } from '../tools/synth.mjs';
+import crypto from 'node:crypto';
+import { synthesize, drumEvents, drumMidi, chordEvents, twin, formatSpec, distribution, levelMap, defaultPeaks, ENVELOPES, FLUX_CEILING, MIDI_DRUMS, STEMS } from '../tools/synth.mjs';
 import { CANVAS } from './helpers.mjs';
 
 const spec = {
@@ -205,10 +206,159 @@ test('a twin spec says nothing about the sound: coarse levels per section, no pe
     }
     assert.ok((s.voc || []).length <= 16, `${id}: voc windows, not syllables`);
     for (const groups of Object.values(s.events || {})) for (const wins of Object.values(groups)) assert.ok(wins.length <= 8, `${id}: event windows, not onsets`);
+    // chords: a short progression the grid plays round, never the song's changes in time
+    if (s.chords) {
+      assert.deepEqual(Object.keys(s.chords).filter(k => !['track', 'progression', 'every'].includes(k)), [], `${id}: chords are a track, a progression and a period`);
+      assert.ok(s.chords.progression.length <= 16, `${id}: a progression, not a transcription`);
+    }
   }
 });
 
 test('quantize stores bytes, like the toolkit-era packs', () => {
   const p = synthesize({ ...spec, quantize: 255 });
   assert.ok(p.bass.every(v => Number.isInteger(v) && v >= 0 && v <= 255));
+});
+
+// ---------------------------------------------------------------- the drums as MIDI, and stems
+test('the drums it plays are in the pack as MIDI: events.midi.kick / .snare / .hat / .crash, [t, velocity, 0.05, pitch]', () => {
+  const s = { seed: 7, fps: 100, dur: 64, bpm: 100, downbeat: 0.6,
+    sections: [{ from: 0, kick: 'none', snare: false }, { from: 20.6, kick: '1-3' }, { from: 40.6, kick: 'none', snare: false, hats: false }, { from: 50.2 }] };
+  const M = synthesize(s).events.midi, ev = drumEvents(s);
+  assert.deepEqual(Object.keys(M), ['kick', 'snare', 'hat', 'crash']);
+  assert.deepEqual(M, drumMidi(ev));
+  for (const [track, list] of Object.entries(M)) {
+    assert.ok(list.length > 0, track);
+    list.forEach(([t, v, d, pitch], i) => {
+      assert.ok(t >= 0 && t < s.dur && (!i || t >= list[i - 1][0]), `${track}: in order, inside the song`);
+      assert.ok(v > 0 && v <= 1 && d === 0.05 && Number.isInteger(pitch), `${track}: [${t}, ${v}, ${d}, ${pitch}]`);
+    });
+  }
+  // the hits the envelopes were built from, rounded to 0.1 ms; the open hats ride in `hat` as note 46
+  assert.deepEqual(M.kick.map(e => e[0]), ev.kick.map(([t]) => +t.toFixed(4)));
+  assert.deepEqual(M.snare.map(e => e[0]), ev.snare.map(([t]) => +t.toFixed(4)));
+  assert.equal(M.hat.length, ev.hat.length + ev.open.length);
+  assert.deepEqual(M.hat.filter(e => e[3] === MIDI_DRUMS.open).map(e => e[0]), ev.open.map(([t]) => +t.toFixed(4)));
+  assert.ok(M.kick.every(e => e[3] === 36) && M.snare.every(e => e[3] === 38) && M.hat.every(e => e[3] === 42 || e[3] === 46) && M.crash.every(e => e[3] === 49));
+  assert.deepEqual(M.crash.map(e => e[0]), [20.6, 50.2], 'a crash opens each section with drums');
+  assert.ok(M.snare.some(e => e[1] < 0.5), 'the ghost notes are soft');
+  assert.ok(M.kick.every(([t]) => t >= 20.6 && (t < 40.6 || t >= 50.2)), 'no kick where a section has none');
+  // a spec's own events sit beside it; a group of its own named "midi" would be overwritten, so it is refused
+  const both = synthesize({ ...spec }).events;
+  assert.deepEqual(Object.keys(both), ['stutter', 'midi']);
+  assert.throws(() => synthesize({ ...spec, events: { midi: { k: [[1, 2]] } } }), /can't have a group named "midi"/);
+});
+
+// sha256 of each piece's v0.3.0 twin pack as JSON (Node 22): the gallery and CI render from these, so a
+// spec must still produce them byte for byte, apart from what is new since: events.midi, and stems and
+// events.chords where the spec asks for them (the template's twin plays chords now; nothing else moved).
+const V030 = {
+  'hamechi-manzor-dare': '24a17ceb9667c5d0a06a2095bade3481f65c580d30a7b90c0669ba9ff1c7c5f3',
+  minus: '77a00c7c595cd6ff2fefbf4282f9fa52a6a1c3c966b70ad66e62a680ba423149',
+  'same-as-you': 'b5a2b7e32dfd0c4ec4aadf42aa50d4f426ce06fd8d6df77987c848d47e406344',
+  'should-i': '2336386ecbbb916fd52a7e94bb7a4bd44fe83363eb4ee86392da05ff8d8f04d9',
+  template: 'bfd62876e947b37a1ead7d8b59584e53ae9a687c71cd3c54c8e5ffd5b1db2851',
+};
+const withoutNew = p => { const q = { ...p, events: { ...p.events } }; delete q.events.midi; delete q.events.chords; if (!Object.keys(q.events).length) delete q.events; delete q.stems; return q; };
+
+test('every piece\'s twin is byte-identical to v0.3.0\'s, apart from events.midi (and stems and events.chords, where asked for)', () => {
+  for (const [id, sha] of Object.entries(V030)) {
+    const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', id, 'synthetic.json'), 'utf8'));
+    const got = crypto.createHash('sha256').update(JSON.stringify(withoutNew(synthesize(spec)))).digest('hex');
+    assert.equal(got, sha, `${id}: its twin pack changed. If you re-measured or edited pieces/${id}/synthetic.json on purpose, update its hash here; if not, the generator changed what every render and the gallery see`);
+  }
+});
+
+test('stems: true adds stems and changes nothing else', () => {
+  const a = synthesize(spec), b = synthesize({ ...spec, stems: true });
+  assert.equal(a.stems, undefined);
+  assert.deepEqual(withoutNew(b), withoutNew(a));
+  assert.deepEqual(b.events.midi, a.events.midi);
+  assert.deepEqual(Object.keys(b).slice(-2), ['events', 'stems'], 'the new keys come last');
+});
+
+test('stems: the master\'s envelopes per part, each normalised on its own like a real pack\'s; a part that doesn\'t play reads 0', () => {
+  const s = { ...spec, dur: 16, keys: undefined, stems: true };
+  const p = synthesize(s), n = p.rms.length, keys = ['bass', 'lowmid', 'mid', 'high', 'air', 'rms', 'rmsdb', 'flux', 'bflux', 'hflux', 'cent'];
+  assert.deepEqual(Object.keys(p.stems), STEMS);
+  for (const st of STEMS) {
+    assert.deepEqual(Object.keys(p.stems[st]), keys, `${st}: the master's envelopes, voc aside`);
+    for (const k of keys) {
+      const a = p.stems[st][k], on = a.filter(v => (k === 'rmsdb' ? v > -100 : v > 0));
+      assert.equal(a.length, n, `${st}.${k}`);
+      if (k === 'rmsdb') { assert.ok(a.every((v, i) => v >= -100 && v <= p.rmsdb[i] + 0.05), `${st}.rmsdb: never louder than the whole`); continue; }
+      assert.ok(a.every(v => v >= 0 && v <= (/flux/.test(k) ? FLUX_CEILING : 1)), `${st}.${k} in range`);
+      const top = Math.max(...a);
+      if (on.length && k !== 'cent') assert.ok(/flux/.test(k) ? top >= 1 && top <= FLUX_CEILING : top === 1, `${st}.${k}: its own loudest reads 1 (a flux: its 99.5th), got ${top}`);
+    }
+  }
+  const at = (st, k, a, b) => p.stems[st][k].slice(Math.round(a * 100), Math.round(b * 100)), max = a => Math.max(...a);
+  assert.ok(STEMS.filter(st => st !== 'vocals').every(st => max(p.stems[st].rms) === 1));
+  assert.equal(max(at('vocals', 'rms', 0, 3.9)), 0, 'no vocals before the voc window');
+  assert.ok(max(at('vocals', 'mid', 4.2, 7.8)) > 0.5 && max(at('vocals', 'cent', 4.2, 7.8)) > 0, 'singing in it');
+  assert.ok(Math.min(...at('vocals', 'rmsdb', 0, 3.9)) === -100, 'digital silence in dB');
+  assert.equal(max(p.stems.bass.mid), 0, 'the bassline is all bass');
+  assert.equal(max(at('drums', 'bass', 0, 3.9)), 0, 'no kick in the first section: nothing in the drums\' bass');
+  // consistent with the master: the drums' bass flux rises on the kicks the pack says were played
+  const kickAt = p.events.midi.kick.map(([t]) => Math.round(t * 100)), bf = p.stems.drums.bflux;
+  const onKick = kickAt.map(i => Math.max(...bf.slice(i, i + 3))), mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  assert.ok(mean(onKick) > 5 * mean(bf), `the drums' bflux on the kicks ${mean(onKick).toFixed(2)} vs everywhere ${mean(bf).toFixed(2)}`);
+  const q = synthesize({ ...s, quantize: 255 });
+  assert.ok(STEMS.every(st => keys.filter(k => k !== 'rmsdb').every(k => q.stems[st][k].every(v => Number.isInteger(v) && v >= 0 && v <= 255))), 'quantize stores the stems as bytes too');
+  assert.deepEqual(Object.keys(synthesize({ ...s, keys: ['bass', 'rms', 'voc'] }).stems.drums), ['bass', 'rms'], 'the spec\'s keys');
+});
+
+test('--twin keeps "stems" when it re-measures a piece', () => {
+  const real = synthesize({ ...spec, keys: undefined });
+  const t = twin(real, { base: { ...spec, stems: true } });
+  assert.equal(t.stems, true);
+  assert.deepEqual(Object.keys(t).slice(-2), ['stems', 'sections']);
+});
+
+// ---------------------------------------------------------------- chords
+const CHORDS = { track: 'keys', progression: ['Am', 'F', 'C', 'G'], every: 'bar' };
+
+test('chords: a progression on the bar lines, as a chord track -- events.chords.<track> = [[t, 1, name], ...]', () => {
+  const p = synthesize({ ...spec, chords: CHORDS });                  // 120 BPM from 0.25 s: a bar line every 2 s
+  assert.deepEqual(p.events.chords, { keys: [[0.25, 1, 'Am'], [2.25, 1, 'F'], [4.25, 1, 'C'], [6.25, 1, 'G'], [8.25, 1, 'Am'], [10.25, 1, 'F']] });
+  assert.deepEqual(chordEvents({ ...spec, chords: CHORDS }), p.events.chords);
+  // the progression starts on the first downbeat; a bar line before it plays the end of it, into chord 1
+  const late = chordEvents({ bpm: 120, dur: 9, downbeat: 3, chords: CHORDS }).keys;
+  assert.deepEqual(late, [[1, 1, 'G'], [3, 1, 'Am'], [5, 1, 'F'], [7, 1, 'C']]);
+  // every beat, every n bars; the track named as asked; times rounded to 0.1 ms, like the drums
+  assert.deepEqual(chordEvents({ bpm: 120, dur: 2, chords: { progression: ['C', 'G'], every: 'beat' } }), { keys: [[0, 1, 'C'], [0.5, 1, 'G'], [1, 1, 'C'], [1.5, 1, 'G']] });
+  assert.deepEqual(chordEvents({ bpm: 120, dur: 12, chords: { track: 'pad', progression: ['Dm'], every: 2 } }), { pad: [[0, 1, 'Dm'], [4, 1, 'Dm'], [8, 1, 'Dm']] });
+  assert.deepEqual(chordEvents({ bpm: 90, dur: 6, downbeat: 0.1234567, chords: CHORDS }).keys.map(e => e[0]), [0.1235, 2.7901, 5.4568]);
+});
+
+test('chords change nothing else: the envelopes, the drums and the other events are the pack a spec without them makes', () => {
+  const a = synthesize(spec), b = synthesize({ ...spec, chords: CHORDS });
+  assert.deepEqual(withoutNew(b), withoutNew(a));
+  assert.deepEqual(b.events.midi, a.events.midi);
+  assert.deepEqual(Object.keys(b.events), ['stutter', 'midi', 'chords'], 'the new list comes last');
+  assert.equal(JSON.stringify({ ...b, events: { stutter: b.events.stutter, midi: b.events.midi } }), JSON.stringify(a), 'byte for byte');
+});
+
+test('chords: a spec that can\'t be played is refused, saying what is wrong', () => {
+  const bad = (chords, re) => assert.throws(() => synthesize({ ...spec, chords }), re);
+  bad('Am F C G', /"chords" must be \{"track": "keys", "progression"/);
+  bad([CHORDS], /"chords" must be \{"track"/);
+  bad({ ...CHORDS, track: 'my.keys' }, /"track" must be a name of letters, digits, - and _ \(it is a key: events\.chords\.<track>\), got "my\.keys"/);
+  bad({ ...CHORDS, progression: [] }, /"progression" must be a non-empty list of chord names, got \[\]/);
+  bad({ ...CHORDS, progression: ['Am', ''] }, /"progression" must be a non-empty list of chord names/);
+  bad({ ...CHORDS, every: 'bars' }, /"every" must be "bar", "beat" or a number of bars, got "bars"/);
+  bad({ ...CHORDS, every: 0 }, /"every" must be "bar", "beat" or a number of bars, got 0/);
+  // a spec's own events can't take the group the progression is written to
+  assert.throws(() => synthesize({ ...spec, events: { chords: { k: [[1, 2]] } } }), /can't have a group named "chords": events\.chords is the chord progression/);
+});
+
+test('--twin keeps "chords" when it re-measures a piece; the template\'s twin changes chord into bar 7', () => {
+  const t = twin(synthesize({ ...spec, keys: undefined }), { base: { ...spec, chords: CHORDS, stems: true } });
+  assert.deepEqual(t.chords, CHORDS);
+  assert.deepEqual(Object.keys(t).slice(-3), ['chords', 'stems', 'sections']);
+  assert.deepEqual(JSON.parse(formatSpec(t)).chords, CHORDS);
+  // what the template's droste turns on: a change of chord on the bar line where its endings start
+  const tpl = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', 'template', 'synthetic.json'), 'utf8'));
+  const at = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', 'template', 'piece.json'), 'utf8')).variants.ending.at;
+  const ch = Object.values(synthesize(tpl).events.chords)[0], i = ch.findIndex(e => e[0] === at);
+  assert.ok(i > 0 && ch[i][2] !== ch[i - 1][2], `a new chord at ${at} s: ${JSON.stringify(ch.slice(i - 1, i + 1))}`);
 });

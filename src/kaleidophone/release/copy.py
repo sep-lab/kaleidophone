@@ -18,7 +18,11 @@ MIN_PINNED_COMMENT_TIME = 15.0
 MIN_DURATION_FOR_PINNED_COMMENT = 45.0
 
 
-def generate_release_pack(brief: CreativeBrief, analysis: AudioAnalysis) -> str:
+def generate_release_pack(
+    brief: CreativeBrief, analysis: AudioAnalysis, drafts: list[str] | None = None
+) -> str:
+    """The pack as markdown. ``drafts`` -- already-rendered lines, e.g. a local model's caption
+    drafts (`kaleidophone.release.local_llm`) -- goes after the posting order, before the notes."""
     rel = brief.release or ReleaseConfig()
     out: list[str] = []
     w = out.append
@@ -51,6 +55,8 @@ def generate_release_pack(brief: CreativeBrief, analysis: AudioAnalysis) -> str:
 
     out.extend(_timed_comments(brief, analysis))
     out.extend(_posting_order(rel))
+    if drafts:
+        out.extend(drafts)
     out.extend(_notes_for_you(brief, analysis, rel))
     return "\n".join(out).rstrip() + "\n"
 
@@ -251,6 +257,9 @@ def _mood_line(brief: CreativeBrief) -> str:
     return ", ".join(w.lower() for w in words[:3]) if words else ""
 
 
+mood_line = _mood_line  # public: the CLI hands it to a local model as mood words
+
+
 def _short_caption(brief: CreativeBrief, rel: ReleaseConfig) -> str:
     who = f" — {brief.song.artist}" if brief.song.artist else ""
     mood = _mood_line(brief)
@@ -277,3 +286,44 @@ def fmt_time(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)
     h, m = divmod(m, 60)
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def minimal_brief(
+    audio_path: str,
+    title: str,
+    duration: float,
+    *,
+    artist: str | None = None,
+    concept: str | None = None,
+    primary_language: str = "en",
+    secondary_language: str | None = None,
+) -> CreativeBrief:
+    """A brief for a release that has no footage brief -- a canvas piece's, say -- so `kit` can
+    write its pack from the song alone: one station, one section covering the song."""
+    return CreativeBrief(
+        song={"title": title, "artist": artist, "audio_path": audio_path},
+        stations=[{"name": "song"}],
+        sections=[{"name": "the song", "start": 0.0, "end": max(duration, 0.1), "station": "song"}],
+        release={
+            "concept": concept,
+            "primary_language": primary_language,
+            "secondary_language": secondary_language,
+        },
+    )
+
+
+def release_facts(brief: CreativeBrief, analysis: AudioAnalysis) -> list[str]:
+    """What the tool knows for certain about the release, in words a caption writer can use:
+    the biggest change, the chapters, the date. Not the length or the tempo -- true, and an
+    invitation to a filler line ("three minutes at 96 BPM")."""
+    rel = brief.release or ReleaseConfig()
+    facts = []
+    jump = _strongest_jump(analysis)
+    if jump is not None:
+        facts.append(f"the biggest change in the song comes at {fmt_time(jump)}")
+    if len(brief.sections) > 1:
+        facts.append("chapters: " + ", ".join(f"{fmt_time(s.start)} {s.name}" for s in brief.sections))
+    if rel.date:
+        facts.append(f"release date {rel.date}")
+    return facts
+

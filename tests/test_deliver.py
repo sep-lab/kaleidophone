@@ -19,14 +19,17 @@ else.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import shutil
 import subprocess
 import textwrap
+from typing import ClassVar
 
 import numpy as np
 import pytest
+import yaml
 
 from kaleidophone.render import _ffmpeg_util as fu
 from kaleidophone.render import deliver as dv
@@ -53,6 +56,24 @@ Input #0, wav, from 'Song.wav':
 
 def loudnorm_log(integrated: str = "-8.81", true_peak: str = "+6.05") -> str:
     return LOUDNORM_LOG.replace('"-8.81"', f'"{integrated}"').replace('"+6.05"', f'"{true_peak}"')
+
+
+def trace_log(init_qp: str = "-6") -> str:
+    """trace_headers' real shape (ffmpeg 6.1): the extradata's SPS and PPS,
+    field by field, then the first packet. An x264 CRF sets pic_init_qp."""
+    return textwrap.dedent(
+        f"""\
+        [trace_headers @ 0x1] Extradata
+        [trace_headers @ 0x1] 4 bytes left at end of AVCC header.
+        [trace_headers @ 0x1] Sequence Parameter Set
+        [trace_headers @ 0x1] 8           profile_idc                                          01100100 = 100
+        [trace_headers @ 0x1] 24          level_idc                                            00011111 = 31
+        [trace_headers @ 0x1] Picture Parameter Set
+        [trace_headers @ 0x1] 18          pic_init_qp_minus26                                   0001101 = {init_qp}
+        [trace_headers @ 0x1] Packet: 11418 bytes, key frame, pts 0, dts -2048, duration 1024.
+        [trace_headers @ 0x1] 0           forbidden_zero_bit                                          0 = 0
+        """
+    )
 
 
 def ebur128_log(integrated: str, peak: str) -> str:
@@ -142,6 +163,11 @@ class FakeFfmpeg:
         self.peaks = list(peaks)
         self.integrated = integrated
         self.loudnorm = loudnorm
+        # The preflight's look at each part's stream headers (trace_headers):
+        # answered from `headers` by file name, and kept out of `log` -- it is
+        # a check before the delivery, not a step --dry-run's script repeats.
+        self.traces: list[list[str]] = []
+        self.headers: dict[str, str] = {}
 
     def run(self, ffmpeg, args):
         self.runs.append(args)
@@ -152,6 +178,9 @@ class FakeFfmpeg:
                 fh.write(b"\0" * 2048)
 
     def run_measure(self, ffmpeg, args):
+        if "-bsf:v" in args:
+            self.traces.append(args)
+            return self.headers.get(os.path.basename(args[args.index("-i") + 1]), trace_log())
         self.measures.append(args)
         self.log.append(["-hide_banner", "-nostats", "-nostdin", *args])
         filters = args[args.index("-af") + 1]
@@ -1110,13 +1139,28 @@ def test_the_dry_run_keeps_every_ffmpeg_off_stdin(here):
             assert "-nostdin" in line, line
 
 
+def outside_the_manifest(script: str) -> list[str]:
+    """The script's lines less the planned manifest's: JSON under a quoted
+    here-document, which sh never expands (tested on its own, run, in
+    test_platforms_deliver.py)."""
+    lines, inside = [], False
+    for line in script.splitlines():
+        if inside:
+            inside = line != dv._MANIFEST_END
+            continue
+        inside = line.endswith(f"<<'{dv._MANIFEST_END}'")
+        lines.append(line)
+    return lines
+
+
 def test_an_out_name_cannot_inject_into_the_dry_run_script(here):
     """Every place the name reaches a command it is single-quoted; the only
-    bare copy is in a comment, and a newline -- the one way out of a
-    comment -- is refused by the sheet's validation."""
+    bare copies are in a comment, and in the planned manifest's quoted
+    here-document -- and a newline, the one way out of either, is refused by
+    the sheet's validation."""
     cuts = "  - {out: 'x $(touch pwned) `id`.mp4', t0: 0, dur: 4}\n"
     script = dv.delivery_script(rel_sheet(here, sheet_with("{mode: auto}", cuts=cuts)))
-    commands = [line for line in script.splitlines() if "pwned" in line and not line.lstrip().startswith("#")]
+    commands = [line for line in outside_the_manifest(script) if "pwned" in line and not line.lstrip().startswith("#")]
     assert len(commands) >= 4  # the encode, the measure, the printf, the check
     for line in commands:
         assert "'./x $(touch pwned) `id`.mp4'" in line or "'x $(touch pwned) `id`.mp4'" in line
@@ -1164,6 +1208,11 @@ case "$*" in
     printf 'alimiter AVOptions:\n   limit             <double>     ..F.A....T. set limit\n'
     if [ -n "$FAKE_LATENCY" ]; then printf '   latency           <boolean>    ..F.A....T. compensate delay\n'; fi
     exit 0;;
+  *"-h filter=drawtext"*)
+    if [ -n "$FAKE_DRAWTEXT" ]; then printf 'drawtext AVOptions:\n   text              <string>     ..FV.....T. set text\n'; fi
+    exit 0;;
+  *drawtext=*)
+    if [ -n "$FAKE_DRAWTEXT_FAILS" ]; then echo "Cannot find a valid font for the family Sans" >&2; exit 1; fi;;
   *loudnorm*)
     printf '{\n\t"input_i" : "%s",\n\t"input_tp" : "+6.05"\n}\n' "$FAKE_LUFS" >&2
     exit 0;;
@@ -1182,9 +1231,11 @@ case "$last" in *.mp4) : > "$last";; esac
 FAKE_FFPROBE = "#!/bin/sh\necho 1\n"
 
 
-def run_script(here, script: str, *, peaks=("-3.0",), lufs="-8.81", latency=True):
+def run_script(here, script: str, *, peaks=("-3.0",), lufs="-8.81", latency=True, drawtext="no"):
     """Run a --dry-run script under sh with the stand-ins; returns (the
-    process, every ffmpeg argv it ran, the ffmpeg path excluded)."""
+    process, every ffmpeg argv it ran, the ffmpeg path excluded). `drawtext`:
+    whether the stand-in has the filter -- "yes", "no", or "fails" (it has
+    it, and drawing fails)."""
     bin_dir = here / "fake-bin"
     bin_dir.mkdir(exist_ok=True)
     for name, body in (("ffmpeg", FAKE_FFMPEG), ("ffprobe", FAKE_FFPROBE)):
@@ -1199,6 +1250,8 @@ def run_script(here, script: str, *, peaks=("-3.0",), lufs="-8.81", latency=True
         "FAKE_PEAKS": str(here / "peaks.txt"),
         "FAKE_LUFS": lufs,
         "FAKE_LATENCY": "1" if latency else "",
+        "FAKE_DRAWTEXT": "" if drawtext == "no" else "1",
+        "FAKE_DRAWTEXT_FAILS": "1" if drawtext == "fails" else "",
     }
     proc = subprocess.run(["sh", "deliver.sh"], cwd=here, env=env, capture_output=True, text=True)
     log = (here / "ffmpeg.log").read_text().splitlines() if (here / "ffmpeg.log").exists() else []
@@ -1289,3 +1342,598 @@ def test_deliver_uses_the_public_quoting_and_bitrate_check():
     _ffmpeg_util (the staff-engineering review found this module importing
     two private names from others)."""
     assert dv.concat_quote is fu.concat_quote and dv.BITRATE_RE is fu.BITRATE_RE
+
+
+# --------------------------------------------------------------------------
+# endings as variants (issue #58)
+# --------------------------------------------------------------------------
+#
+# A piece rendered with `render.mjs --endings`: a body from song time 51 s to
+# the join at 61 s, and two endings from 61 s to the window's end at 67 s --
+# 240 and 144 frames at 24 fps. Each ending is delivered as a file of its
+# own: the body and that ending joined, the master under the whole 16 s.
+
+MANIFEST = "_work/reel.variants.json"
+REEL = "  - {out: SONG_reel.mp4, t0: 51, dur: 16, endings: _work/reel.variants.json}\n"
+CARD_REEL = (
+    "  - {out: SONG_reel.mp4, t0: 51, dur: 16, card: _work/card_silent.mp4, video_from: 53, "
+    "endings: _work/reel.variants.json}\n"
+)
+LISTED = (
+    "  - out: SONG_reel.mp4\n    t0: 51\n    dur: 16\n    body: _work/reel.body.mp4\n    at: 61\n"
+    "    endings:\n      - {name: rain, file: _work/reel.ending-rain.mp4}\n"
+    "      - {name: door, file: _work/reel.ending-door.mp4}\n"
+)
+
+
+def variants(**overrides) -> dict:
+    """render.mjs's manifest, as the interface fixes it."""
+    data = {
+        "piece": "template", "axis": "ending", "at": 61.0, "t0": 51.0, "dur": 16.0, "fps": 24,
+        "body": {"file": "reel.body.mp4", "frames": 240},
+        "endings": [
+            {"option": "rain", "file": "reel.ending-rain.mp4", "frames": 144},
+            {"option": "door", "file": "reel.ending-door.mp4", "frames": 144},
+        ],
+        "stream": {"codec": "h264", "profile": "High", "level": 31, "pix_fmt": "yuv420p", "width": 1080,
+                   "height": 1920, "fps": 24, "time_base": "1/12288", "sar": "1:1"},
+    }
+    data.update(overrides)
+    return data
+
+
+def write_variants(where, **overrides) -> None:
+    (where / "_work").mkdir(exist_ok=True)
+    (where / MANIFEST).write_text(json.dumps(variants(**overrides)))
+
+
+class FakeProbe:
+    """ffprobe for the parts (and the delivered files): per file name, its
+    frame count, any `stream=` entry, and its keyframes. By default every
+    part is one encode and starts on a keyframe."""
+
+    STREAM: ClassVar[dict[str, str]] = {
+        "codec_name": "h264", "profile": "High", "level": "31", "pix_fmt": "yuv420p", "width": "1080",
+        "height": "1920", "r_frame_rate": "24/1", "time_base": "1/12288", "sample_aspect_ratio": "1:1",
+        "start_time": "0.000000",
+    }
+
+    def __init__(self):
+        self.frames = {
+            "reel.body.mp4": "240", "reel.ending-rain.mp4": "144", "reel.ending-door.mp4": "144",
+            "card_silent.mp4": "48", "SONG_reel.rain.mp4": "384", "SONG_reel.door.mp4": "384",
+        }
+        self.entries: dict[str, dict[str, str]] = {}
+        self.keyframes: dict[str, list[float]] = {"full_silent.mp4": [0.0, 26.25, 51.0, 53.0]}
+
+    def stream(self, path, stream, entry, count_packets=False):
+        name = os.path.basename(path)
+        if entry == "nb_read_packets":
+            return self.frames.get(name)
+        return self.entries.get(name, {}).get(entry, self.STREAM.get(entry))
+
+    def keyframes_of(self, path):
+        return self.keyframes.get(os.path.basename(path), [0.0])
+
+
+@pytest.fixture
+def parts(media, fake, monkeypatch):
+    """The parts and their manifest next to the other placeholders, and an
+    ffprobe that answers for them."""
+    for name in ("reel.body.mp4", "reel.ending-rain.mp4", "reel.ending-door.mp4"):
+        (media / "_work" / name).write_bytes(b"placeholder")
+    write_variants(media)
+    probe = FakeProbe()
+    monkeypatch.setattr(dv, "probe_stream", probe.stream)
+    monkeypatch.setattr(dv, "probe_keyframes", probe.keyframes_of)
+    return probe
+
+
+def capture_listings(fake, monkeypatch) -> list[str]:
+    """Every concat list, read as ffmpeg is handed it."""
+    listings = []
+
+    def run(ffmpeg, args):
+        if "concat" in args:
+            listings.append(open(args[args.index("-i") + 1]).read())
+        fake.run(ffmpeg, args)
+
+    monkeypatch.setattr(dv, "run", run)
+    return listings
+
+
+# --- the sheet ---------------------------------------------------------------
+def test_a_cut_takes_its_endings_from_a_manifest_or_lists_them(tmp_path):
+    from_manifest = dv.load_sheet(write_sheet(tmp_path, sheet_with(cuts=REEL))).cuts[0]
+    assert from_manifest.endings == MANIFEST and from_manifest.body is None
+    listed = dv.load_sheet(write_sheet(tmp_path, sheet_with(cuts=LISTED))).cuts[0]
+    assert [(e.name, e.file) for e in listed.endings] == [
+        ("rain", "_work/reel.ending-rain.mp4"), ("door", "_work/reel.ending-door.mp4")
+    ]
+    assert (listed.body, listed.at) == ("_work/reel.body.mp4", 61)
+
+
+def test_a_sheet_whose_every_cut_has_endings_needs_no_silent_render(tmp_path):
+    sheet = dv.load_sheet(write_sheet(tmp_path, "audio: Song.wav\ncuts:\n" + REEL))
+    assert sheet.silent is None
+    with pytest.raises(ValueError, match=r"`silent` \(the render\) is required: x.mp4 is cut from it"):
+        dv.load_sheet(write_sheet(tmp_path, "audio: Song.wav\ncuts:\n" + REEL + "  - {out: x.mp4, t0: 0, dur: 1}\n"))
+
+
+def _listed(extra: str = "", endings: str = "[{name: rain, file: r.mp4}, {name: door, file: d.mp4}]") -> str:
+    return sheet_with(cuts=f"  - {{out: r.mp4, t0: 51, dur: 16, body: b.mp4, at: 61, endings: {endings}{extra}}}\n")
+
+
+@pytest.mark.parametrize(
+    ("text", "match"),
+    [
+        (sheet_with(cuts="  - {out: r.mp4, t0: 51, dur: 16, endings: v.json, at: 61}\n"), "at come from its variants manifest"),
+        (sheet_with(cuts="  - {out: r.mp4, t0: 51, dur: 16, body: b.mp4}\n"), "body go with a list of `endings`"),
+        (sheet_with(cuts="  - {out: r.mp4, t0: 51, dur: 16, endings: [{name: a, file: a.mp4}]}\n"), "needs `body`"),
+        (_listed(endings="[]"), "lists no endings"),
+        (_listed(endings="5"), "a variants manifest \\(its path\\) or a list"),
+        (_listed(endings="[{name: rain}]"), r"cuts\[0\].endings: \[0\].file: Field required"),
+        (_listed(endings="[{name: a, file: a.mp4}, {name: b, file: b.mp4, oops: 1}]"), r"\[1\].oops: Extra inputs"),
+        (_listed(endings="[rain]"), r"\[0\]: Input should be a valid dictionary"),
+        (_listed(endings="[{name: a/b, file: a.mp4}]"), "must be a plain name"),
+        (_listed(endings="[{name: .hidden, file: a.mp4}]"), "must be a plain name"),
+        (_listed(endings="[{name: 'rain ', file: a.mp4}]"), "must be a plain name"),
+        (_listed(endings="[{name: Rain, file: a.mp4}, {name: rain, file: b.mp4}]"), "'Rain' and 'rain' would write one file"),
+        (_listed(endings="[{name: rain, file: \"a\\n.mp4\"}]"), "control character"),
+        (_listed(", video_from: 62, card: c.mp4"), "the card has to end in the body"),
+        (sheet_with(cuts="  - {out: r.mp4, t0: 51, dur: 16, body: b.mp4, at: 70, endings: [{name: a, file: a.mp4}]}\n"),
+         r"at \(70\) must fall inside the cut \(51..67\)"),
+        (sheet_with(cuts="  - {out: r.mp4, t0: 51, dur: 16, body: b.mp4, at: 61.01, endings: [{name: a, file: a.mp4}]}\n"),
+         "at 61.01 isn't on the 24 fps frame grid"),
+        (sheet_with(cuts="  - {out: r.mp4, t0: 51, dur: 16, body: \"b\\n.mp4\", at: 61, endings: [{name: a, file: a.mp4}]}\n"),
+         "control character"),
+        (sheet_with(cuts="  - {out: r.mp4, t0: 51, dur: 16, endings: \"v\\n.json\"}\n"), "control character"),
+        (_listed() + "  - {out: r.rain.mp4, t0: 0, dur: 4}\n", "two cuts write 'r.rain.mp4'"),
+        (sheet_with(cuts="  - {out: a.mp4, t0: 0, dur: 4, endings: v.json}\n  - {out: a.mov, t0: 0, dur: 4, endings: w.json}\n"),
+         "two cuts write 'a.endings.jpg'"),
+    ],
+)
+def test_a_sheet_with_endings_that_cant_be_delivered_says_why(tmp_path, text, match):
+    with pytest.raises(ValueError, match=match):
+        dv.load_sheet(write_sheet(tmp_path, text))
+
+
+def test_each_ending_is_delivered_beside_its_cut_and_shown_on_one_contact_sheet():
+    assert dv.ending_out("reels/SONG_reel.mp4", "rain") == "reels/SONG_reel.rain.mp4"
+    assert dv.ending_out("SONG.MOV", "door") == "SONG.door.MOV"
+    assert dv.contact_sheet_out("reels/SONG_reel.m4v") == "reels/SONG_reel.endings.jpg"
+
+
+# --- the manifest ---------------------------------------------------------------
+def test_the_manifests_files_sit_next_to_it(here):
+    write_variants(here)
+    sheet = dv.load_sheet(rel_sheet(here, sheet_with(cuts=REEL)))
+    (resolved,) = dv._resolve_endings(sheet, dv._paths("deliver.yaml", None)).values()
+    assert resolved.body == "_work/reel.body.mp4" and resolved.frames == 240
+    assert [(e.name, e.file, e.frames) for e in resolved.endings] == [
+        ("rain", "_work/reel.ending-rain.mp4", 144), ("door", "_work/reel.ending-door.mp4", 144)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("overrides", "extra", "problem"),
+    [
+        ({"fps": 12}, {}, "its variants were rendered at 12 fps; the sheet's fps is 24"),
+        ({"t0": 50.0, "at": 60.0}, {}, "its variants start at song time 50.000 s, the cut at 51.000 s"),
+        ({}, {"silent_start": "1"},
+         "its variants start at song time 51.000 s, the cut at song time 52.000 s (silent_start 1 + t0 51)"),
+        ({"dur": 20.0}, {}, "its variants run 20 s, the cut 16 s"),
+        ({"at": 80.0}, {}, "its manifest's at (80 s) isn't inside its window (51..67 s)"),
+        ({"body": {"file": "reel.body.mp4", "frames": 239}, "endings": [{"option": "rain", "file": "r.mp4", "frames": 145}]},
+         {}, "its body has 239 frames, but 51..61 s at 24 fps is 240"),
+        ({"endings": [{"option": "rain", "file": "r.mp4", "frames": 143}]}, {},
+         "ending 'rain' has 143 frames: after the body's 240 that is 383, and the cut is 384"),
+        ({"endings": [{"option": "rain", "file": "r.mp4", "frames": 144}, {"option": "RAIN", "file": "s.mp4", "frames": 144}]},
+         {}, "two endings named 'rain' and 'RAIN' would write one file"),
+    ],
+)
+def test_a_manifest_that_doesnt_fit_its_cut_is_refused_in_one_line(tmp_path, overrides, extra, problem):
+    write_variants(tmp_path, **overrides)
+    with pytest.raises(ValueError) as exc:
+        dv.delivery_script(write_sheet(tmp_path, sheet_with(cuts=REEL, **extra)))
+    assert str(exc.value).splitlines() == ["the endings don't fit their cuts:", f"  SONG_reel.mp4: {problem}"]
+
+
+def test_a_card_that_runs_past_the_join_is_refused(tmp_path):
+    write_variants(tmp_path, body={"file": "reel.body.mp4", "frames": 240}, at=61.0)
+    cuts = "  - {out: SONG_reel.mp4, t0: 51, dur: 16, card: c.mp4, video_from: 66, endings: _work/reel.variants.json}\n"
+    with pytest.raises(ValueError, match="its card \\(360 frames\\) runs to or past the join at frame 240"):
+        dv.delivery_script(write_sheet(tmp_path, sheet_with(cuts=cuts)))
+
+
+@pytest.mark.parametrize(
+    ("content", "match"),
+    [
+        ("{not json", "is not JSON"),
+        ("[1, 2]", "expected an object with body and endings"),
+        (json.dumps({k: v for k, v in variants().items() if k != "body"}), "is not a variants manifest: body: Field required"),
+        (json.dumps(variants(body={"file": "../reel.body.mp4", "frames": 240})), "must be a file name next to the manifest"),
+        (json.dumps(variants(body={"file": "reel.body.mp4", "frames": 0})), r"body.frames: Input should be greater than"),
+        (json.dumps(variants(endings=[])), "endings: List should have at least 1 item"),
+    ],
+)
+def test_a_malformed_manifest_is_refused_in_one_line(tmp_path, content, match):
+    (tmp_path / "_work").mkdir()
+    (tmp_path / MANIFEST).write_text(content)
+    with pytest.raises(ValueError, match=match) as exc:
+        dv.delivery_script(write_sheet(tmp_path, sheet_with(cuts=REEL)))
+    assert len(str(exc.value).splitlines()) == 1
+
+
+def test_a_missing_manifest_is_a_file_not_found(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        dv.delivery_script(write_sheet(tmp_path, sheet_with(cuts=REEL)))
+
+
+def test_a_manifests_endings_cant_overwrite_another_cut(tmp_path):
+    write_variants(tmp_path)
+    with pytest.raises(ValueError, match=r"two cuts write 'SONG_reel\.door\.mp4'"):
+        dv.delivery_script(write_sheet(tmp_path, sheet_with(cuts=REEL + "  - {out: SONG_reel.door.mp4, t0: 0, dur: 4}\n")))
+
+
+# --- the joins, the mux, the guard ------------------------------------------
+def test_each_ending_is_the_body_and_the_ending_joined_then_muxed_under_the_whole_cut(parts, fake, media, monkeypatch):
+    listings = capture_listings(fake, monkeypatch)
+    logged = []
+    rain, door = dv.deliver(write_sheet(media, sheet_with(cuts=REEL)), log=logged.append)
+    join_rain, join_door, mux_rain, mux_door, contact = fake.runs
+    assert listings == [
+        "file '../../_work/reel.body.mp4'\nfile '../../_work/reel.ending-rain.mp4'\n",
+        "file '../../_work/reel.body.mp4'\nfile '../../_work/reel.ending-door.mp4'\n",
+    ]
+    assert arg_after(join_rain, "-c") == "copy" and join_rain[-1].endswith("cut01.e01.silent.mp4")
+    for mux, join in ((mux_rain, join_rain), (mux_door, join_door)):
+        assert arg_after(mux, "-i", 0) == join[-1]  # the joined picture, whole
+        assert mux.index("-ss") > mux.index("-i") and arg_after(mux, "-ss") == "51.000000"  # the audio's seek only
+        assert arg_after(mux, "-t") == "16.000000" and arg_after(mux, "-frames:v") == "384"
+    assert mux_rain[-1].endswith("SONG_reel.rain.mp4") and mux_door[-1].endswith("SONG_reel.door.mp4")
+    assert (rain.cut, rain.ending, door.ending, rain.frames_expected) == ("SONG_reel.mp4", "rain", "door", 384)
+    assert rain.contact_sheet is door.contact_sheet and rain.contact_sheet.endings == ("rain", "door")
+    assert contact[-1].endswith("SONG_reel.endings.jpg") and rain.frames == 384
+    assert "SONG_reel.mp4: the body and each of 2 endings, joined by stream copy" in logged
+    assert not (media / ".kaleidophone-cache").exists()
+
+
+def test_endings_listed_in_the_sheet_join_the_same_way(parts, fake, media, monkeypatch):
+    listings = capture_listings(fake, monkeypatch)
+    dv.deliver(write_sheet(media, sheet_with(cuts=LISTED)))
+    assert listings[1] == "file '../../_work/reel.body.mp4'\nfile '../../_work/reel.ending-door.mp4'\n"
+
+
+def test_the_endings_share_the_masters_one_gain_and_are_stepped_together(parts, fake, media):
+    """The door ending comes out at -0.2 dBTP, 1.8 dB over a -2 dBTP ceiling:
+    both endings go again, 2 dB down -- one gain per master."""
+    fake.peaks = [-2.5, -0.2, -4.4, -2.3]
+    logged = []
+    rain, door = dv.deliver(write_sheet(media, sheet_with("{mode: auto}", cuts=REEL)), log=logged.append)
+    assert [arg_after(a, "-af").split(",")[0] for a in fake.encodes] == ["volume=0.00dB"] * 2 + ["volume=-2.00dB"] * 2
+    assert rain.gain_db == door.gain_db == -2.0 and (rain.true_peak, door.true_peak) == (-4.4, -2.3)
+    assert any(line.startswith("SONG_reel.door.mp4 peaked at -0.2 dBTP") for line in logged)
+    assert [os.path.basename(m[m.index("-i") + 1]) for m in fake.peak_measures] == [
+        "SONG_reel.rain.mp4", "SONG_reel.door.mp4"
+    ] * 2
+
+
+def test_a_card_cut_with_endings_puts_the_card_in_front_of_every_join(parts, fake, media, monkeypatch):
+    parts.keyframes["reel.body.mp4"] = [0.0, 2.0]
+    listings = capture_listings(fake, monkeypatch)
+    dv.deliver(write_sheet(media, sheet_with(cuts=CARD_REEL)))
+    tail = fake.runs[0]
+    assert arg_after(tail, "-ss") == "2.000000" and arg_after(tail, "-i").endswith("reel.body.mp4")
+    assert arg_after(tail, "-frames:v") == "192"  # the body's 240 frames, less the 48 under the card
+    assert listings[0] == "file '../../_work/card_silent.mp4'\nfile 'cut01.tail.mp4'\nfile '../../_work/reel.ending-rain.mp4'\n"
+
+
+def test_a_silent_cut_with_endings_delivers_every_ending_silent(parts, fake, media):
+    text = "cuts:\n  - {out: SONG_canvas.mp4, t0: 51, dur: 16, audio: none, endings: _work/reel.variants.json}\n"
+    canvas_rain, _ = dv.deliver(write_sheet(media, text))
+    assert len(fake.silent_cuts) == 2 and fake.measures == [] and not canvas_rain.has_audio
+    assert arg_after(fake.silent_cuts[0], "-i").endswith("cut01.e01.silent.mp4")
+
+
+def test_the_joins_intermediates_go_even_when_an_encode_fails(parts, fake, media, monkeypatch):
+    def run(ffmpeg, args):
+        fake.run(ffmpeg, args)
+        if "-af" in args:
+            raise RuntimeError("ffmpeg failed")
+
+    monkeypatch.setattr(dv, "run", run)
+    parts.keyframes["reel.body.mp4"] = [0.0, 2.0]
+    with pytest.raises(RuntimeError):
+        dv.deliver(write_sheet(media, sheet_with(cuts=CARD_REEL)))
+    assert not (media / ".kaleidophone-cache").exists()
+
+
+def test_the_keyframe_list_leaves_out_a_cut_with_endings():
+    sheet = dv.DeliverySheet.model_validate({
+        "silent": "s.mp4", "audio": "a.wav",
+        "cuts": [{"out": "a.mp4", "t0": 10, "dur": 2}, {"out": "r.mp4", "t0": 51, "dur": 16, "endings": "v.json"}],
+    })
+    assert dv._keyframe_list(sheet) == "0,10,12"
+
+
+# --- the preflight -------------------------------------------------------------
+def test_every_part_of_a_join_must_exist(parts, fake, media):
+    (media / "_work" / "reel.ending-door.mp4").unlink()
+    with pytest.raises(FileNotFoundError) as exc:
+        dv.deliver(write_sheet(media, sheet_with(cuts=REEL)))
+    assert exc.value.filename.endswith("reel.ending-door.mp4") and fake.runs == []
+
+
+def _wrong_frames(probe):
+    probe.frames["reel.ending-door.mp4"] = "143"
+
+
+def _late_keyframe(probe):
+    probe.keyframes["reel.ending-rain.mp4"] = [0.5]
+
+
+def _no_keyframe(probe):
+    probe.keyframes["reel.ending-rain.mp4"] = []
+
+
+def _other_encode(probe):
+    probe.entries["reel.ending-door.mp4"] = {"width": "720", "pix_fmt": "yuv444p"}
+
+
+def _other_rate(probe):
+    for name in ("reel.body.mp4", "reel.ending-rain.mp4", "reel.ending-door.mp4"):
+        probe.entries[name] = {"r_frame_rate": "25/1"}
+
+
+@pytest.mark.parametrize(
+    ("spoil", "problem"),
+    [
+        (_wrong_frames, "ending 'door' (reel.ending-door.mp4) has 143 frames; its span needs 144"),
+        (_late_keyframe, "ending 'rain' (reel.ending-rain.mp4) doesn't start on a keyframe (its first is 0.500 s in)"),
+        (_no_keyframe, "ending 'rain' (reel.ending-rain.mp4) doesn't start on a keyframe (it has none)"),
+        (_other_encode, "ending 'door' (reel.ending-door.mp4) isn't the same encode as the body: "
+                        "pix_fmt yuv444p, not yuv420p; width 720, not 1080"),
+        (_other_rate, "the body (reel.body.mp4) runs at 25/1 fps; the sheet's fps is 24"),
+    ],
+)
+def test_parts_that_cant_be_joined_are_refused_before_anything_runs(parts, fake, media, spoil, problem):
+    spoil(parts)
+    with pytest.raises(ValueError) as exc:
+        dv.deliver(write_sheet(media, sheet_with(cuts=REEL)))
+    (line,) = str(exc.value).splitlines()[1:]
+    assert line.startswith(f"  SONG_reel.mp4: {problem}")
+    assert "-force_key_frames" not in str(exc.value)  # nothing to re-render in the silent render
+    assert fake.runs == [] and fake.measures == []
+
+
+def test_a_card_cut_with_endings_needs_a_body_keyframe_where_the_card_ends(parts, fake, media):
+    with pytest.raises(ValueError, match=r"the body has no keyframe at 2\.000 s, where the card ends"):
+        dv.deliver(write_sheet(media, sheet_with(cuts=CARD_REEL)))
+
+
+def test_a_part_that_starts_later_than_zero_is_held_to_its_own_start(parts, fake, media):
+    parts.entries["reel.ending-rain.mp4"] = {"start_time": "0.500000"}
+    parts.keyframes["reel.ending-rain.mp4"] = [0.5]
+    parts.entries["reel.ending-door.mp4"] = {"start_time": "N/A"}  # unreadable: from 0
+    assert len(dv.deliver(write_sheet(media, sheet_with(cuts=REEL)))) == 2
+
+
+def test_a_part_encoded_with_other_settings_is_a_warning(parts, fake, media):
+    """An x264 CRF sets the PPS's pic_init_qp: every stream parameter agrees
+    and the headers still differ. ffmpeg decodes the join; a strict player
+    may not."""
+    fake.headers["reel.ending-door.mp4"] = trace_log("4")
+    logged = []
+    dv.deliver(write_sheet(media, sheet_with(cuts=REEL)), log=logged.append)
+    (warning,) = [line for line in logged if "encoded with other settings" in line]
+    assert "ending 'door' (reel.ending-door.mp4) was encoded with other settings than the body" in warning
+    assert "their stream headers differ (pic_init_qp_minus26 4, not -6)" in warning
+    assert len(fake.traces) == 3 and "keyframes for every cut point" not in "\n".join(logged)
+
+
+def test_the_header_check_is_skipped_where_ffmpeg_cant_trace_the_headers(parts, fake, media, monkeypatch):
+    def run_measure(ffmpeg, args):
+        if "-bsf:v" in args:
+            raise RuntimeError("Codec 'prores' is not supported by the bitstream filter 'trace_headers'")
+        return fake.run_measure(ffmpeg, args)
+
+    monkeypatch.setattr(dv, "run_measure", run_measure)
+    logged = []
+    dv.deliver(write_sheet(media, sheet_with(cuts=REEL)), log=logged.append)
+    assert not any(line.startswith("warning:") for line in logged)
+    assert dv._parameter_sets("ffmpeg", "x.mp4") is None
+    monkeypatch.setattr(dv, "run_measure", lambda ffmpeg, args: "no extradata here")
+    assert dv._parameter_sets("ffmpeg", "x.mp4") is None
+
+
+def test_the_first_header_field_two_parts_disagree_on_is_named():
+    first = [("profile_idc", "100"), ("pic_init_qp_minus26", "-6")]
+    assert dv._header_difference(first, list(first)) is None
+    assert dv._header_difference(first, [("profile_idc", "100"), ("pic_init_qp_minus26", "4")]) == (
+        "pic_init_qp_minus26 4, not -6"
+    )
+    assert dv._header_difference(first, [("level_idc", "31")]) == "level_idc where the first has profile_idc"
+    assert dv._header_difference(first, first[:1]) == "1 header fields, not 2"
+
+
+@pytest.mark.parametrize(("text", "rate"), [("24/1", 24.0), ("30000/1001", 30000 / 1001), ("25", 25.0),
+                                            ("N/A", None), (None, None), ("1/0", None)])
+def test_a_frame_rate_reads_as_ffprobe_writes_it(text, rate):
+    assert dv._rate(text) == rate
+
+
+def test_the_endings_preflight_is_best_effort_without_ffprobe(parts, fake, media, monkeypatch):
+    monkeypatch.setattr(dv, "probe_stream", lambda *a, **k: None)
+    monkeypatch.setattr(dv, "probe_keyframes", lambda path: None)
+    rain, _ = dv.deliver(write_sheet(media, sheet_with(cuts=CARD_REEL)))
+    assert rain.frames is None and rain.size_mb is not None
+
+
+# --- the contact sheet ---------------------------------------------------------
+SHEET_ROW = (
+    "select='eq(n,239)+eq(n,240)+eq(n,269)+eq(n,297)+eq(n,326)+eq(n,354)+eq(n,383)',scale=-2:320,setsar=1,"
+    "tile=7x1:margin=8:padding=8:color=0x111111,drawbox=x=(iw-64)/7+10:y=0:w=4:h=ih:color=0xe03c31:t=fill"
+)
+SHEET_LABEL = (
+    ",pad=iw:ih+36:0:36:color=0x111111,"
+    "drawtext=text=\\'{}\\':expansion=none:fontcolor=white:fontsize=22:x=8:y=(36-th)/2"
+)
+
+
+def test_a_contact_sheet_row_is_the_last_body_frame_then_six_frames_of_its_ending():
+    """By frame index, so the sheet is the same every run: 239 is the body's
+    last; 240..383 the ending, its first and last included."""
+    assert dv._sheet_picks(240, 384) == [239, 240, 269, 297, 326, 354, 383]
+    assert dv._sheet_picks(240, 243) == [239, 240, 241, 242]  # a short ending: every frame
+    assert dv._sheet_picks(240, 241) == [239, 240]
+
+
+def test_the_contact_sheet_is_one_filter_graph_of_rows_stacked_top_to_bottom():
+    picks = dv._sheet_picks(240, 384)
+    argv = dv._contact_sheet_argv(["a.rain.mp4", "a.door.mp4"], ["rain", "door"], picks, "a.endings.jpg", labelled=True)
+    assert arg_after(argv, "-filter_complex") == (
+        f"[0:v:0]{SHEET_ROW}{SHEET_LABEL.format('rain')}[r0];[1:v:0]{SHEET_ROW}{SHEET_LABEL.format('door')}[r1];"
+        "[r0][r1]vstack=inputs=2[sheet]"
+    )
+    assert argv[:5] == ["-y", "-i", "./a.rain.mp4", "-i", "./a.door.mp4"]
+    assert argv[-9:] == ["-map", "[sheet]", "-frames:v", "1", "-q:v", "2", "-update", "1", "./a.endings.jpg"]
+    single = dv._contact_sheet_argv(["a.rain.mp4"], ["rain"], picks, "a.endings.jpg", labelled=False)
+    assert arg_after(single, "-filter_complex") == f"[0:v:0]{SHEET_ROW}[sheet]"  # nothing to stack
+
+
+@pytest.mark.parametrize(
+    ("name", "quoted"),
+    [("rain", "\\'rain\\'"), ("it's: a, [b]; c\\d", "\\'it\\'\\\\\\'\\'s: a\\, \\[b\\]\\; c\\\\d\\'"), ("خانه", "\\'خانه\\'")],
+)
+def test_a_label_is_quoted_for_both_of_the_graphs_parsers(name, quoted):
+    """Measured with ffmpeg 6.1: each of these drew exactly as written."""
+    assert dv._filter_text(name) == quoted
+
+
+def test_a_contact_sheet_without_drawtext_is_unlabelled_and_says_so(parts, fake, media):
+    rain, _ = dv.deliver(write_sheet(media, sheet_with(cuts=REEL)))
+    (contact,) = [a for a in fake.runs if a[-1].endswith(".jpg")]
+    assert "drawtext" not in arg_after(contact, "-filter_complex")
+    assert not rain.contact_sheet.labelled and rain.contact_sheet.note == "this ffmpeg has no drawtext filter"
+
+
+def test_a_contact_sheet_is_labelled_where_drawtext_works(parts, fake, media, monkeypatch):
+    monkeypatch.setattr(dv, "filter_options", lambda ffmpeg, name: frozenset({"text", "latency"}))
+    rain, _ = dv.deliver(write_sheet(media, sheet_with(cuts=REEL)))
+    (contact,) = [a for a in fake.runs if a[-1].endswith(".jpg")]
+    assert "drawtext=text=\\'door\\'" in arg_after(contact, "-filter_complex") and rain.contact_sheet.labelled
+
+
+@pytest.mark.parametrize(
+    ("said", "why"),
+    [
+        ("[Parsed_drawtext_9 @ 0x1] Cannot find a valid font for the family Sans\nError initializing filters",
+         "[Parsed_drawtext_9 @ 0x1] Cannot find a valid font for the family Sans"),
+        ("Error initializing filters", "Error initializing filters"),
+    ],
+)
+def test_a_contact_sheet_whose_drawtext_fails_is_made_again_unlabelled(parts, fake, media, monkeypatch, said, why):
+    monkeypatch.setattr(dv, "filter_options", lambda ffmpeg, name: frozenset({"text", "latency"}))
+
+    def run(ffmpeg, args):
+        fake.run(ffmpeg, args)
+        if any("drawtext" in a for a in args):
+            raise RuntimeError(f"ffmpeg failed (args tail: -update 1 ./x.jpg):\n{said}")
+
+    monkeypatch.setattr(dv, "run", run)
+    rain, _ = dv.deliver(write_sheet(media, sheet_with(cuts=REEL)))
+    labelled, unlabelled = [a for a in fake.runs if a[-1].endswith(".jpg")]
+    assert "drawtext" in arg_after(labelled, "-filter_complex") and "drawtext" not in arg_after(unlabelled, "-filter_complex")
+    assert rain.contact_sheet.note == f"this ffmpeg's drawtext failed ({why})"
+
+
+def test_the_table_lists_every_ending_and_its_contact_sheet_once():
+    contact = dv.ContactSheet("out/SONG_reel.endings.jpg", ("rain", "door"), 6, labelled=False, note="no drawtext")
+    rows = [dv.Delivered(f"out/SONG_reel.{n}.mp4", 384, frames=384, ending=n, contact_sheet=contact) for n in ("rain", "door")]
+    lines = dv.format_table(rows).splitlines()
+    assert lines[1].startswith("SONG_reel.rain.mp4") and lines[2].startswith("SONG_reel.door.mp4")
+    assert lines[3:] == [
+        "contact sheet SONG_reel.endings.jpg: rain, door, top to bottom -- the last body frame, then 6 frames "
+        "of each ending; unlabelled: no drawtext"
+    ]
+    one = dv.ContactSheet("x.endings.jpg", ("a",), 1, labelled=True)
+    assert one.describe() == "contact sheet x.endings.jpg: a, top to bottom -- the last body frame, then 1 frame of each ending"
+
+
+# --- --dry-run ----------------------------------------------------------------
+def test_the_dry_run_of_a_sheet_of_endings(here):
+    write_variants(here)
+    script = dv.delivery_script(rel_sheet(here, "audio: Song.wav\ncuts:\n" + REEL))
+    assert "-force_key_frames" not in script  # nothing is cut from a silent render
+    assert "# A cut with endings is its body and each ending, joined by stream copy" in script
+    assert "mkdir -p -- .kaleidophone-cache/deliver\n" in script
+    assert "# the endings of SONG_reel.mp4: the body, then each ending, joined by stream copy\n" in script
+    assert (
+        "cat > .kaleidophone-cache/deliver/cut01.e02.concat.txt <<'EOF'\n"
+        "file '../../_work/reel.body.mp4'\nfile '../../_work/reel.ending-door.mp4'\nEOF\n"
+    ) in script
+    assert "\n  DRAWTEXT=1\n" in script and '\nif [ "$DRAWTEXT" = 1 ] && ffmpeg ' in script
+    assert "# 2/2  SONG_reel.door.mp4: 51.000-67.000 s, 384 frames, ending door" in script
+    assert "check ./SONG_reel.rain.mp4 384\ncheck ./SONG_reel.door.mp4 384" in script
+    assert str(here) not in script
+
+
+def test_the_dry_run_of_a_card_cut_with_endings_says_where_the_body_resumes(here):
+    write_variants(here)
+    script = dv.delivery_script(rel_sheet(here, sheet_with(cuts=CARD_REEL + "  - {out: x.mp4, t0: 0, dur: 4}\n")))
+    assert "# the endings of SONG_reel.mp4: the card, the body from its keyframe at 2 s, then each ending" in script
+    assert "-force_key_frames 0,4\n" in script  # only the cut from the silent render
+
+
+PARITY_ENDINGS = REEL + "  - {out: full.mp4, t0: 0, dur: 72.25}\n"
+
+
+@needs_sh
+@pytest.mark.parametrize(
+    ("cuts", "drawtext", "peaks"),
+    [
+        (PARITY_ENDINGS, "yes", ["-1.0", "-3.0", "-2.5", "-3.1", "-4.0", "-2.9"]),  # two rounds
+        (CARD_REEL, "no", ["-3.0"]),
+        (LISTED, "fails", ["-3.0"]),
+    ],
+)
+def test_the_dry_run_script_runs_the_same_ffmpeg_commands_with_endings(here, parts, fake, monkeypatch, cuts, drawtext, peaks):
+    parts.keyframes["reel.body.mp4"] = [0.0, 2.0]
+    options = {"text", "latency"} if drawtext != "no" else {"latency"}
+    monkeypatch.setattr(dv, "filter_options", lambda ffmpeg, name: frozenset(options))
+    if drawtext == "fails":
+        def run(ffmpeg, args):
+            fake.run(ffmpeg, args)
+            if any("drawtext" in a for a in args):
+                raise RuntimeError("ffmpeg failed:\nCannot find a valid font for the family Sans")
+
+        monkeypatch.setattr(dv, "run", run)
+    fake.peaks = [float(p) for p in peaks]
+    sheet = rel_sheet(here, sheet_with("{mode: auto}", cuts=cuts, check="false"))
+    dv.deliver(sheet)
+    proc, ran = run_script(here, dv.delivery_script(sheet), peaks=peaks, drawtext=drawtext)
+    assert proc.returncode == 0, proc.stderr
+    assert [argv for argv in ran if "-h" not in argv] == fake.log
+    assert ("unlabelled" in proc.stdout) == (drawtext != "yes")
+
+
+@needs_sh
+def test_nothing_in_an_endings_name_or_path_expands_or_runs_in_the_dry_run_script(here):
+    """Every name and path in single quotes for sh, in the concat demuxer's
+    quoting in a list, and in the filter graph's for a label."""
+    (here / "_work").mkdir()
+    nasty = "x $(touch pwned) ${G} `touch pwned3` \"q\" 's $HOME"
+    body, ending = "_work/body $(touch pwned2).mp4", "_work/-end 'n' `touch pwned4`.mp4"
+    for name in (body, ending, "Song.wav"):
+        (here / name).write_bytes(b"placeholder")
+    cut = {"out": "reel.mp4", "t0": 0, "dur": 4, "body": body, "at": 2,
+           "endings": [{"name": nasty, "file": ending}, {"name": "plain", "file": ending}]}
+    sheet = rel_sheet(here, yaml.safe_dump({"audio": "Song.wav", "gain": {"mode": "auto"}, "cuts": [cut]}))
+    proc, ran = run_script(here, dv.delivery_script(sheet), drawtext="yes")
+    assert proc.returncode == 0, proc.stderr
+    assert not any((here / p).exists() for p in ("pwned", "pwned2", "pwned3", "pwned4"))
+    assert (here / f"reel.{nasty}.mp4").exists() and (here / "reel.plain.mp4").exists()
+    (contact,) = [argv for argv in ran if "-filter_complex" in argv and "drawtext" in arg_after(argv, "-filter_complex")]
+    assert dv._filter_text(nasty) in arg_after(contact, "-filter_complex") and contact[-1] == "./reel.endings.jpg"
+    assert f"contact sheet reel.endings.jpg: {nasty}, plain, top to bottom" in proc.stdout

@@ -10,7 +10,7 @@
       "name": "kaleidophone",
       "source": ".",
       "description": "A song becomes a music video, cover art and a per-platform release pack: your photos and clips cut by ffmpeg filter graphs, footage reworked frame by frame, or a canvas piece drawn in code. Claude reads the song's structure and directs; deterministic code draws every pixel.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "author": { "name": "sep-lab" },
       "homepage": "https://github.com/sep-lab/kaleidophone",
       "license": "Apache-2.0"

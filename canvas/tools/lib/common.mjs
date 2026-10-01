@@ -9,7 +9,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const CANVAS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-export const PIECES = path.join(CANVAS, 'pieces');
+// KALEIDOPHONE_PIECES: another folder of pieces instead of canvas/pieces -- how the tests render
+// throwaway fixture pieces without writing into the repository
+export const PIECES = process.env.KALEIDOPHONE_PIECES ? path.resolve(process.env.KALEIDOPHONE_PIECES) : path.join(CANVAS, 'pieces');
 export const DIST = path.join(CANVAS, 'dist');
 // where render.mjs and still.mjs build the piece they are about to open (never dist/: see buildForRun)
 export const BUILD = path.join(CANVAS, 'out', 'build');
@@ -32,7 +34,7 @@ export function die(msg, code = 1) {
 
 export const firstLine = s => String(s ?? '').split('\n').find(l => l.trim()) || String(s ?? '');
 
-// Cleanups run on success, on failure and on Ctrl-C: temp builds, _parts/, Chromium, ffmpeg.
+// Cleanups run on success, on failure and on Ctrl-C: temp builds, the render's private work folder, Chromium, ffmpeg.
 const CLEANUPS = [];
 export function onCleanup(fn) { CLEANUPS.push(fn); return fn; }
 async function runCleanups() {
@@ -76,8 +78,10 @@ export async function main(fn) {
 //                                      UsageError naming the valid ones.
 // Both accept --flag value, --flag=value and a bare --flag (true).
 //
-// spec = { usage: 'one line', positional: [min, max], flags: { name: { type, help, choices, arg } } }
+// spec = { usage: 'one line', positional: [min, max], flags: { name: { type, help, choices, arg, repeat } } }
 // types: string | number | int | bool | numbers | ints | list | json | optional (a value, or bare = true)
+// repeat: the flag may be given more than once; its values collect into one array, in order
+// (`--variant a=x --variant b=y` is `--variant a=x,b=y`)
 export function parseArgs(argv = process.argv.slice(2), spec) {
   if (argv && !Array.isArray(argv)) { spec = argv; argv = process.argv.slice(2); }
   const out = { _: [] };
@@ -119,7 +123,8 @@ export function parseArgs(argv = process.argv.slice(2), spec) {
       else if (type === 'optional') { out[key] = true; continue; }
       else throw new UsageError(`--${key} needs a value${f.arg ? ` (${f.arg})` : ''}`);
     }
-    out[key] = typed(key, val, f);
+    const v = typed(key, val, f);
+    out[key] = f.repeat ? [...(out[key] || []), ...(Array.isArray(v) ? v : [v])] : v;
   }
   if (flags && spec.positional && !out.help) {
     const [min, max] = spec.positional;
@@ -191,7 +196,7 @@ export function helpText(spec) {
   const rows = Object.entries(flags).map(([k, f]) => {
     const t = f.type || 'string';
     const arg = f.arg || (t === 'bool' ? '' : t === 'optional' ? '[value]' : t === 'numbers' || t === 'ints' || t === 'list' ? 'a,b,...' : t === 'json' ? '{...}' : t === 'number' || t === 'int' ? 'n' : 'value');
-    return [`--${k}${arg ? ' ' + arg : ''}`, f.help || ''];
+    return [`--${k}${arg ? ' ' + arg : ''}`, (f.help || '') + (f.repeat ? ' (repeatable)' : '')];
   });
   const w = Math.max(...rows.map(r => r[0].length));
   return `usage: ${spec.usage}\n\n` + rows.map(([a, h]) => `  ${a.padEnd(w)}  ${h}`).join('\n') + '\n\nFlags take --flag value or --flag=value.';
@@ -288,6 +293,272 @@ export function keyTimesToFrames(times, { t0, fps, frames, tolerance = 0.01 }) {
   });
 }
 
+// ---------------------------------------------------------------- variants
+// piece.json "variants": {"<axis>": {"at": 14, "options": ["a", "b"], "default": "a", "note": "..."}}.
+// An axis is one choice the piece can make -- how it ends, say. Every option is drawn from `at`
+// (song seconds) on; before it, every option draws the same frames, so one render of the body
+// serves every ending (render.mjs --endings). The page gets the choice as p.variant =
+// {<axis>: "<option>", ...} in __frame(p), every axis in it; live mode reads ?variant=<axis>:<option>.
+export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SLUG_IS = 'lowercase letters, digits and single hyphens';
+const axisRef = axis => SLUG.test(axis) ? `variants.${axis}` : `variants[${JSON.stringify(axis)}]`;
+
+// The piece's "variants", checked; null when it declares none. A problem throws an Error whose
+// message is one line naming the piece and the axis (build.mjs reports it as a build error).
+export function checkVariants(id, spec) {
+  if (!spec || !Object.hasOwn(spec, 'variants')) return null;
+  const V = spec.variants;
+  const bad = (what, msg) => new Error(`${id}: piece.json ${what}: ${msg}`);
+  if (!V || typeof V !== 'object' || Array.isArray(V)) {
+    throw bad('"variants"', 'must be an object of axes, e.g. {"ending": {"at": 14, "options": ["a", "b"], "default": "a"}}');
+  }
+  const axes = Object.keys(V);
+  if (!axes.length) throw bad('"variants"', 'declares no axes (remove it, or declare one)');
+  const dur = spec.grid && Number.isFinite(spec.grid.dur) ? spec.grid.dur : null;
+  for (const axis of axes) {
+    const a = V[axis], where = axisRef(axis);
+    if (!SLUG.test(axis)) throw bad(where, `an axis name must be a slug (${SLUG_IS}): it names files, <out>.<axis>-<option>.mp4`);
+    if (!a || typeof a !== 'object' || Array.isArray(a)) throw bad(where, 'must be an object with "at", "options" and "default"');
+    const { options, at } = a;
+    if (!Array.isArray(options) || !options.length) throw bad(where, '"options" must be a non-empty list of option names');
+    for (const o of options) {
+      if (typeof o !== 'string' || !SLUG.test(o)) throw bad(where, `option ${JSON.stringify(o)} must be a slug (${SLUG_IS}): it names a file, <out>.${axis}-<option>.mp4`);
+    }
+    const twice = options.find((o, i) => options.indexOf(o) !== i);
+    if (twice) throw bad(where, `option "${twice}" is listed twice`);
+    if (!Object.hasOwn(a, 'default')) throw bad(where, `has no "default" (one of ${options.join(', ')})`);
+    if (!options.includes(a.default)) throw bad(where, `"default" must be one of its options (${options.join(', ')}), got ${JSON.stringify(a.default)}`);
+    if (typeof at !== 'number' || !Number.isFinite(at)) throw bad(where, `"at" must be a number of song seconds, got ${JSON.stringify(at)}`);
+    if (at < 0 || (dur !== null && at > dur)) throw bad(where, `"at" ${at} is outside the song (0 to ${dur ?? '...'} s${dur !== null ? ', grid.dur' : ''})`);
+    if (a.note !== undefined && typeof a.note !== 'string') throw bad(where, '"note" must be a string');
+  }
+  return V;
+}
+
+// checkVariants for the render and still tools: a piece.json that can't be right stops the run.
+export function pieceVariants(piece) {
+  try { return checkVariants(piece.id, piece.spec); } catch (e) { throw new RunError(e.message); }
+}
+
+// --variant axis=option,... -> { choice: every axis -> its option (the default unless given),
+// given: only the axes asked for }. choice is null for a piece without variants.
+export function resolveVariant(id, variants, asked = []) {
+  if (!variants) {
+    if (asked.length) throw new UsageError(`${id} declares no variants in piece.json: there is nothing for --variant to choose`);
+    return { choice: null, given: {} };
+  }
+  const axes = Object.keys(variants), given = {};
+  const eg = `${axes[0]}=${variants[axes[0]].options.at(-1)}`;
+  for (const item of asked) {
+    const m = /^([^=]*)=([^=]*)$/.exec(String(item));
+    if (!m || !m[1] || !m[2]) throw new UsageError(`--variant takes axis=option, e.g. --variant ${eg} (got "${item}")`);
+    const [, axis, option] = m;
+    if (!Object.hasOwn(variants, axis)) throw new UsageError(`${id} has no variant axis "${axis}" (axes: ${axes.join(', ')})`);
+    const options = variants[axis].options;
+    if (!options.includes(option)) throw new UsageError(`${id}: "${option}" is not an option of ${axis} (options: ${options.join(', ')})`);
+    if (Object.hasOwn(given, axis) && given[axis] !== option) throw new UsageError(`--variant gives ${axis} twice (${given[axis]}, ${option}): pick one`);
+    given[axis] = option;
+  }
+  return { choice: Object.fromEntries(axes.map(a => [a, Object.hasOwn(given, a) ? given[a] : variants[a].default])), given };
+}
+
+// "ending-lamp", "ending-lamp.palette-dark": the axes asked for, in the piece's order, as file names use them
+export function variantTag(variants, given) {
+  return variants ? Object.keys(variants).filter(a => Object.hasOwn(given, a)).map(a => `${a}-${given[a]}`).join('.') : '';
+}
+
+// A driver's frame with the choice on it. The harness adds p.variant itself, so it reaches the page
+// through any driver whose draw() passes p on (the default one does), whatever its frame() returns.
+export function withVariant(p, variant) {
+  return variant && p && typeof p === 'object' ? { ...p, variant } : p;
+}
+
+// The window frame a variant starts on: the first frame at or after `at` (frame i is song time
+// t0 + i / fps). Before it, the frames are the body's.
+export function joinFrame(at, { t0, fps }) {
+  return Math.ceil((at - t0) * fps - 1e-6);
+}
+
+// Window frames [from, to) as separate encodes: cut at every join strictly inside (the encoder
+// starts again there, so the frames on each side are exactly a body's and an ending's), then each
+// stretch split among the workers as planParts splits it. With no join inside, this is planParts.
+export function planEncodes(from, to, workers, keys = [], joins = []) {
+  const cuts = [...new Set(joins)].filter(j => j > from && j < to).sort((a, b) => a - b);
+  const bounds = [from, ...cuts, to], out = [];
+  for (let s = 0; s + 1 < bounds.length; s++) {
+    for (const p of planParts(bounds[s], bounds[s + 1], workers, keys)) out.push({ ...p, k: out.length });
+  }
+  return out;
+}
+
+// The whole render, planned before anything starts: the files (parts) and the page runs that draw them.
+//   no --endings  one file, window frames [from, to), cut at every join inside it
+//   --endings X   a body, frames [0, J) with X's default, and one ending per option of X, frames
+//                 [J, N): J is X's join frame. Other axes keep the given choice, cut at their joins.
+// Runs: a stateless piece draws each encode on a page of its own, `workers` at a time -- exactly the
+// frames it encodes, as a whole-window render's pages do; a stateful one draws each part on one page,
+// in order, replaying from its warm-up first. `probe` (stateful --endings) marks the frame before the
+// join, captured losslessly by the body and by every ending's replay, so the tool can check that each
+// ending continues the same body. (A stateless piece's options are checked on pages of their own.)
+export function planRender({ id = 'piece', variants = null, choice = null, endings = null, t0 = 0, fps, frames, from = 0, to = frames, workers = 1, stateful = false, keys = [] }) {
+  const W = stateful ? 1 : Math.max(1, Math.floor(workers) || 1);
+  const axes = variants ? Object.keys(variants) : [];
+  const joinOf = axis => ({ axis, at: variants[axis].at, frame: joinFrame(variants[axis].at, { t0, fps }) });
+  const part = (name, role, a, b, variant, joins, extra = {}) => {
+    const inside = joins.filter(j => j.frame > a && j.frame < b);
+    return {
+      name, role, ...extra, from: a, to: b, frames: b - a, variant,
+      joins: inside.map(j => ({ ...j, file_frame: j.frame - a })),
+      keys: keys.filter(k => k >= a && k < b),
+      encodes: planEncodes(a, b, W, keys, inside.map(j => j.frame)),
+    };
+  };
+  let parts, join = null;
+  if (!endings) {
+    parts = [part(null, 'window', from, to, choice, axes.map(joinOf))];
+  } else {
+    if (!variants) throw new UsageError(`${id} declares no variants in piece.json: there are no endings to render`);
+    if (!Object.hasOwn(variants, endings)) throw new UsageError(`${id} has no variant axis "${endings}" (axes: ${axes.join(', ')})`);
+    const spec = variants[endings], J = joinFrame(spec.at, { t0, fps });
+    const s = n => +(t0 + n / fps).toFixed(6);
+    if (!(J > 0 && J < frames)) {
+      throw new UsageError(`--endings ${endings}: ${endings} starts at ${spec.at} s, outside this window (song time ${s(0)} to ${s(frames)} s): ` +
+        (spec.at <= 0 ? `an axis that changes the whole piece has no body -- render each option with --variant ${endings}=<option>`
+          : `give a window that starts before ${spec.at} s and ends after it`));
+    }
+    join = { axis: endings, at: spec.at, frame: J, song_t: s(J) };
+    const others = axes.filter(a => a !== endings).map(joinOf);
+    parts = [
+      part('body', 'body', 0, J, { ...choice, [endings]: spec.default }, others),
+      ...spec.options.map(o => part(`${endings}-${o}`, 'ending', J, frames, { ...choice, [endings]: o }, others,
+        { axis: endings, option: o, default: o === spec.default })),
+    ];
+  }
+  const runs = [];
+  parts.forEach((p, i) => {
+    const encodes = stateful ? [p.encodes.map(e => e.k)] : p.encodes.map(e => [e.k]);
+    for (const ks of encodes) {
+      const a = p.encodes[ks[0]].a, b = p.encodes[ks.at(-1)].b;
+      const probe = join && stateful && ((p.role === 'body' && b === join.frame) || (p.role === 'ending' && a === join.frame)) ? join.frame - 1 : null;
+      runs.push({ part: i, a, b, encodes: ks, probe });
+    }
+  });
+  return { join, parts, runs };
+}
+
+// ---------------------------------------------------------------- joining by stream copy
+// What two files must share for the concat demuxer to join them with -c copy: `kaleidophone
+// deliver` stream-copies a body and an ending into one film, so every part of an --endings render
+// is probed and must agree on all of these (the extradata is the H.264 SPS/PPS every frame decodes with).
+export const JOIN_PARAMS = ['codec_name', 'codec_tag_string', 'profile', 'level', 'pix_fmt', 'width', 'height',
+  'sample_aspect_ratio', 'r_frame_rate', 'time_base', 'has_b_frames', 'refs', 'field_order', 'chroma_location',
+  'color_range', 'color_space', 'color_transfer', 'color_primaries', 'bits_per_raw_sample', 'extradata_hash'];
+
+export function requireFfprobe() {
+  const r = spawnSync('ffprobe', ['-hide_banner', '-version'], { encoding: 'utf8' });
+  if (r.error || r.status !== 0) {
+    throw new RunError(`ffprobe is not on PATH${r.error ? ` (${r.error.code || r.error.message})` : ''} -- --endings checks every file it writes with it. ` +
+      'It comes with ffmpeg (macOS: brew install ffmpeg; Debian/Ubuntu: sudo apt-get install ffmpeg).');
+  }
+}
+
+// the concat demuxer's list: one quoted file per line
+export function concatList(files) {
+  return files.map(p => `file '${String(p).replace(/'/g, "'\\''")}'`).join('\n') + '\n';
+}
+
+function ffprobeJson(args, what) {
+  const r = spawnSync('ffprobe', ['-v', 'error', ...args, '-of', 'json'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  if (r.error || r.status !== 0) {
+    throw new RunError(`ffprobe could not read ${what}: ${firstLine((r.stderr || '').trim().split('\n').pop() || (r.error && r.error.message))}`);
+  }
+  try { return JSON.parse(r.stdout); } catch { throw new RunError(`ffprobe's answer about ${what} is not JSON`); }
+}
+
+// One file's video stream: the parameters a join needs, and its packets' pts and key flags (in file order).
+export function probeVideo(file) {
+  const j = ffprobeJson(['-select_streams', 'v:0', '-show_entries', 'stream:packet=pts,flags', '-show_data_hash', 'sha256', file], path.basename(file));
+  const s = (j.streams || [])[0];
+  if (!s) throw new RunError(`${path.basename(file)} has no video stream`);
+  return { params: Object.fromEntries(JOIN_PARAMS.map(k => [k, s[k] ?? null])), packets: (j.packets || []).map(p => ({ pts: +p.pts, key: /^K/.test(p.flags || '') })) };
+}
+
+// The packets of `files` joined in order by the concat demuxer, as `-c copy` writes them (nothing is written).
+export function probeConcat(files, listFile) {
+  fs.writeFileSync(listFile, concatList(files));
+  const j = ffprobeJson(['-f', 'concat', '-safe', '0', '-i', listFile, '-select_streams', 'v:0', '-show_entries', 'stream=time_base:packet=pts,flags'], `${files.map(f => path.basename(f)).join(' + ')} joined`);
+  const s = (j.streams || [])[0] || {};
+  return { time_base: s.time_base || null, packets: (j.packets || []).map(p => ({ pts: +p.pts, key: /^K/.test(p.flags || '') })) };
+}
+
+// The first parameter two probed files disagree on, or null: [name, a, b].
+export function streamDifference(a, b) {
+  for (const k of JOIN_PARAMS) if ((a[k] ?? null) !== (b[k] ?? null)) return [k, a[k] ?? null, b[k] ?? null];
+  return null;
+}
+
+// Problems with a timeline of packets (in presentation order once sorted): `frames` of them, the
+// first at pts 0 and each one frame after the last -- no gap, no repeat -- and keyframes at `keys`
+// (frame numbers). [] when there are none.
+export function timelineProblems(packets, { frames, fps, timeBase, keys = [] }) {
+  const out = [];
+  const [num, den] = String(timeBase).split('/').map(Number);
+  const step = den / (num * fps), exact = Math.abs(step - Math.round(step)) < 1e-9;
+  const pts = packets.map(p => p.pts).sort((x, y) => x - y);
+  if (pts.length !== frames) out.push(`${pts.length} frames, expected ${frames}`);
+  if (pts.length && pts[0] !== 0) out.push(`the first frame is at pts ${pts[0]}, not 0`);
+  for (let i = 1; i < pts.length; i++) {
+    const d = pts[i] - pts[i - 1];
+    if (exact ? d !== Math.round(step) : Math.abs(d - step) > 1) {
+      out.push(`${d > step ? 'a gap' : d === 0 ? 'a repeated timestamp' : 'frames too close'} between frames ${i - 1} and ${i} (pts ${pts[i - 1]} -> ${pts[i]}, one frame is ${+step.toFixed(3)})`);
+      break;
+    }
+  }
+  const keyPts = new Set(packets.filter(p => p.key).map(p => p.pts));
+  for (const k of keys) if (!keyPts.has(pts[k])) out.push(`frame ${k} is not a keyframe`);
+  return out;
+}
+
+// The --endings manifest, <out>.variants.json: what was rendered, what joins to what, and the
+// stream every file shares -- what `kaleidophone deliver` reads (a cut's `endings:`). File names
+// only, never paths: the files sit next to it. t0, at and silent_start are song seconds; `at` is the
+// join on the frame grid, t0 + join.frame / fps (piece.json's own value, if it was between two
+// frames, is join.declared_at).
+export function variantsManifest({ piece, song, synthetic, axis, t0, dur, fps, size, plan, files, stream, joined, encode, tools }) {
+  const spec = axis.spec, J = plan.join.frame;
+  const body = plan.parts.find(p => p.role === 'body'), endings = plan.parts.filter(p => p.role === 'ending');
+  const N = endings[0].to;
+  const r6 = x => +x.toFixed(6);
+  const entry = p => ({ file: files[p.name].file, sidecar: files[p.name].sidecar, frames: p.frames, variant: p.variant });
+  return {
+    kaleidophone: 'canvas-variants/1',
+    piece,
+    axis: axis.name,
+    // the window: its first frame's song time (snapped, for a stateful piece), its length, its rate
+    t0: r6(t0),
+    dur,
+    fps,
+    // where the body ends and every ending begins
+    at: r6(t0 + J / fps),
+    options: spec.options,
+    default: spec.default,
+    note: spec.note ?? null,
+    song,
+    synthetic_song: !!synthetic,
+    // the song time of the body's first frame: silent_start for the joined film
+    silent_start: r6(t0),
+    size,
+    // the ending's first frame: J frames into the joined film (t on its clock)
+    join: { frame: J, t: r6(J / fps), declared_at: spec.at },
+    frames: { window: N, body: J, ending: N - J },
+    body: entry(body),
+    endings: endings.map(p => ({ option: p.option, default: !!p.default, ...entry(p), joined: joined[p.name] })),
+    stream,
+    encode,
+    tools,
+  };
+}
+
 // ---------------------------------------------------------------- the browser
 export function chromiumPath() {
   // Explicit override first; then the cloud sandbox's preinstalled Chromium (never run
@@ -304,7 +575,7 @@ export async function launch(extraArgs = []) {
     return await chromium.launch({
       executablePath,
       // main() handles Ctrl-C / SIGTERM: it closes the browser itself once the run's files are
-      // cleaned up (Playwright's own handlers would exit first and leave _parts/ behind)
+      // cleaned up (Playwright's own handlers would exit first and leave the work folder behind)
       handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false,
       // no proxy, and no host resolves: a piece is one self-contained file, and a render must never
       // reach the network (openPiece also aborts, and fails the run on, any request that isn't
@@ -450,6 +721,8 @@ export const DEFAULT_DRIVER = {
   query({ w, h }) { return { render: 1, w, h }; },
   async init(/* page, pack, opts */) { },
   frame(t, pack, opts) { return { t, ...sampleLinear(pack, this.keys, t), ...(opts.flags || {}) }; },
+  // p.variant (a piece with "variants") arrives here from the harness: a driver of its own that
+  // replaces draw() must pass it on to the page
   async draw(page, p) { return await page.evaluate(q => window.__frame(q), p); },
   async cover(page, name, arg, pack) {
     // default cover = one frame at arg.t, with the flags in arg

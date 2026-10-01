@@ -5,6 +5,129 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-01
+
+**The session, every platform, every ending.** 0.3 gave three engines one
+contract. 0.4 feeds the contract from the DAW session instead of guessing from
+the mixed master, sends one render to every platform at its current spec, and
+makes alternate endings a first-class part of a release. It also says which
+model to use, and what still works with no model at all.
+
+### Added — the Session engine (#56)
+
+- **`kaleidophone envelope Song.wav --midi Song.mid --stem drums=… --stem vocals=…`.**
+  A Standard MIDI File reader written for this (formats 0 and 1, ticks and
+  SMPTE, running status, tempo and meter maps, the sustain pedal), the MIDI
+  aligned to the bounce automatically (+1.3 / +1.4 ms on synthetic sessions,
+  with a confidence and a warning when it's a guess; `--midi-offset`,
+  `--downbeat` to overrule), every note as an event (`events.midi.<track>`),
+  chord changes with their names, slash chords included (`events.chords.<track>`),
+  the grid from the session (beats counted from each bar line, `pulses` for
+  6/8 and 12/8), and per-stem envelopes — each stem aligned to the master
+  first (within 3 ms on synthetic cases; `--stem-offset` when it can't be
+  trusted) — with `voc` from the real vocal stem. Hostile files are refused in
+  one line (tempo outside 10–1000 BPM, over 64 MB, absurd grids).
+- **The canvas lib reads events:** `evList`, `evLast`, `evSince`, `evPulse`,
+  `evCount`, `evNth`, `evChord`; `EV` in live mode, where the procedural
+  fallback pushes its own kicks and snares so a piece reacts the same live;
+  `envAt('stems.drums.rms', t)`.
+- **Synthetic twins** emit their drums as MIDI events and, on request, stems and
+  chord progressions; existing twins are byte-identical apart from the new
+  event lists.
+
+### Added — one piece, every platform (#57, folding in #27, #30, #34)
+
+- **`kaleidophone platforms`**: 20 deliverables (Instagram reel, story,
+  carousel and grid; TikTok; YouTube video, Short and thumbnails; Spotify Canvas
+  and cover; Apple Music cover and motion art; SoundCloud artwork and header;
+  and one distributor cover, the 3000 px file DistroKid, TuneCore, CD Baby,
+  Amuse, LANDR, UnitedMasters and SoundCloud all take), each with its size,
+  length, frame rate, audio rule, file limit, safe area and loudness target,
+  its sources, a confidence level and the date it was checked.
+  [docs/PLATFORMS.md](docs/PLATFORMS.md) is generated from it.
+- **In the delivery sheet:** `platforms: [instagram-reel, tiktok, youtube-short,
+  spotify-canvas]` on a cut writes one file per platform — stream-copied when
+  the render already fits, scaled or reframed (`reframe: pad-blur | pad-color |
+  crop`) when it doesn't, silent where the platform wants silence, and checked
+  afterwards for size, length, frame rate, audio, file size and loudness ("YouTube
+  will turn this down by ~5 dB"). Files are named one way
+  (`<title>.<cut>.<platform>[.<ending>]`), and `<title>.delivery.json` lists
+  everything delivered with its spec and measurements.
+- **The covers matrix** (`covers:` in the sheet): every cover size from one
+  master — squares, a 16:9 thumbnail and a 9:16 reel cover with blurred,
+  darkened sides, the Instagram 3:4 grid preview, the SoundCloud header band —
+  in sRGB with no embedded profile or EXIF, marked 300 dpi, under each file
+  limit, never upscaled.
+
+### Added — endings as variants (#58)
+
+- A piece declares `variants` in `piece.json`; `render.mjs --variant
+  ending=lamp` renders one, and `render.mjs --endings ending` renders the body
+  once and one file per ending with identical stream parameters, so they join
+  by stream copy (proved frame by frame against a whole render, in CI too).
+- `deliver` takes `endings:` on a cut and writes one finished file per ending,
+  the audio continuous over the join, plus a contact sheet of the endings side
+  by side, to choose — or to post them all as trial reels and keep the one
+  people watch to the end.
+- The template ships three endings: the droste fall, the lamp going out, and
+  the exit, where only the chair stays.
+
+### Added — no tokens, another agent, which model
+
+- **[docs/PORTABILITY.md](docs/PORTABILITY.md):** what runs with no AI at all
+  (everything but the concept, new piece code and the captions' voice), and how
+  other agents use the repository: Codex, Copilot, Cursor and Jules read
+  `AGENTS.md`; Gemini CLI does through `.gemini/settings.json`; the skills are
+  linked at `.agents/skills`, where Codex, Gemini CLI, Copilot and Cursor look.
+- **`kaleidophone kit`** works without a brief (`--song`, `--title`, `--concept`,
+  `--lang en,fa`), and `--llm ollama:<model>` drafts each caption with a model
+  on your own machine — no tokens, no network, no proxy — labelled as drafts,
+  with Persian normalised and rule-breaking lines flagged. ADR-0006 records the
+  exception; without `--llm` the pack is the same, byte for byte (measured on
+  the demo brief, with and without a `release` block).
+- **Which model:** `/kaleido:direct`, `/kaleido:piece` and `/kaleido:release`
+  ask Claude Code for `best` (Fable where your plan has it, otherwise Opus, and
+  your session's model if neither); README.md says what the rest want.
+
+### Changed
+
+- The 9:16 safe frame (`SAFE_FRAME`, drawn with `?qa=1`) is now the area clear
+  of Instagram's, TikTok's and YouTube Shorts' interfaces, from their published
+  numbers: x 65–940, y 269–1248 at 1080×1920 (it was an inferred x 54–1026,
+  y 220–1480). The template's title fits inside it.
+- The template: the lamp's bulb pops on each snare, the figure nods on each
+  kick, the droste turns on each chord change, the walker leaves during bar 7,
+  and its covers are 3000 px.
+- `still.mjs` writes to `out/stills/` by default; `render.mjs` works in a
+  private temporary folder.
+- The repository-size guardrail measures what git stores (a symlink is a link,
+  not the folder it points at).
+- Python: 1448 tests at 98 % coverage (0.3.0: 816 at 96 %); the floor rises to
+  95. Canvas: 155 tests.
+
+### Reviewed
+
+Reviewed again from the same three seats before release. Fixed: stems that were
+never aligned to the master (a mastered file's trimmed head put `voc` 300 ms
+late), beats that drifted after an odd-length bar, 6/8 felt in quarters, the
+sustain pedal ignored, two MIDI inputs that could exhaust memory, tracebacks
+instead of one-line errors, a local-model request that could leave the machine
+through a proxy, blurred sides that showed a second copy of the picture, a safe
+frame wider than the platforms', and endings that didn't read.
+
+### Known
+
+- SAME AS YOU's title, SHOULD I ?'s frame counter and HAMECHI MANZOR DARE's
+  credit line sit outside the new safe frame; the pieces are frozen.
+- Stems are aligned in time but not checked for a different tempo.
+- A YouTube thumbnail made from a portrait piece has blurred sides; a 16:9
+  cover drawn for it is better (the covers matrix takes one as `master`).
+- The endings contact sheet samples frames evenly, so a fast change can fall
+  between cells.
+- Instagram's maximum reel length is disputed between its own pages (3, 15 or
+  20 minutes); the table enforces 15 and recommends 3.
+- Local models write Persian less well than English: the drafts say so.
+
 ## [0.3.0] — 2026-09-29
 
 **Three engines, one contract.** 0.2 cut your footage into a release. The

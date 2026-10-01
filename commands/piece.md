@@ -1,6 +1,7 @@
 ---
 description: Make a canvas piece for this song — no footage, the picture drawn by code — from the concept to QA stills, a keyframed silent render and covers.
 argument-hint: "[song file] [piece id]"
+model: best
 ---
 
 # Make a canvas piece

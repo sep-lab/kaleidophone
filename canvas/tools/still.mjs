@@ -3,12 +3,14 @@
 //
 //   node tools/still.mjs <piece> --song pack.json --t 12.5,30,60 [--w 540 --h 960] [--out dir] [--qa]
 //                                  [--flags '{"noSpots":true}'] [--card --t0 51] [--html file.html]
+//                                  [--variant ending=lamp]   (a piece with "variants"; named <piece>.ending-lamp_<t>.png)
 //   node tools/still.mjs <piece> --song pack.json --cover main,drift [--size 3000] [--out dir]
 //   node tools/still.mjs <piece> --song pack.json --cover all
 //
 // --qa draws every declared body<->furniture contact on the frame and prints the worst one
 // (pieces built on the rig v2 contact log; see docs/TECHNIQUES.md, "contact QA").
-// PNG, not JPEG: stills are for judging, and covers are deliverables.
+// PNG, not JPEG: stills are for judging, and covers are deliverables. They go in --out, by default
+// canvas/out/stills/ (git ignores canvas/out/, wherever the command is run from).
 //
 // Like render.mjs, the piece is built from its source with THIS song pack first (--html to open
 // another file), and a page error or a request for anything but a local file fails the run
@@ -18,9 +20,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  UsageError, RunError, main, onCleanup, parseArgs, helpText, firstLine, loadPiece, loadDriver, loadSong,
-  launch, openPiece, assertPageOk, buildForRun,
+  CANVAS, UsageError, RunError, main, onCleanup, parseArgs, helpText, firstLine, loadPiece, loadDriver, loadSong,
+  launch, openPiece, assertPageOk, buildForRun, pieceVariants, resolveVariant, variantTag, withVariant,
 } from './lib/common.mjs';
+
+// where stills go without --out: inside canvas/out/, which git ignores (never the folder the command runs in)
+const STILLS = path.join(CANVAS, 'out', 'stills');
 
 const SPEC = {
   usage: 'node tools/still.mjs <piece> --song pack.json (--t t1,t2,... | --cover name,...|all) [flags]',
@@ -32,10 +37,11 @@ const SPEC = {
     size: { type: 'int', arg: 'px', help: 'cover width (height keeps the cover\'s aspect; default: piece.json)' },
     w: { type: 'int', arg: 'px', help: 'still width (default 540)' },
     h: { type: 'int', arg: 'px', help: 'still height (default: 16:9 portrait of --w)' },
-    out: { type: 'string', arg: 'dir', help: 'where the PNGs go (default <piece>_stills)' },
-    prefix: { type: 'string', help: 'file name prefix for --t stills (default: the piece id)' },
+    out: { type: 'string', arg: 'dir', help: 'where the PNGs go (default canvas/out/stills, which git ignores)' },
+    prefix: { type: 'string', help: 'file name prefix for --t stills (default: the piece id, and the --variant asked for)' },
     qa: { type: 'bool', help: 'draw the rig\'s contact log on the frame and print the worst contact' },
     flags: { type: 'json', arg: '{...}', help: 'extra per-frame flags, as JSON' },
+    variant: { type: 'list', repeat: true, arg: 'axis=option', help: 'a piece with "variants": the option to draw on that axis (default: piece.json\'s)' },
     card: { type: 'bool', help: 'the piece\'s signature card (with --t0: the window it opens)' },
     t0: { type: 'number', arg: 's', help: 'the window start the card belongs to (default 0)' },
     fps: { type: 'number', help: 'frame rate the piece is timed at (default: piece.json, else 24)' },
@@ -56,10 +62,14 @@ await main(async () => {
   const drv = await loadDriver(piece);
   need(A.song, `--song is required: the song pack to draw from (usage: ${SPEC.usage})`);
   const pack = loadSong(A.song);
+  const variants = pieceVariants(piece);
   const flags = A.flags ?? {};
   need(flags && typeof flags === 'object' && !Array.isArray(flags), '--flags must be a JSON object, e.g. \'{"noSpots":true}\'');
+  need(!Object.hasOwn(flags, 'variant'), '--flags can\'t set "variant": choose an option with --variant axis=option');
+  const { choice, given } = resolveVariant(id, variants, A.variant || []);
   need(A.cover || A.t, 'give --t t1,t2,... or --cover name,...|all');
   need(!(A.cover && A.t), 'give --t or --cover, not both');
+  need(!(A.cover && (A.variant || []).length), '--variant is for --t stills: a cover is drawn by its name (--cover)');
   const allowPageErrors = !!A['allow-page-errors'];
 
   let covers, cw, ch, times, w, h, opts;
@@ -80,10 +90,12 @@ await main(async () => {
     const fps = A.fps ?? +((piece.spec.render || {}).fps || 24);
     need(fps > 0, `--fps must be positive (got ${fps})`);
     need((A.t0 ?? 0) >= 0, `--t0 is song time and can't be negative (got ${A.t0})`);
-    opts = { t0: A.t0 ?? 0, dur: 1, fps, w, h, card: !!A.card, mode: A.mode || 'none', flags };
+    opts = { t0: A.t0 ?? 0, dur: 1, fps, w, h, card: !!A.card, mode: A.mode || 'none', flags, variant: choice };
   }
-  const outDir = path.resolve(A.out || `${id}_stills`);
-  need(!fs.existsSync(outDir) || fs.statSync(outDir).isDirectory(), `--out ${A.out} is a file: give a folder`);
+  // stills of an option asked for carry it in their names, so two options' stills never overwrite each other
+  const tag = variantTag(variants, given), prefix = tag ? `${id}.${tag}` : id;
+  const outDir = A.out ? path.resolve(A.out) : STILLS;
+  need(!fs.existsSync(outDir) || fs.statSync(outDir).isDirectory(), `${A.out ? `--out ${A.out}` : outDir} is a file: give a folder`);
 
   const { file: html } = await buildForRun(piece, A.song, A.html);
   fs.mkdirSync(outDir, { recursive: true });
@@ -137,12 +149,12 @@ await main(async () => {
         const o = { ...opts, t0: t, dur: 0.05 };
         if (drv.plan) drv.plan(pack, { ...o, snap: false });
         const wn = Math.round((drv.warmup || 3) * o.fps);
-        for (let i = -wn; i <= 0; i++) res = await guard(`t ${t}`, () => drv.draw(page, drv.frame(t + i / o.fps, pack, o)));
+        for (let i = -wn; i <= 0; i++) res = await guard(`t ${t}`, () => drv.draw(page, withVariant(drv.frame(t + i / o.fps, pack, o), choice)));
       } else {
-        res = await guard(`t ${t}`, () => drv.draw(page, drv.frame(t, pack, opts)));
+        res = await guard(`t ${t}`, () => drv.draw(page, withVariant(drv.frame(t, pack, opts), choice)));
       }
       assertPageOk(page, `${id}: t ${t}`);
-      const f = await png(page, path.join(outDir, `${A.prefix || id}_${t.toFixed(3)}.png`));
+      const f = await png(page, path.join(outDir, `${A.prefix || prefix}_${t.toFixed(3)}.png`));
       const qa = res && res.contacts ? res.contacts : null;
       console.log(`${path.relative(process.cwd(), f)}${qa ? '  contacts ' + JSON.stringify(qa) : ''}`);
       if (drv.stateful) { await page.close(); page = null; }

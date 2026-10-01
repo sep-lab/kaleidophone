@@ -14,6 +14,12 @@ kaleidophone kit $ARGUMENTS -o release_pack.md
 Everything in the generated file is derived from the brief and the audio, so
 the numbers are right. The voice is not — that is the job.
 
+No brief (a canvas piece's release)? `kaleidophone kit --song Song.wav --title
+"…" --concept "…" --lang en,fa`. Out of tokens? Add `--llm ollama:<model>` and a
+model on the artist's own machine drafts each caption, labelled as drafts
+([docs/PORTABILITY.md](../docs/PORTABILITY.md)); the rules below still apply to
+whatever it wrote.
+
 ## Before you write
 
 - Read the pack's **"Notes for you (not for the caption)"** section first. It

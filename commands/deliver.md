@@ -52,6 +52,36 @@ does with `silent_start` — negative when it starts before the song, as when
 verdict prints the value to use). A render already exists: `deliver` checks
 its keyframes and says which are missing.
 
+### Endings
+
+A piece that can end more than one way delivers every ending: render it with
+`render.mjs <piece> --endings <axis>` (the body once, each ending after it,
+one encoder setting) and give the cut its manifest,
+`endings: _work/reel.variants.json` — or list `body`, `at` and the endings by
+hand. Each ending ships as `<out stem>.<ending>.mp4`, the master under the
+whole cut at the one gain, and `<out stem>.endings.jpg` shows them side by
+side for the artist to choose from (or to post them all as trial reels and
+keep the one people watch to the end). `--dry-run` reads the manifest, not
+the render.
+
+### Platforms
+
+`kaleidophone platforms` is what each platform asks for -- size, length,
+frame rate, audio, file size, loudness -- every number with its sources,
+how sure it is, and the date it was checked (`docs/PLATFORMS.md`). Give
+the sheet the release's `title` and the render's `size`, and each cut
+`name` and `platforms: [ig-reel, tiktok, youtube-short, canvas]`: one file
+per platform, `<title>.<name>.<platform>.mp4`, stream-copied where the
+render is already the platform's size and scaled once where it isn't. A
+platform of another shape needs `reframe: pad-blur` (the picture over a
+blurred copy of itself), `pad-color` or `crop`. A Canvas gets no audio
+stream; every other file shares the master's one gain. What a platform
+won't take -- a 30 s Canvas, a shape with no reframe -- is refused before
+anything renders; past a softer limit (a Reel over 3 min) it is a warning.
+`covers: {master: <3000 px square>, platforms: [...]}` makes every cover
+from one master, and `<title>.delivery.json` lists every file with its
+spec, what was measured, and the findings.
+
 ## 3. Deliver where the master lives
 
 ```
@@ -71,13 +101,18 @@ and the ceiling. Then frames counted against frames expected, duration, LUFS,
 true peak, size and the gain (and limiter) used — measured on each delivered
 file. `!frames`, `!peak`, a guard that ran out of steps or a `fixed` gain over
 the ceiling is a finding: fix it before anything ships. So is a warning about
-an unfaded edge that isn't silent.
+an unfaded edge that isn't silent. A cut with endings has a row per ending and
+a line for its contact sheet — unlabelled where this ffmpeg can't draw text,
+and it says so.
 
 ## 5. Covers, carousel, captions
 
 - Covers and carousel stills come from the piece's own draw code
   (`still.mjs --cover all`), the frame program's stills, or
-  `kaleidophone cover` for a brief.
+  `kaleidophone cover` for a brief. The sheet's `covers` turns the square
+  master into every platform's size -- Spotify, Apple, your distributor, SoundCloud
+  (and its header), YouTube thumbnails, the Reel cover and what the
+  Instagram grid will show of it.
 - Captions: the copy pack, `kaleidophone kit <brief>`, then
   `/kaleido:caption`. A canvas or frame-program release needs only a
   copy-only brief (see the skill).

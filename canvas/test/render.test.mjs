@@ -21,9 +21,9 @@ function run(tool, args, env = process.env) {
   return { code: r.status, out: r.stdout, err: r.stderr.trim() };
 }
 
-function refused(tool, args, re) {
+function refused(tool, args, re, env = process.env) {
   const dir = fs.mkdtempSync(path.join(tmp, 'out-'));
-  const r = run(tool, [...args, '--out', path.join(dir, tool === 'still.mjs' ? 'stills' : 'x.mp4')]);
+  const r = run(tool, [...args, '--out', path.join(dir, tool === 'still.mjs' ? 'stills' : 'x.mp4')], env);
   assert.equal(r.code, 2, `${tool} ${args.join(' ')}: exit ${r.code}\n${r.err}`);
   assert.equal(r.err.split('\n').length, 1, `one line, got:\n${r.err}`);
   assert.match(r.err, /^kaleidophone-canvas: /);
@@ -86,6 +86,9 @@ test('render / still / build --help', () => {
   }
   assert.match(run('render.mjs', ['--help']).out, /--key-times s,s,\.\.\. +force keyframes at these song times/);
   assert.match(run('render.mjs', ['--help']).out, /--allow-page-errors/);
+  assert.match(run('render.mjs', ['--help']).out, /--variant axis=option +.*\(repeatable\)/);
+  assert.match(run('render.mjs', ['--help']).out, /--endings axis +the body once and every option of this axis after it/);
+  assert.match(run('still.mjs', ['--help']).out, /--variant axis=option +.*\(repeatable\)/);
 });
 
 test('still: bad requests are refused in one line', () => {
@@ -113,4 +116,107 @@ test('build.mjs reads its arguments only when run: the gallery imports it with f
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(url)}); console.log('imported');`, '--', '--out', '../site', '--only', 'minus'], { cwd: CANVAS, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout.trim(), 'imported');
+});
+
+// ---------------------------------------------------------------- variants (issue #58)
+// Fixture pieces in a folder of our own (KALEIDOPHONE_PIECES), never in canvas/pieces: one that can end
+// three ways from 2.5 s, and one whose "variants" can't be right. None of these commands gets as far as
+// building them.
+const fixtures = path.join(tmp, 'pieces');
+function fixturePiece(id, variants) {
+  fs.mkdirSync(path.join(fixtures, id, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(fixtures, id, 'piece.json'), JSON.stringify({ title: id.toUpperCase(), template: 'template.html', src: 'src',
+    lib: ['core', 'live'], grid: { bpm: 120, dur: 16 }, render: { fps: 24 }, variants }));
+  fs.writeFileSync(path.join(fixtures, id, 'template.html'), '<!doctype html><canvas></canvas><script>/*__JS__*/</script>\n');
+  fs.writeFileSync(path.join(fixtures, id, 'src', 'main.js'), 'boot({ bpm: 120, dur: 16, draw() {} });\n');
+}
+fixturePiece('ends', { ending: { at: 2.5, options: ['circle', 'square', 'cross'], default: 'circle' } });
+fixturePiece('broken', { ending: { at: 2.5, options: ['circle', 'square'], default: 'oval' } });
+const inFixtures = { ...process.env, KALEIDOPHONE_PIECES: fixtures };
+const ends = ['ends', '--song', song, '--t0', '0', '--dur', '4', '--fps', '12', '--w', '270', '--h', '480'];
+
+test('render --variant: an unknown axis or option is refused with the valid ones; a piece without variants refuses it', () => {
+  refused('render.mjs', [...ends, '--variant', 'ending=oval'], /ends: "oval" is not an option of ending \(options: circle, square, cross\)$/, inFixtures);
+  refused('render.mjs', [...ends, '--variant', 'mood=dark'], /ends has no variant axis "mood" \(axes: ending\)$/, inFixtures);
+  refused('render.mjs', [...ends, '--variant', 'ending'], /--variant takes axis=option, e\.g\. --variant ending=cross \(got "ending"\)/, inFixtures);
+  refused('render.mjs', [...ends, '--variant', 'ending=square', '--variant', 'ending=cross'], /--variant gives ending twice \(square, cross\): pick one/, inFixtures);
+  refused('render.mjs', [...ends, '--variant', 'ending=square,ending=cross'], /--variant gives ending twice/, inFixtures);
+  refused('render.mjs', [...ends, '--flags', '{"variant":{"ending":"square"}}'], /--flags can't set "variant": choose an option with --variant axis=option/, inFixtures);
+  refused('render.mjs', [...window12, '--variant', 'ending=lamp'], /^kaleidophone-canvas: minus declares no variants in piece\.json/);
+});
+
+test('render --endings: refused unless the join is inside the window and the set can be joined by stream copy', () => {
+  refused('render.mjs', [...ends, '--endings', 'mood'], /ends has no variant axis "mood" \(axes: ending\)$/, inFixtures);
+  refused('render.mjs', [...ends, '--endings', 'ending', '--variant', 'ending=square'], /--endings ending renders every option of ending: leave ending out of --variant/, inFixtures);
+  refused('render.mjs', [...ends, '--endings', 'ending', '--from', '3'], /--endings renders the whole window, a body and every ending: --from \/ --to/, inFixtures);
+  refused('render.mjs', [...ends, '--endings', 'ending', '--out-fps', '24'], /--endings needs the render and output frame rates to match/, inFixtures);
+  refused('render.mjs', ['ends', '--song', song, '--t0', '3', '--dur', '4', '--fps', '12', '--endings', 'ending'],
+    /--endings ending: ending starts at 2\.5 s, outside this window \(song time 3 to 7 s\): give a window that starts before 2\.5 s and ends after it$/, inFixtures);
+  refused('render.mjs', ['ends', '--song', song, '--t0', '0', '--dur', '2.5', '--fps', '12', '--endings', 'ending'], /outside this window \(song time 0 to 2\.5 s\)/, inFixtures);
+  refused('render.mjs', [...ends, '--endings'], /--endings needs a value \(axis\)/, inFixtures);
+  refused('render.mjs', [...window12, '--endings', 'ending'], /minus declares no variants in piece\.json: there are no endings to render$/);
+});
+
+test('still --variant: the same checks; a cover is chosen by its name', () => {
+  refused('still.mjs', ['ends', '--song', song, '--t', '3', '--variant', 'ending=oval'], /"oval" is not an option of ending \(options: circle, square, cross\)$/, inFixtures);
+  refused('still.mjs', ['ends', '--song', song, '--t', '3', '--variant', 'x=y'], /ends has no variant axis "x" \(axes: ending\)$/, inFixtures);
+  refused('still.mjs', ['ends', '--song', song, '--cover', 'all', '--variant', 'ending=square'], /--variant is for --t stills: a cover is drawn by its name/, inFixtures);
+  refused('still.mjs', ['minus', '--song', song, '--t', '1', '--variant', 'ending=lamp'], /minus declares no variants in piece\.json/);
+});
+
+test('render / still: a piece.json whose "variants" can\'t be right stops the command in one line, before anything starts', () => {
+  for (const [tool, args] of [['render.mjs', ['broken', '--song', song, '--dur', '1']], ['still.mjs', ['broken', '--song', song, '--t', '1']]]) {
+    const dir = fs.mkdtempSync(path.join(tmp, 'out-'));
+    const r = run(tool, [...args, '--out', path.join(dir, 'x')], inFixtures);
+    assert.equal(r.code, 1, r.err);
+    assert.match(r.err, /^kaleidophone-canvas: broken: piece\.json variants\.ending: "default" must be one of its options \(circle, square\), got "oval"$/);
+    assert.deepEqual(fs.readdirSync(dir), [], 'nothing written');
+  }
+});
+
+// ---------------------------------------------------------------- what a run leaves behind
+// A run that gets as far as starting Chromium and no further: an ffmpeg and an ffprobe that only say their
+// version, and a Chromium that isn't there (KALEIDOPHONE_CHROMIUM). By then a run has done everything it
+// does to the output folder before rendering; that it fails there is the point (exit 1, cleaned up).
+function noBrowser(extra = {}) {
+  const bin = fs.mkdtempSync(path.join(tmp, 'bin-'));
+  for (const tool of ['ffmpeg', 'ffprobe']) fs.writeFileSync(path.join(bin, tool), `#!/bin/sh\necho "${tool} version 0-test"\n`, { mode: 0o755 });
+  return { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, KALEIDOPHONE_CHROMIUM: path.join(tmp, 'no-chromium'), ...extra };
+}
+
+test('render: its work folder is its own, made for the run and gone after it; a folder of yours named <out>_parts is never touched', () => {
+  const dir = fs.mkdtempSync(path.join(tmp, 'out-'));
+  fs.mkdirSync(path.join(dir, 'x_parts'));
+  fs.writeFileSync(path.join(dir, 'x_parts', 'mine.txt'), 'keep me');
+  const r = run('render.mjs', [...window12, '--out', path.join(dir, 'x.mp4')], noBrowser());
+  assert.equal(r.code, 1, r.err);
+  assert.match(r.err, /could not start Chromium/);
+  assert.deepEqual(fs.readdirSync(dir), ['x_parts'], 'nothing left behind, and nothing of yours gone');
+  assert.equal(fs.readFileSync(path.join(dir, 'x_parts', 'mine.txt'), 'utf8'), 'keep me');
+});
+
+test('render --endings: a set rendered again loses its old manifest before anything renders; a refused command leaves it be', () => {
+  const dir = fs.mkdtempSync(path.join(tmp, 'out-')), manifest = path.join(dir, 'x.variants.json');
+  fs.writeFileSync(manifest, '{"kaleidophone": "canvas-variants/1"}\n');
+  fs.writeFileSync(path.join(dir, 'x.body.mp4'), 'an old part');
+  const set = ['ends', '--song', song, '--t0', '0', '--dur', '4', '--fps', '12', '--w', '270', '--h', '480', '--endings', 'ending', '--out', path.join(dir, 'x.mp4')];
+  const env = noBrowser({ KALEIDOPHONE_PIECES: fixtures });
+  const refusal = run('render.mjs', [...set, '--from', '3'], env);
+  assert.equal(refusal.code, 2, refusal.err);
+  assert.ok(fs.existsSync(manifest), 'a command refused before it starts changes nothing');
+  const r = run('render.mjs', set, env);
+  assert.equal(r.code, 1, r.err);
+  assert.match(r.err, /could not start Chromium/);
+  assert.deepEqual(fs.readdirSync(dir), ['x.body.mp4'], 'the old manifest is gone: whatever parts a failed run leaves, none of them sits beside a manifest that isn\'t theirs');
+});
+
+test('still: without --out, the PNGs go in canvas/out/stills (which git ignores), never the folder it is run from', () => {
+  const cwd = fs.mkdtempSync(path.join(tmp, 'cwd-'));
+  const r = spawnSync(process.execPath, [path.join(CANVAS, 'tools', 'still.mjs'), 'minus', '--song', song, '--t', '1'], { cwd, encoding: 'utf8', env: noBrowser(), timeout: 60000 });
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /could not start Chromium/);
+  assert.deepEqual(fs.readdirSync(cwd), [], 'nothing in the folder it ran in (it used to make minus_stills/ there)');
+  assert.ok(fs.statSync(path.join(CANVAS, 'out', 'stills')).isDirectory());
+  assert.match(fs.readFileSync(path.join(CANVAS, '..', '.gitignore'), 'utf8'), /^canvas\/out\/$/m, 'canvas/out/ is ignored');
+  assert.match(run('still.mjs', ['--help']).out, /--out dir +where the PNGs go \(default canvas\/out\/stills, which git ignores\)/);
 });

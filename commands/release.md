@@ -1,6 +1,7 @@
 ---
 description: Take a finished track all the way to a release — video, cover, and per-platform copy.
 argument-hint: "[song file] [media folder]"
+model: best
 ---
 
 # Ship a release

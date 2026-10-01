@@ -108,6 +108,29 @@ you get captions that everyone can smell.
   would be a real argument, and it would deserve its own ADR rather than a
   quiet dependency.
 
+## Update, 2026-10-01
+
+0.4 adds one opt-in exception to "improving the prose is the job of an agent":
+`kaleidophone kit … --llm ollama:<model>` asks a model running on the artist's
+own machine for caption drafts (`src/kaleidophone/release/local_llm.py`). The
+case for it is the one this ADR didn't consider — no tokens, or no network,
+on release day — and it keeps all four rules:
+
+1. It talks to a model server (`127.0.0.1` unless `--llm-host` names another,
+   which it says on stderr), never to a platform, through the standard library
+   — no client dependency, no proxy, no credentials.
+2. The output is still markdown: the drafts go under their own heading, after
+   the posting order, labelled as drafts.
+3. The facts stay derived. The model is asked for a voice and nothing else;
+   the chapters, timestamps and credits are the tool's own, and a draft that
+   breaks the caption rules is flagged, not quietly fixed.
+4. The concept is still the artist's line: the model is given it, or told
+   there is none — it isn't asked to find one.
+
+Without `--llm`, the pack is the same, byte for byte. If the drafts turn out to
+be pasted unchanged, the first bullet of "What would overturn this" applies to
+them first: cut them back before the scaffold.
+
 ## Related
 
 - [ADR-0001](0001-version-the-brief-not-the-render.md) — the same "derive it,

@@ -118,6 +118,55 @@ frame programs and drawn canvas pieces. See the
       synthetic master, ffmpeg's default AAC coder left short pops that
       `-aac_coder fast` mostly removed (see CHANGELOG 0.3.0, "Known").
 
+## Phase 2c — The session, every platform, every ending (0.4) ✅
+
+- [x] **Session engine** — MIDI and stems from the DAW session into the song
+      pack: exact events, chords, the session's grid, aligned stems, `voc`
+      from the vocal stem; event helpers in the canvas lib
+      ([#56](https://github.com/sep-lab/kaleidophone/issues/56)).
+- [x] **One piece, every platform** — the platform table, delivery presets,
+      reframes, one naming convention, a manifest, the covers matrix
+      ([#57](https://github.com/sep-lab/kaleidophone/issues/57); folds in #27,
+      #30, #34).
+- [x] **Endings as variants** — one body, N endings, joined by stream copy,
+      with a contact sheet to choose
+      ([#58](https://github.com/sep-lab/kaleidophone/issues/58)).
+- [x] **No tokens, another agent** — the no-AI path, local caption drafts,
+      `AGENTS.md` and the skills for other agents, which model for what
+      ([docs/PORTABILITY.md](PORTABILITY.md)).
+
+## Phase 2d — The next engines and features
+
+Filed after 0.3.0 from what the releases keep asking for; each issue has the
+idea, why, and the first pieces.
+
+- [ ] **Darkroom engine** — a shot list for a 36-exposure roll from the song,
+      the scans back in, film physics on the drop
+      ([#59](https://github.com/sep-lab/kaleidophone/issues/59)).
+- [ ] **Stage engine** — the pieces as a live set on the drum machine's
+      clock, every show re-rendered afterwards
+      ([#60](https://github.com/sep-lab/kaleidophone/issues/60)).
+- [ ] **Shader engine** — GPU fragment shaders under the same contract
+      ([#61](https://github.com/sep-lab/kaleidophone/issues/61)).
+- [ ] **Foley engine** — the picture's events as a sound-effects stem
+      ([#62](https://github.com/sep-lab/kaleidophone/issues/62)).
+- [ ] **Endless reels** — loop points found in the song, seamless loops
+      ([#63](https://github.com/sep-lab/kaleidophone/issues/63)).
+- [ ] **Rotoscope rig** — a phone video of you moving drives the ink figure
+      ([#64](https://github.com/sep-lab/kaleidophone/issues/64)).
+- [ ] **Nastaliq draw-on** — Persian titles written stroke by stroke
+      ([#65](https://github.com/sep-lab/kaleidophone/issues/65)).
+- [ ] **Overnight concepts** — three rules and three animatics by morning
+      ([#66](https://github.com/sep-lab/kaleidophone/issues/66)).
+- [ ] **Fan editions** — numbered, seeded covers as two-ink prints
+      ([#67](https://github.com/sep-lab/kaleidophone/issues/67)).
+- [ ] Moonshots: every song as a repo
+      ([#68](https://github.com/sep-lab/kaleidophone/issues/68)), a visual
+      album ([#69](https://github.com/sep-lab/kaleidophone/issues/69)), analog
+      round-trip covers ([#70](https://github.com/sep-lab/kaleidophone/issues/70)),
+      release day on autopilot
+      ([#71](https://github.com/sep-lab/kaleidophone/issues/71)).
+
 ## Phase 3 — Cover art and captions get an AI option
 
 Scoped narrowly on purpose — see
@@ -132,6 +181,8 @@ caption.
 - [ ] `promo/plan.py`'s templated caption (`_suggest_caption`) gets an
       optional LLM-assisted rewrite pass — still starting from the same
       structured facts (chapters, BPM, mood words), not a free-form prompt.
+      (0.4 did this for the release pack with a *local* model:
+      `kaleidophone kit --llm ollama:<model>`.)
 
 ## Phase 4 — Ready to be someone else's tool
 

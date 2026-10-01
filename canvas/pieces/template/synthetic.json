@@ -1,11 +1,13 @@
 {
-  "_comment": "The template's song is synthetic by definition: 120 BPM, an 8-bar loop that starts soft, builds, and drops back for the seam. Levels are section means, the way --twin measures a real song, so the kick peaks (not the whole section) cross the template's 0.75 blink threshold.",
+  "_comment": "The template's song is synthetic by definition: 120 BPM, an 8-bar loop that starts soft, builds, and drops back for the seam, over four chords that change on the bar line (the droste ending turns on the change into bar 7). Levels are section means, the way --twin measures a real song, so the kick peaks (not the whole section) cross the template's 0.75 blink threshold.",
   "seed": 7,
   "fps": 100,
   "dur": 16.0,
   "bpm": 120,
   "downbeat": 0,
   "keys": ["bass", "lowmid", "mid", "high", "air", "rms", "flux", "bflux", "hflux", "cent"],
+  "chords": {"track": "keys", "progression": ["Am", "F", "C", "G"], "every": "bar"},
+  "stems": true,
   "sections": [
     {
       "from": 0,

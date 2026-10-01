@@ -33,11 +33,14 @@ else
   history_kb=$(du -sk .git | cut -f1)
 fi
 
-# Batched, so a large file list cannot silently truncate the sum. The awk
-# filter drops xargs' per-batch "total" lines and keeps the per-file ones.
-worktree_kb=$(git ls-files -z \
-  | xargs -0 -n 200 wc -c \
-  | awk '$2 != "total" { t += $1 } END { printf "%d", t / 1024 + 1 }')
+# The size of what git stores for every tracked path, read from the index rather
+# than the filesystem: a symlink (.agents/skills -> ../skills) counts as the few
+# bytes git keeps for it, not as the directory it points at, and nothing here
+# depends on how a file list is batched.
+worktree_kb=$(git ls-files -s \
+  | awk '{ print $2 }' \
+  | git cat-file --batch-check='%(objecttype) %(objectsize)' \
+  | awk '$1 == "blob" { t += $2 } END { printf "%d", t / 1024 + 1 }')
 
 printf '  tracked files : %s KB (limit %s KB)\n' "$worktree_kb" "$MAX_WORKTREE_KB"
 printf '  git history   : %s KB (limit %s KB)\n' "$history_kb" "$MAX_HISTORY_KB"

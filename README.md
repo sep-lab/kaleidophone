@@ -101,6 +101,26 @@ Then, in the folder with your song:
 Also `/kaleido:caption`, `/kaleido:cover`, `/kaleido:brief`. It is directing,
 not generating — every frame is your material or code you can read.
 
+#### Which model
+
+| The work | Model | Why |
+|---|---|---|
+| `/kaleido:direct`, `/kaleido:piece`, `/kaleido:release`, and the review before a release | `best` — these three commands ask for it | hours-long jobs across many tools, where taste and code meet. `best` is Fable where your plan has it and Opus otherwise; without either, the command runs on your session's model |
+| `/kaleido:caption`, `/kaleido:cover`, `/kaleido:brief`, `/kaleido:master` | the model you chose (Opus is the default on most plans) | short, judgement-heavy |
+| `/kaleido:deliver`, re-renders, platform files | Sonnet is plenty (`/model sonnet`) | the tools do the work; the agent reads their reports |
+| no tokens left | none | the engines are code — see [No tokens, no network, another agent](docs/PORTABILITY.md) |
+
+Model aliases as Claude Code resolves them ([model config](https://code.claude.com/docs/en/model-config), checked 2026-10-01).
+
+#### No tokens, or another agent
+
+Everything but the taste runs without an AI: analysis, renders, every platform's
+files and covers, and the factual half of the captions. `kaleidophone kit --llm
+ollama:qwen3:8b` drafts the voice with a model on your own machine. Codex, Copilot,
+Cursor, Gemini CLI and Jules read [AGENTS.md](AGENTS.md) and the skills
+(`.agents/skills`). How, and what each can do:
+[docs/PORTABILITY.md](docs/PORTABILITY.md).
+
 ### I write code
 
 ```bash
@@ -113,8 +133,11 @@ publisher.) Then:
 ```bash
 kaleidophone auto song.wav ./photos -o out/ --aspect 9:16 --preview-only   # footage -> a brief + contact sheet
 kaleidophone envelope song.wav -o songpack.json                           # the song, analysed at 100 Hz
+kaleidophone envelope song.wav --midi song.mid --stem vocals=vox.wav -o songpack.json   # ...or from the session
 kaleidophone master-check old.wav new.wav                                 # did the new master move anything?
-kaleidophone deliver delivery.yaml                                        # one silent render -> every cut
+kaleidophone deliver delivery.yaml                                        # one silent render -> every platform, every ending
+kaleidophone platforms                                                    # what each platform wants, with sources
+kaleidophone kit --song song.wav --title "SONG" --lang en,fa --llm ollama:qwen3:8b   # captions, drafted locally
 ```
 
 The canvas engine lives in [`canvas/`](canvas/README.md) (Node 20+):
@@ -372,22 +395,24 @@ See [ADR-0003](docs/decisions/0003-public-framework-private-assets.md),
 
 ```
 src/kaleidophone/
-  audio/        analyze a song; the envelope pack; the master drop-in check
+  audio/        analyze a song; the envelope pack (and MIDI + stems in); the master drop-in check
   assets/       station presets + heuristic photo/clip curation
   timeline/     CreativeBrief schema, EDL, compose(), zero-config auto mode
-  render/       ffmpeg pipeline (silent/remux split, effects, preview, teasers), deliver
+  render/       ffmpeg pipeline (silent/remux split, effects, preview, teasers), deliver, platforms
   frames/       frame programs: per-pixel, stateful effects; resumable workers
-  cover/        procedural cover art from the song's own energy envelope
+  cover/        procedural cover art from the song's own energy envelope; every platform's size
   overlay/      timed text cards, shaped right-to-left, bundled OFL fonts
   promo/ release/   chapters, captions, the per-platform copy pack
   cli.py        the `kaleidophone` command
 canvas/         the canvas engine (Node): pieces/, lib/, tools/, test/ -- see canvas/README.md
-skills/ commands/   the Claude Code plugin: one skill per stage, slash commands
+skills/ commands/   the Claude Code plugin: one skill per stage (also at .agents/skills), slash commands
 examples/
   demo/         fully synthetic end-to-end demo (run_demo.sh)
   love/         a hand-authored brief matching the reference project
 docs/
   TECHNIQUES.md every field-tested technique, numbered, with where it lives
+  PLATFORMS.md  every platform's spec, generated from render/platforms.py
+  PORTABILITY.md  no tokens, no network, another agent
   decisions/    ADRs -- the design, and what would overturn each one
   case-studies/ the real releases this framework generalizes from
 tests/          unit tests; synthetic fixtures only; ffmpeg argv asserted, never run
@@ -398,8 +423,12 @@ tests/          unit tests; synthetic fixtures only; ffmpeg argv asserted, never
 
 - **[AGENTS.md](AGENTS.md)** — the canonical brief for anyone (or any agent)
   working on this repo. Start here if you're contributing code.
-- **[docs/TECHNIQUES.md](docs/TECHNIQUES.md)** — 54 techniques from real releases,
+- **[docs/TECHNIQUES.md](docs/TECHNIQUES.md)** — 55 techniques from real releases,
   numbered, each with where it came from and where it lives.
+- **[docs/PLATFORMS.md](docs/PLATFORMS.md)** — what every platform wants (size,
+  length, audio, file limit, safe area, loudness), sourced and dated.
+- **[docs/PORTABILITY.md](docs/PORTABILITY.md)** — no tokens, no network, or
+  another agent: what still runs, and how.
 - **[canvas/README.md](canvas/README.md)** — the canvas engine: the piece
   contract, song packs, rendering, starting a new piece.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the pipeline in detail, the
@@ -417,11 +446,13 @@ tests/          unit tests; synthetic fixtures only; ffmpeg argv asserted, never
 
 ## Status
 
-**v0.3 — three engines.** Every claim above was measured on the machine or the
-release it names; see [CHANGELOG.md](CHANGELOG.md) for what's built, including the
-real bugs found and fixed rather than documented as known issues. Before it
-shipped, 0.3 was reviewed from three seats — a musician's, an art director's and
-a staff engineer's — and it ships with their findings fixed and measured.
+**v0.4 — the session, every platform, every ending.** Every claim above was
+measured on the machine or the release it names; see [CHANGELOG.md](CHANGELOG.md)
+for what's built, including the real bugs found and fixed rather than documented
+as known issues. Before each release since 0.3, the work has been reviewed from
+three seats — a musician's, an art director's and a staff engineer's — and it
+ships with their findings fixed and measured. What's next, engine by engine:
+[ROADMAP.md](docs/ROADMAP.md), "The next engines and features".
 
 What's genuinely still open, in the order it hurts:
 
