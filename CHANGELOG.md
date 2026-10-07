@@ -109,6 +109,12 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 - **A gallery entry**, six seconds from 67.7 s, and `canvas/pieces/setareh/covers.mjs`,
   which draws all six covers in all three formats (`still.mjs` draws only the
   square) with the tools' own launcher, a fresh page for each.
+- **Under the frozen contract**: `"libVersion": "0.4.0"` (the build is byte-identical
+  to the unpinned one), its page and its twin pinned in `contract.test.mjs`, and
+  eight golden stills recorded on Linux CI by the golden-update job (the four
+  existing files came out byte-identical). Their list sits inside the two cuts —
+  the moon, the shutter curtain, the finished photograph, the figure leaving —
+  instead of the default's points across the song, two of which fall outside both.
 - **[docs/case-studies/setareh.md](docs/case-studies/setareh.md)** (row 13) and
   techniques [#56–#62](docs/TECHNIQUES.md#56-exposure-as-an-integral): the exposure
   as an integral, the count closes the circle, the occupancy ghost, a deterministic

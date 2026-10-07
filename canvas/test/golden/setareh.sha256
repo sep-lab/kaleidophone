@@ -1,0 +1,14 @@
+# kaleidophone golden frames: setareh, from its synthetic twin. Each line is the sha256 of one still's decoded
+# RGBA pixels (canvas/tools/golden.mjs), drawn from the page with the "html" sha256 below: the page as the
+# release zip ships it. Recorded by the golden-update job on the machine named in "env"; never edit by hand.
+# html 293c0bf5f1ea171414ee914d5d8fb24fc996c94fe1f2a0ffdae029afa434a498
+# env linux-x64 | chromium 141.0.7390.37 --disable-skia-runtime-opts | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
+# size 1080x1920
+8653174d122c05156f3fe9571e6579379ab948d05addfd45ac14ee7a57815c32  setareh_17.917.png
+89379e5b4f7d36566b46e520c68cfd0662526abfd0aaeef783118d3f50d4a10a  setareh_36.333.png
+71c88b6b0a60acbb0127dc69b924724c7c67b921a55c0390d4104d32d7e5e826  setareh_66.000.png
+decf6fdb08f4ca168702a56fe3c7f050e0478cfee49a795f5a89ca7808a08857  setareh_72.208.png
+7f617a42362365ab2a5ba1f7307b41373806043b9fc589a635b502488c9d9eb9  setareh_73.083.png
+f448b1df9e07d481e8231f9ca5339bdebe54600f588f82031862c4fd91dcea0d  setareh_139.958.png
+7d72aa58985325c8e9a63c227447efb7d37fb44999f8f3845fed4beb4b5c7a65  setareh_cover_night_1200.png
+4c9074b81cab02d2371071839bd4526687c0629c5fdc12e8883929b18c0100ae  setareh_cover_dawn_1200.png

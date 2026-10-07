@@ -243,6 +243,14 @@ private):
   `gallery.t0`, and the gallery shows six seconds from 67.7 s: the last rings
   closing, the shutter, and the held photograph (a 2.3 MB WebP at q50; the grain
   keeps it large). Its sha256 is pinned in `canvas/test/synth.test.mjs`.
+- **The contract.** The page built from the twin (186,304 bytes) and the twin
+  itself are pinned in `canvas/test/contract.test.mjs`, with `"libVersion":
+  "0.4.0"`: the lib it was built with, which the build reproduces byte for byte.
+  Eight golden stills (six frames and two covers, recorded on Linux CI) hold its
+  pixels. The frames are the first at 17.9 s, the plane's at 36.3 s, the moon's at
+  66.0 s, the shutter curtain's at 72.208 s, the finished photograph at 73.083 s
+  and the figure leaving at 139.958 s: all inside the two cuts, drawn in that
+  order on one page, which the sprite flaw above makes part of the recording.
 
 ## What it contributed
 
