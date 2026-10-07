@@ -167,6 +167,38 @@ idea, why, and the first pieces.
       release day on autopilot
       ([#71](https://github.com/sep-lab/kaleidophone/issues/71)).
 
+## Phase 2e — Never the same twice (0.5 → 0.10)
+
+The last six releases are all canvas pieces on one scaffold, and they have
+started to look alike; release night is still hand-made. This arc makes
+sameness something CI can measure and refuse, makes the Mac the studio, and
+lands what the releases since 0.4.0 taught. Each milestone ends in something
+to watch or click; its tracking issue says what. Engineering comes first; new
+songs wait for the release lane to reopen at v0.6.0
+([milestones](https://github.com/sep-lab/kaleidophone/milestones)).
+
+- [x] **M0 · Truth-up and privacy first** — the deny-list and session-URL
+      checks, doc counts that can't drift, the milestones re-homed, the night
+      clock's baseline ([NIGHT-CLOCK.md](NIGHT-CLOCK.md)).
+- [ ] **M1 · The Mac is the studio** — benchmarks, `doctor`, the frozen-piece
+      contract and golden frames ([#74](https://github.com/sep-lab/kaleidophone/issues/74)).
+- [ ] **M2 · Six pieces** — Setareh and ⛈️ STORM land; the Lib Lab (v0.5.0,
+      [#75](https://github.com/sep-lab/kaleidophone/issues/75)).
+- [ ] **M3 · STORM, the whole night** — deliver v2, the full film, no
+      hand-written mux (v0.6.0, [#76](https://github.com/sep-lab/kaleidophone/issues/76)).
+- [ ] **M4 · The Atlas and the Deck** — the catalogue as computed; cards dealt
+      from its empty regions ([#77](https://github.com/sep-lab/kaleidophone/issues/77)).
+- [ ] **M5 · Loops and editions** — Canvas loops, boards, seeded editions
+      (v0.7.0, [#78](https://github.com/sep-lab/kaleidophone/issues/78)).
+- [ ] **M6 · Never the same twice** — the style genome, the signature card,
+      new template families, the B-side (v0.7.0, [#79](https://github.com/sep-lab/kaleidophone/issues/79)).
+- [ ] **M7 · One tag plays every piece** — `<kp-piece>`, `envelope.js`,
+      manifest v2 (v0.8.0, [#80](https://github.com/sep-lab/kaleidophone/issues/80)).
+- [ ] **M8 · Song in, kit out by morning** — markers, `kaleidophone night`,
+      kit v2 (v0.9.0, [#81](https://github.com/sep-lab/kaleidophone/issues/81)).
+- [ ] **M9 · New worlds, the artist's hand** — analog and opt-in generated
+      inputs, the world template (v0.10.0, [#82](https://github.com/sep-lab/kaleidophone/issues/82)).
+
 ## Phase 3 — Cover art and captions get an AI option
 
 Scoped narrowly on purpose — see
