@@ -39,8 +39,9 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   covers of each frozen page, as the sha256 of their decoded pixels, in
   `canvas/test/golden/`. Exact on CI only, where the new `frozen` job pins the
   environment (`ubuntu-24.04`, Chromium by playwright-core's version, the
-  fallback monospace font); elsewhere `--check` checks the pages and skips the
-  frames. A `golden-update` job (CI → Run workflow, *golden_update*) re-records
+  fallback monospace font) and Skia's baseline code path, so the pixels don't
+  depend on which CPU the runner has (measured: the same 32 hashes on AMD and
+  Intel runners); elsewhere `--check` checks the pages and skips the frames. A `golden-update` job (CI → Run workflow, *golden_update*) re-records
   them there and uploads them for a reviewed PR to commit.
 - **The lib pin.** `"libVersion": "0.4.0"` in `piece.json` builds a piece's lib
   from `canvas/lib/versions/0.4.0/`, byte copies of v0.4.0's `core.js` and

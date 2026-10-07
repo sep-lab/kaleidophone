@@ -2,13 +2,13 @@
 # RGBA pixels (canvas/tools/golden.mjs), drawn from the page with the "html" sha256 below: the page as the
 # release zip ships it. Recorded by the golden-update job on the machine named in "env"; never edit by hand.
 # html af5900ac1527b2e4262bc73f5d97978a813394cb4d7b71668313f80a6d194faf
-# env linux-x64 | chromium 141.0.7390.37 | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
+# env linux-x64 | chromium 141.0.7390.37 --disable-skia-runtime-opts | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
 # size 1080x1920
-42f725c627bc3cd58b4fbdcd5be35936f3f613eca77993f557ff74f1a3ca9fe1  same-as-you_23.375.png
-1c91cfb2da659d33e02b4989df5d827531c4582d1f0a3570d42ba17b1cd26323  same-as-you_46.750.png
-741c0b965f04277270d318507f1702eda7a06f0e06ce98f632912afeaf9fe0ae  same-as-you_70.125.png
-b47025fd82bafc4786c50b937e8b1f7a8bc9ca4de5b1a2d70c56872ccbd77793  same-as-you_90.500.png
-c30fb636b74c4b13faa793d4b840b77e8c4ccfc115b7498e8c3c9ae9ceab62c1  same-as-you_93.500.png
-7f173b23768b85efefe07e5a10f0748d3bf1f8ddde380057d105aa9ba02ada36  same-as-you_116.875.png
-06f541e4413133b30b1c4acd6b4cf6ea54ecf2313f5f457cb91a74a5963a9bc2  same-as-you_cover_main_1200.png
-db9fcd837b7a7d17fc96d705ace6c3248ab0ad43b8c70ed71bb4c9c59c5bb81c  same-as-you_cover_psychedelic_1200.png
+e7d50281f73c96c336d2d817f2e792b56b1124368ec1506708c95c6f035c6144  same-as-you_23.375.png
+5fe8287d7c92a1c84e9d98198564f456e8469328be09a357b91408fc60b3cf3b  same-as-you_46.750.png
+a400265e056c1ae98e754287bdefc00979a14d1da46c18e3a1047cffb5fae6dc  same-as-you_70.125.png
+4988c9b29e3805ce7f36dc95a50dd607d04f56a0b4d9eb92d9f421aadf75c3cd  same-as-you_90.500.png
+d598aa3bf88a1c29c82f93db2ef050d576c7b4c3118efde5ca75ed8d8d9cd6cd  same-as-you_93.500.png
+5e41fc2bbab24ebfed7d50aa049ca57a8886ebb53392de2cb358b2786e2d3116  same-as-you_116.875.png
+25a08d25e85547e6d1421d10897c8ec19226b8c0a0cce65f0f865230422a6765  same-as-you_cover_main_1200.png
+85d4c77714429652dd18e732c27406c308504ac1384c72bac28ed159774ca189  same-as-you_cover_psychedelic_1200.png

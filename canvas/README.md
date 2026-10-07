@@ -418,6 +418,14 @@ golden frames are recorded and checked on CI only, on one environment: `ubuntu-2
 `--check` checks the pages and says it skipped the frames. A failed check leaves the stills it drew in
 `out/golden/<piece>/` (CI uploads them as `golden-stills`).
 
+The rasteriser also picks code paths by CPU, and GitHub's runners aren't all one CPU. Measured on CI:
+SAME AS YOU's stills came out 1–2 levels apart in 17 to 532 pixels each between an Intel Xeon 6973P-C
+runner and AMD EPYC 7763 and 9V74 ones (which agreed with each other). So `golden.mjs` draws every still
+on Skia's baseline code path (`--disable-skia-runtime-opts`, the switch Chromium's own pixel tests use,
+passed to `still.mjs` through `KALEIDOPHONE_CHROMIUM_ARGS`). With it, six recordings on AMD EPYC 7763
+(AVX2), AMD EPYC 9V45 and Intel Xeon Platinum 8573C (both AVX-512) gave the same 32 hashes. A failed
+check names the CPU it ran on.
+
 **When the pixels have to change** (a new runner image, a Chromium bump, a measured fix to a frozen
 piece), re-record them on that environment: Actions → CI → Run workflow on the branch, with
 *golden_update* ticked, or

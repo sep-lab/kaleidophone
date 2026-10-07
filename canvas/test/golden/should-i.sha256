@@ -2,13 +2,13 @@
 # RGBA pixels (canvas/tools/golden.mjs), drawn from the page with the "html" sha256 below: the page as the
 # release zip ships it. Recorded by the golden-update job on the machine named in "env"; never edit by hand.
 # html 65a8204150efd1a4584730681c289c3aa2fa9ced39343fe58c28a48b1ef1a727
-# env linux-x64 | chromium 141.0.7390.37 | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
+# env linux-x64 | chromium 141.0.7390.37 --disable-skia-runtime-opts | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
 # size 1080x1920
-7e84d4d4df32e887f2e03c3660cf8feb4c049bc709b741437d702df7e9c39530  should-i_30.625.png
-920e805f716120e8cfebb5777e25409d90a017afc03351647efb2313b720824b  should-i_61.250.png
-f6bd48dc56e6600ef188c6ba1fc4e518851b6697d7d9011c2cbcc82636d86609  should-i_74.833.png
-2de53c27c0255423cbe440331211e361e4042e0304f9e05769d4f00f89a758eb  should-i_91.875.png
-0e2559e470ea2856c6f10f5545f59a4d8af48c378611a9c3425a325b5731d1ee  should-i_122.500.png
-a435d1d62230f53b9c55044800be37ae63e5e999122d44d75950dda47156032a  should-i_153.167.png
-e3ac805e3b4c91e652137c4741cfe6fc45b6f53e39d8e728d7bda8d4e46b48be  should-i_cover_main_1200.png
-cbe73536d7c586b525155f5209aa46d4016c8dc5f33ac5c45500a9b418ac62d9  should-i_cover_ghost_1200.png
+09c95d0aae13f90832311d73a7b9e9d961d1ed1ba9b61ea9bdb2aa265ef219e4  should-i_30.625.png
+19c3fbe7c66c22341636f004463138a07ab9870fc6a8f51f1580d3a9c9fe2fda  should-i_61.250.png
+564aee8fcb92544f30be7a20f10eda0170679eedf5b7461547cedd6a12445638  should-i_74.833.png
+65e23e3bd8d41538c12e1177a90d21378c6a2b04307670a35f732682483bac65  should-i_91.875.png
+b3d9b44b281142cf127db64d2ed1744b0771281658b6e58e208bd2d82e0fa4cc  should-i_122.500.png
+5b23f5d4c6593778c16b83852eed6e936434672042736d5a63076fc4abd9a0a4  should-i_153.167.png
+e2556a4fc46920e04acdd33d54ea896c8622b2f96d056b5d9c272d3cb96cc88e  should-i_cover_main_1200.png
+bfca94cec17a79fa5edb31936c411bd39097960b77ba07cbda3798820c44961f  should-i_cover_ghost_1200.png

@@ -2,7 +2,7 @@
 # RGBA pixels (canvas/tools/golden.mjs), drawn from the page with the "html" sha256 below: the page as the
 # release zip ships it. Recorded by the golden-update job on the machine named in "env"; never edit by hand.
 # html b60aa672468aed4529fd2c91480083b4f8dd52431e6edcc8fd5df5aaa65d723b
-# env linux-x64 | chromium 141.0.7390.37 | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
+# env linux-x64 | chromium 141.0.7390.37 --disable-skia-runtime-opts | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
 # size 1080x1920
 72527e28830db05f86dae00c7b7e027fe313a3e8cb6ff2c84239313c6426cb75  hamechi-manzor-dare_34.733.png
 cb25c33343c2f3748b74e92d0a4f62cc4b75c906047ad5a67481d647368bbc64  hamechi-manzor-dare_69.500.png
@@ -10,5 +10,5 @@ d5f90626cae846ee3f7f33942b998e8437e9f89742f0ba045fa4ba314c4783f1  hamechi-manzor
 0f00cb74a8a61b4e55abccd312015cb3f425980d498f42e04e98e953bd363e32  hamechi-manzor-dare_104.233.png
 0a5cbc3b9a483fd063de13d1a304a1343e75ac499fdaee12e029648899d053f1  hamechi-manzor-dare_139.000.png
 ce08b07f1c38d12aeeda2479f1c63a0c91059069b73233a10c3f698520cbd582  hamechi-manzor-dare_173.733.png
-a0af4f2e0fe659a9d5b85c4b29672365aae358f89386c2a553d61aca880a6ae2  hamechi-manzor-dare_cover_scream_1200.png
+b3a5da4fa6ba9fa282f83b76efad67ddf3513b8f047940a1a312e690d41469dc  hamechi-manzor-dare_cover_scream_1200.png
 670cf8114b36f0170588cb7f15a8c310aef8cd4436c02363cee466f9177061b4  hamechi-manzor-dare_cover_mask_1200.png
