@@ -12,8 +12,11 @@
 // Exact pixels only repeat on one machine image. Chromium's software rasteriser differs between Linux
 // and macOS, and a piece that falls back on a system font (HAMECHI MANZOR DARE's credit line is
 // ui-monospace) changes with the fonts installed: canvas/README.md, "Verified against what shipped".
-// So the hashes are recorded on CI's ubuntu-24.04 with its fonts pinned (.github/actions/canvas-env),
-// every file says what it was recorded on, and:
+// It also picks code paths by CPU: on CI, SAME AS YOU drew up to 532 pixels 1-2 levels apart on an
+// Intel runner and an AMD one (measured), so every still is drawn with Skia's baseline code path
+// (--disable-skia-runtime-opts, what Chromium's own pixel tests use). The hashes are recorded on CI's
+// ubuntu-24.04 with its fonts pinned (.github/actions/canvas-env), every file says what it was
+// recorded on, and:
 //
 //   --check    builds each piece as the release ships it, checks the page's sha256 against the one the
 //              frames were drawn from (anywhere), then renders the stills the file lists and compares
@@ -40,6 +43,8 @@ import { synthFor } from './synth.mjs';
 export const GOLDEN = path.join(CANVAS, 'test', 'golden');
 const STILLS = path.join(CANVAS, 'out', 'golden');
 export const FRAMES = 6, COVERS = 2, COVER_W = 1200;
+// Skia's baseline code path, the same on every x86 CPU, instead of the one it picks for this one
+export const CHROMIUM_ARGS = ['--disable-skia-runtime-opts'];
 const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
 
 // ---------------------------------------------------------------- which pieces
@@ -178,8 +183,8 @@ const UNAVAILABLE = 'unavailable';
 export async function environment() {
   let chromium;
   try {
-    const browser = await launch();
-    chromium = browser.version();
+    const browser = await launch(CHROMIUM_ARGS);
+    chromium = `${browser.version()} ${CHROMIUM_ARGS.join(' ')}`;
     await browser.close();
   } catch (e) {
     chromium = `${UNAVAILABLE} (${firstLine(e.message).slice(0, 80)})`;
@@ -207,7 +212,9 @@ export function cpu() {
 const node = process.execPath;
 function still(args) {
   try {
-    execFileSync(node, [path.join(CANVAS, 'tools', 'still.mjs'), ...args], { cwd: CANVAS, stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync(node, [path.join(CANVAS, 'tools', 'still.mjs'), ...args], {
+      cwd: CANVAS, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, KALEIDOPHONE_CHROMIUM_ARGS: CHROMIUM_ARGS.join(' ') },
+    });
   } catch (e) {
     throw new RunError(`still.mjs ${args[0]} failed: ${firstLine(String(e.stderr || e.message).trim().split('\n').pop())}`);
   }

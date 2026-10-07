@@ -568,6 +568,12 @@ export function chromiumPath() {
   return undefined;
 }
 
+// KALEIDOPHONE_CHROMIUM_ARGS: more Chromium switches for every browser the tools start, space-separated.
+// tools/golden.mjs sets --disable-skia-runtime-opts through it, so its stills don't depend on the CPU.
+export function chromiumArgs(extra = []) {
+  return [...extra, ...(process.env.KALEIDOPHONE_CHROMIUM_ARGS || '').split(/\s+/).filter(Boolean)];
+}
+
 export async function launch(extraArgs = []) {
   const { chromium } = await import('playwright-core');
   const executablePath = chromiumPath();
@@ -580,7 +586,7 @@ export async function launch(extraArgs = []) {
       // no proxy, and no host resolves: a piece is one self-contained file, and a render must never
       // reach the network (openPiece also aborts, and fails the run on, any request that isn't
       // file:/data:/blob:)
-      args: ['--allow-file-access-from-files', '--disable-gpu', '--no-proxy-server', '--host-resolver-rules=MAP * ~NOTFOUND', ...extraArgs],
+      args: ['--allow-file-access-from-files', '--disable-gpu', '--no-proxy-server', '--host-resolver-rules=MAP * ~NOTFOUND', ...chromiumArgs(extraArgs)],
     });
   } catch (e) {
     throw new RunError(`could not start Chromium (${firstLine(e.message)}). ` +

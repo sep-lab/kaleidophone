@@ -495,6 +495,10 @@ jobs:
     # that says why the pixels changed (a new runner image, a Chromium bump, a measured fix).
     name: Golden frames, re-recorded (on request)
     if: github.event_name == 'workflow_dispatch' && inputs.golden_update
+    strategy:   # TEMPORARY: sample runner CPUs; back to one leg before merge
+      fail-fast: false
+      matrix:
+        leg: [1, 2, 3, 4, 5, 6]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -507,7 +511,7 @@ jobs:
         uses: ./.github/actions/canvas-env
 
       - name: Re-record every frozen piece's golden frames
-        run: node tools/golden.mjs --update
+        run: node tools/golden.mjs --update | tee test/golden/run.txt
 
       - name: What changed
         run: |
@@ -524,7 +528,7 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: golden-frames
+          name: golden-frames-${{ matrix.leg }}
           path: canvas/test/golden/
           if-no-files-found: error
           retention-days: 14
@@ -532,8 +536,8 @@ jobs:
       - name: Upload the stills they were recorded from (to compare with a failed check's)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: golden-stills-recorded
-          path: canvas/out/golden/
+          name: golden-stills-recorded-${{ matrix.leg }}
+          path: canvas/out/golden/same-as-you/
           if-no-files-found: ignore
           retention-days: 14
 
