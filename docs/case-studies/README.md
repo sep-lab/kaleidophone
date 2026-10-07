@@ -18,7 +18,7 @@ private and never enter this repository
 ([ADR-0003](../decisions/0003-public-framework-private-assets.md)), so those
 numbers can't be re-run from here. **Measured on the port** means measured
 against the code in `canvas/pieces/`, which you can run. Anything inferred
-says so. Technique numbers (#1–#54) refer to
+says so. Technique numbers (#N) refer to
 [TECHNIQUES.md](../TECHNIQUES.md).
 
 **What's scrubbed, everywhere.** Song titles are real and credited to Sep

@@ -114,7 +114,7 @@ and it says so.
   (and its header), YouTube thumbnails, the Reel cover and what the
   Instagram grid will show of it.
 - Captions: the copy pack, `kaleidophone kit <brief>`, then
-  `/kaleido:caption`. A canvas or frame-program release needs only a
+  `/kaleidophone:caption`. A canvas or frame-program release needs only a
   copy-only brief (see the skill).
 
 ## 6. Hand it over

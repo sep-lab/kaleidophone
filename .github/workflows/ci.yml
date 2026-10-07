@@ -3,8 +3,9 @@
 # What this pipeline actually protects, in priority order:
 #
 #   1. The promise that no real photo, video, or audio file -- and no
-#      absolute personal path -- ever enters this repository
-#         -> job: guardrails
+#      absolute personal path, no private name, no session URL -- ever
+#      enters this repository
+#         -> jobs: guardrails, deny-list
 #   2. Ordinary correctness: the pure-logic test suite, and lint
 #         -> jobs: test, lint
 #   3. The actual end-to-end promise ("a song + your photos -> a video")
@@ -94,7 +95,7 @@ jobs:
         run: |
           command -v shellcheck >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y shellcheck; }
           shellcheck --version
-          shellcheck .github/workflows/scripts/*.sh examples/demo/*.sh
+          shellcheck .github/workflows/scripts/*.sh examples/demo/*.sh .githooks/pre-push
 
   # =========================================================================
   test:
@@ -189,6 +190,11 @@ jobs:
       - name: No real song packs committed
         run: python3 .github/workflows/scripts/check_no_real_songpacks.py
 
+      - name: No Claude Code session URLs in the commits being pushed
+        # Only this pull request's commits (or a push's new ones): the three on
+        # main from before the rule stay, because history is not rewritten.
+        run: python3 .github/workflows/scripts/check_no_session_urls.py --github
+
       - name: Why these checks exist
         if: always()
         run: |
@@ -201,7 +207,35 @@ jobs:
             echo "| per-file + repo size ceiling | Catches a format nobody thought to blocklist. History size cannot be undone by a later delete. |"
             echo "| no absolute personal paths | A real CreativeBrief's \`media_dir\`/\`audio_path\` are local paths into someone's actual folders. Pasting one into a doc or issue leaks a username and folder structure. See AGENTS.md. |"
             echo "| no real song packs | A song pack is the song measured 100 times a second. One made from an unreleased master is as private as the master, and at ~1.6 MB for four minutes it passes the size ceiling. Pieces ship synthetic twins instead. See docs/decisions/0007. |"
+            echo "| no session URLs | A \`Claude-Session:\` trailer points a public commit at a private working session. Only the commits being pushed are read. |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # =========================================================================
+  deny-list:
+    # A private name has no shape for the other guardrails to catch, so the
+    # owner keeps a list of them in the KP_DENY_LIST secret. Fail closed: no
+    # secret is an error, except on a pull request GitHub gives no secrets to
+    # (from a fork or from Dependabot), which is skipped with a notice. The
+    # output names file:line and a keyed hash of the term, never the term --
+    # this log is public. See CONTRIBUTING.md, "The deny list".
+    name: Deny list (private names stay out; prints hashes, never terms)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every commit in the range is read, not just the tip.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: No name on the private deny list in the commits being pushed, or in the tree
+        env:
+          # Only this step sees the secret, and the script never prints it.
+          KP_DENY_LIST: ${{ secrets.KP_DENY_LIST }}
+        run: python3 .github/workflows/scripts/check_deny_list.py --github
 
   # =========================================================================
   demo:
@@ -406,7 +440,7 @@ jobs:
     # later doesn't mean editing repository settings.
     name: CI
     if: always()
-    needs: [lint, test, guardrails, demo, canvas]
+    needs: [lint, test, guardrails, deny-list, demo, canvas]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

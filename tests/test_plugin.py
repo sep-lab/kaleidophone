@@ -79,6 +79,46 @@ def test_the_plugin_version_matches_the_package_version():
 
 
 # --------------------------------------------------------------------------
+# the prefix the commands answer to
+# --------------------------------------------------------------------------
+# Claude Code namespaces a plugin's commands and skills by the plugin's name. Measured 2026-10-07
+# with `claude --plugin-dir .` (Claude Code 2.1.289): the session listed `kaleidophone:brief` ...
+# `kaleidophone:release` and `kaleidophone:kaleidophone-<skill>`. The docs said `/kaleido:` until
+# then, which no installed copy ever answered to.
+PREFIX = "/kaleidophone:"
+
+
+def test_the_documented_prefix_is_the_plugin_name():
+    """Renaming the plugin would change every command; this makes that loud."""
+    assert PREFIX == f"/{PLUGIN['name']}:"
+
+
+def namespaced(text: str) -> set[tuple[str, str]]:
+    """Every `/<namespace>:<name>` in a text, outside URLs and paths."""
+    return set(re.findall(r"(?<![\w/.:-])/([a-z][a-z0-9-]*):([a-z][a-z0-9-]*)", text))
+
+
+def test_every_documented_command_uses_the_prefix_and_exists():
+    from tests.test_doc_drift import live_lines, tracked_markdown
+
+    names = {p.stem for p in COMMANDS} | {p.parent.name for p in SKILLS}
+    wrong = []
+    for path in tracked_markdown():
+        text = "\n".join(line for _, line in live_lines(path, path.read_text(encoding="utf-8")))
+        for ns, name in sorted(namespaced(text)):
+            if ns != PLUGIN["name"] and name in names:
+                wrong.append(f"{path.relative_to(ROOT)}: /{ns}:{name} -- Claude Code shows it as {PREFIX}{name}")
+            elif ns == PLUGIN["name"] and name not in names:
+                wrong.append(f"{path.relative_to(ROOT)}: {PREFIX}{name} -- no such command or skill")
+    assert not wrong, "\n".join(wrong)
+
+
+def test_the_prefix_scan_reads_commands_and_leaves_urls_alone():
+    text = "Run `/kaleido:direct`, then /kaleidophone:piece; see https://example.com/a:b and C:/x:y."
+    assert namespaced(text) == {("kaleido", "direct"), ("kaleidophone", "piece")}
+
+
+# --------------------------------------------------------------------------
 # commands
 # --------------------------------------------------------------------------
 def test_there_are_commands_at_all():

@@ -178,6 +178,39 @@ To re-render a real release, render with the real pack: `node tools/render.mjs
 <piece> --song private/songpack.json …` builds its own copy of the piece with that
 pack's events baked in, so it can never pick up a twin left in `dist/`.
 
+### Private pieces: `KALEIDOPHONE_PIECES`
+
+A piece joins this repository only once its song is out, with a synthetic twin,
+a gallery entry and a scrubbed case study. Until then it is private, like its
+song pack, and lives in a folder of pieces outside the checkout, laid out like
+`canvas/pieces/` (`<id>/piece.json`, `src/`, `driver.mjs`). Point the tools at
+that folder and they work on it unchanged:
+
+```bash
+export KALEIDOPHONE_PIECES=/path/to/private/pieces     # a folder of pieces, outside the repository
+node tools/build.mjs my-piece --song /path/to/private/songpack.json --out /path/to/private/my-piece.html
+node tools/render.mjs my-piece --song /path/to/private/songpack.json --out /path/to/private/film.mp4
+node tools/still.mjs my-piece --song /path/to/private/songpack.json --t 12 --out /path/to/private/stills
+```
+
+- **What it swaps:** where pieces are listed and loaded from. Every tool
+  (`build`, `render`, `still`, `synth`, `gallery`) sees only that folder, so
+  `build.mjs --all` builds the private pieces and none of the public ones.
+- **What it keeps:** the lib, the fonts and the tools are this checkout's, so a
+  private piece builds with exactly the code a public one does, and it lands
+  later as a copy of the folder, not a port.
+- **Where output goes:** without `--out`, a build lands in `canvas/dist/`,
+  stills in `canvas/out/stills/` and a render in the folder you ran it from;
+  the render tools' working builds always go to `canvas/out/build/`. Git
+  ignores all of them, but they are inside the checkout, so pass `--out` and
+  keep a private build next to its song.
+- Unset it (or open a new shell) before working on the repository's own
+  pieces. The tests use the same variable for throwaway fixture pieces
+  (`canvas/test/render.test.mjs`).
+
+The deny-list check ([CONTRIBUTING.md](../CONTRIBUTING.md#the-deny-list)) is
+the backstop for a private name that does reach a commit.
+
 ## From render to release
 
 Render the film once, silent, with keyframes forced at every cut you plan
@@ -293,7 +326,7 @@ node tools/still.mjs my-piece --song out/songs/my-piece.songpack.json --t 1,4,9 
 | `recursion.js` | vector droste and vector kaleidoscope: recursion by redrawing, crisp at any depth |
 | `viewfinder.js` | the viewfinder compositor: split-image focusing, microprism, meter, counter, mirror slap |
 
-Everything else a piece can borrow is in the four pieces, indexed by technique in
+Everything else a piece can borrow is in the shipped pieces, indexed by technique in
 [docs/TECHNIQUES.md](../docs/TECHNIQUES.md).
 
 ### Reserved names

@@ -26,7 +26,7 @@ Quick orientation:
   (0.3) canvas piece, release kit, master swap, footage effects. Read the
   relevant one before working on that stage, whether you're a person or an
   agent.
-- The four shipped canvas pieces are frozen (verified against their releases);
+- The shipped canvas pieces are frozen (verified against their releases);
   new canvas work starts from `canvas/pieces/template` and `canvas/lib/`. Real
   song packs, lyrics and collaborator names never enter the repository.
 - Every number in `docs/` must be reproducible. Label claims measured /

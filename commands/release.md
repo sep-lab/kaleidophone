@@ -9,15 +9,15 @@ model: best
 The whole arc, checking in at each expensive step. Arguments: `$ARGUMENTS`.
 
 This is the path for the artist's own photos and clips. With no footage — the
-picture drawn in code — start with `/kaleido:piece`; for footage that needs
+picture drawn in code — start with `/kaleidophone:piece`; for footage that needs
 per-pixel, stateful effects, the `kaleidophone-footage-effects` skill. Either
-way the files are cut from one silent render with `/kaleido:deliver`.
+way the files are cut from one silent render with `/kaleidophone:deliver`.
 
 Work in the artist's project folder. Never copy their media anywhere.
 
 ## 1. The edit
 
-Follow `/kaleido:direct`. Stop at the contact sheet and get a yes before
+Follow `/kaleidophone:direct`. Stop at the contact sheet and get a yes before
 rendering.
 
 ## 2. Deliverables

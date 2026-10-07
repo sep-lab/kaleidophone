@@ -34,6 +34,14 @@ attack surface that matters:
 - **The delivery sheet.** `kaleidophone deliver` refuses output paths that
   leave the output folder, and `--dry-run` quotes every name in the script it
   emits. A sheet value that reaches the shell unquoted is a bug.
+- **The privacy guardrails.** A real path, media file, song pack or private
+  name that gets past CI is a vulnerability here, not a style issue. The
+  deny-list check ([CONTRIBUTING.md](CONTRIBUTING.md#the-deny-list)) reads a
+  secret list of private names and prints only `file:line` and a keyed hash; a
+  spelling of a listed name it misses, a way to make its output (or any other
+  CI output) reveal a term, or a way to skip it on a pull request that has the
+  secret, is a security report — send it privately, as above, and don't name
+  the term in it if you know one.
 - **Canvas pieces** (`canvas/`) are self-contained HTML files: no external
   scripts, stylesheets, fonts or requests (CI checks each build for them). In
   live mode a piece decodes an audio file the viewer drops on it, locally, with

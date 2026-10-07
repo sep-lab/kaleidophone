@@ -19,8 +19,10 @@ from kaleidophone.render import ffmpeg_pipeline as fp
 from kaleidophone.timeline.schema import CreativeBrief, OverlayConfig, OverlayLine
 from tests.factories import make_section, make_song, make_station
 
-PERSIAN = "من از نهایت شب حرف می‌زنم"
-ENGLISH = "i speak from the depth of the night"
+# A plain sentence, not a lyric ("kaleidophone turns sound into a picture"): joined letters and a
+# zero-width non-joiner, which is what shaping has to get right.
+PERSIAN = "کالیدوفون صدا را تصویر می‌کند"
+ENGLISH = "kaleidophone turns sound into a picture"
 
 
 def card(**kw) -> OverlayConfig:

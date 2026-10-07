@@ -27,6 +27,44 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   engine's run log and `RenderResult` split each part into read, program and
   write time.
 
+### Added — privacy first
+
+- **The deny list.** A `deny-list` CI job and a pre-push hook
+  (`git config core.hooksPath .githooks`) refuse any name on a private list (the
+  `KP_DENY_LIST` secret, or `~/.kaleidophone-private/deny-list.txt`) in the
+  commits being pushed: messages, paths and files, as committed, and the whole
+  tree at the tip. They print `file:line` and a keyed hash of the term, never the
+  term. Fail closed: no list is an error, except on a fork's or Dependabot's pull
+  request, which GitHub gives no secrets to and which is skipped with a notice.
+  The list format is the artist site's, so one list serves both
+  ([CONTRIBUTING.md](CONTRIBUTING.md#the-deny-list)).
+- **No session URLs.** CI and the hook refuse a `claude.ai/code/session_` URL in
+  the message of a commit being pushed. The three on `main` from before the rule
+  stay: history isn't rewritten.
+- **Docs that can't drift.** `tests/test_doc_drift.py` holds every count of the
+  techniques, the shipped pieces and the ADRs to the files they count, and the
+  piece tables to `canvas/pieces/`; `tests/test_doc_links.py` checks that every
+  relative link and `#anchor` in the docs resolves. The counts that were going
+  stale are gone from the prose.
+- **[docs/NIGHT-CLOCK.md](docs/NIGHT-CLOCK.md):** how long the last six releases
+  took to land on the Mac, from their folders' file times (measured, rough).
+- **Private pieces**, documented: `KALEIDOPHONE_PIECES` points the canvas tools at
+  a folder of pieces outside the repository ([canvas/README.md](canvas/README.md#private-pieces-kaleidophone_pieces)).
+
+### Fixed
+
+- **The commands are `/kaleidophone:<name>`.** Claude Code namespaces a plugin's
+  commands by the plugin's name; the docs said `/kaleido:` (measured with
+  `claude --plugin-dir .`, Claude Code 2.1.289). `tests/test_plugin.py` now pins
+  the prefix and that every documented command exists. The entries below keep the
+  old spelling as released.
+- The Persian sample in the README and the overlay tests was a line of a poem
+  recited on a release; it is now a plain sentence.
+- Two counts had gone stale: `docs/case-studies/README.md`'s range of
+  techniques, and CONTRIBUTING.md's count of the ADRs.
+- Dependabot ignores numba: its two PRs for it only rewrote the comment above
+  the Intel-Mac pin until it contradicted the pin.
+
 ## [0.4.0] — 2026-10-01
 
 **The session, every platform, every ending.** 0.3 gave three engines one
