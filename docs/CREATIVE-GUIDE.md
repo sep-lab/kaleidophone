@@ -128,8 +128,8 @@ have them whether or not anyone is watching.
 
 The canvas pieces ([canvas/](../canvas/README.md)) have no footage, so nothing
 constrains the picture except the song — which is exactly why each one needs a
-rule the renderer obeys, found before a line is drawn. Four releases, four
-rules:
+rule the renderer obeys, found before a line is drawn. One release, one
+rule:
 
 - **( - ):** *she is never drawn.* Her silhouette is filled with bare paper,
   last, so anything that reaches into it — a hand at a crossing, a flower at a

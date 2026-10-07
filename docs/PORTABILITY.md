@@ -99,7 +99,7 @@ The repository is written for any coding agent, not only Claude Code:
   [Copilot](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) and
   [Cursor](https://cursor.com/docs/context/skills) look; Claude Code loads them through
   the plugin.
-- **The slash commands** (`/kaleido:piece`, `/kaleido:deliver`, …) are Claude Code's.
+- **The slash commands** (`/kaleidophone:piece`, `/kaleidophone:deliver`, …) are Claude Code's.
   Elsewhere, ask in words: "follow `skills/kaleidophone-canvas-piece` to make a piece
   for Song.wav" does the same job, because the commands only point at the skills.
 
@@ -125,6 +125,6 @@ the way the frontier models do — keep those for when the tokens are back.
 ## Which model, when there are tokens
 
 See [README.md, "Which model"](../README.md#which-model). In short: the long creative
-commands (`/kaleido:direct`, `/kaleido:piece`, `/kaleido:release`) ask Claude Code for
+commands (`/kaleidophone:direct`, `/kaleidophone:piece`, `/kaleidophone:release`) ask Claude Code for
 `best`, which is Fable where your plan has it and Opus otherwise; everything else runs
 on the model you chose, and re-runs are fine on Sonnet.

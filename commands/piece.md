@@ -58,7 +58,7 @@ start, the drop, the card, the ending, with every contact passing (#35) — and
 
 ## 5. Plan the cuts, render once, draw the covers
 
-Write the delivery sheet first (`/kaleido:deliver`): the header of
+Write the delivery sheet first (`/kaleidophone:deliver`): the header of
 `kaleidophone deliver <sheet> --dry-run` lists every keyframe the render
 needs, in seconds; `--keys` takes them as frame numbers (seconds × fps).
 
@@ -68,7 +68,7 @@ node tools/still.mjs <id> --song private/songpack.json --cover all --size 3000 -
 ```
 
 Silent, from song time 0. The audio goes on where the master lives, in
-`/kaleido:deliver`.
+`/kaleidophone:deliver`.
 
 ## 6. Hand it over
 

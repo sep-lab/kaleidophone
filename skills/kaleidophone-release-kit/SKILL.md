@@ -25,7 +25,7 @@ keyframes go.
 | Spotify Canvas (optional) | a short cut with `platform: spotify-canvas` (3–8 s, 9:16, delivered with no audio stream) — or its own render | SAME AS YOU's: an 8 s crossfaded loop of a separate state, 608×1080 — under the 720 px short edge Spotify is usually read to ask for, so `deliver` would now scale it to 1080×1920, with a warning that it's enlarged (`kaleidophone platforms canvas`) |
 | Covers | the piece's own draw code (`still.mjs --cover all`), a frame-program still (a mean face, a slit-scan with the face held), or `kaleidophone cover` for a brief | square and portrait masters, an avatar, variants (#31, #51, #54); the sheet's `covers` sizes the square master for every platform |
 | Carousel | stills from the same draw code | the frame's own aspect, or a crop band in the cover code (#31) |
-| Captions | the copy pack, `kaleidophone kit`, then `/kaleido:caption` | the facts derived, the voice the artist's (ADR-0006) |
+| Captions | the copy pack, `kaleidophone kit`, then `/kaleidophone:caption` | the facts derived, the voice the artist's (ADR-0006) |
 
 **A reel that loops** ends on its own first frame, and the piece has to be
 built for it: SAME AS YOU runs its rain and ink clocks on the reel's end clock
@@ -72,7 +72,7 @@ kaleidophone deliver delivery.yaml --dry-run | grep force_key_frames
 |---|---|
 | Canvas | `render.mjs --keys`, in frame numbers of the render window (seconds × fps from `--t0`): 53 s → 1272 at 24 fps. Record them in `piece.json` `keyframes` |
 | Frame programs | start a `RenderJob` at each point: every part is its own encode and opens on a keyframe, and `job_parts()` joins jobs that tile |
-| Filter graphs | `kaleidophone silent` doesn't force keyframes. Render each vertical as its own windowed brief (`output.window`, as `/kaleido:release` does), or re-encode the silent render once with the printed list |
+| Filter graphs | `kaleidophone silent` doesn't force keyframes. Render each vertical as its own windowed brief (`output.window`, as `/kaleidophone:release` does), or re-encode the silent render once with the printed list |
 
 `deliver` checks every keyframe with ffprobe before a minute of encoding is
 spent, and prints the list to re-render with if one is missing.
@@ -263,7 +263,7 @@ shipped.
 has no edit brief, so write a copy-only one — the song, one placeholder
 station, sections named for the song's parts (they become the chapters), and
 the `release` block — and run it from the folder the song path is relative to.
-Then `/kaleido:caption`. The concept line is the artist's; nothing invents it.
+Then `/kaleidophone:caption`. The concept line is the artist's; nothing invents it.
 
 ```yaml
 song: {title: SONG, artist: Artist, audio_path: Song.wav}

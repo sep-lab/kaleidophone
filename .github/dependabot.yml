@@ -30,3 +30,10 @@ updates:
     groups:
       python-dependencies:
         patterns: ["*"]
+    # numba is not a dependency we track: its only line in pyproject is a
+    # ceiling (numba<0.63 on Intel Macs) that keeps llvmlite below 0.46, the
+    # first line without x86_64 macOS wheels. Any bump would defeat it, and the
+    # two Dependabot tried (#5, #73) only rewrote the comment above the pin
+    # until it contradicted the pin. Revisit by hand if Intel Macs are dropped.
+    ignore:
+      - dependency-name: "numba"

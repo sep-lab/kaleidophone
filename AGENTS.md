@@ -75,12 +75,13 @@ the **delivered** file. Before re-rendering anything for a new master, run
 
 For `canvas/` specifically:
 
-- **The four shipped pieces (`canvas/pieces/{hamechi-manzor-dare,minus,
-  same-as-you,should-i}`) are frozen.** They are kept as they shipped and
-  verified against the delivered films; a change to their drawing code makes
-  the release unreproducible. Fix a real bug only with a measured before/after,
-  and record it (see how ( - )'s grain seeding is documented). New work goes in
-  `canvas/lib/` or a new piece started from `canvas/pieces/template`.
+- **Every shipped piece in `canvas/pieces/` is frozen** — all of them but
+  the templates; [canvas/README.md](canvas/README.md) lists them. They are
+  kept as they shipped and verified against the delivered films; a change to
+  their drawing code makes the release unreproducible. Fix a real bug only
+  with a measured before/after, and record it (see how ( - )'s grain seeding
+  is documented). New work goes in `canvas/lib/` or a new piece started from
+  `canvas/pieces/template`.
 - **Prefer a pure function of time.** State carried between frames means
   warm-ups, one worker, and renders that can't be split (TECHNIQUES #30).
 - **A real song pack is private**, like the audio it came from: never commit
@@ -131,6 +132,14 @@ number in `docs/` or an ADR:
   names, social handles). Keep those out of anything committed —
   `docs/case-studies/love.md` documents what was scrubbed from that one and
   why; match that bar for any new case study.
+- **Private names are checked against a private list.** An unreleased song's
+  title, a collaborator, a real place: CI's deny-list job and the pre-push hook
+  (`git config core.hooksPath .githooks`) refuse any name on it, printing only
+  `file:line` and a hash — [CONTRIBUTING.md](CONTRIBUTING.md#the-deny-list).
+  In anything public (issues, PRs, docs), an unreleased song is "the next
+  release" and a private folder is described, never named.
+- **No `Claude-Session:` trailer** (or any `claude.ai/code/session_` URL) in a
+  commit message; CI refuses one in the commits being pushed.
 
 ## Code conventions
 

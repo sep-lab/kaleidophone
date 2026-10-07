@@ -9,8 +9,8 @@ The canvas engine is for releases with no footage. A piece is one
 self-contained HTML file that plays live, renders its own film frame by frame
 in headless Chromium, and draws its own covers — one draw function for all
 three (`docs/decisions/0007-three-engines-one-contract.md`, `canvas/README.md`).
-Four releases shipped this way: HAMECHI MANZOR DARE, ( - ), SAME AS YOU and
-SHOULD I ?. Their source is in `canvas/pieces/`; start from them and from
+Releases shipped this way, HAMECHI MANZOR DARE, ( - ), SAME AS YOU and SHOULD
+I ? among them, are in `canvas/pieces/`; start from them and from
 `canvas/pieces/template`, never from a blank file. `#N` below is a technique
 in `docs/TECHNIQUES.md`.
 
@@ -177,7 +177,7 @@ harness with the release.
 | `recursion.js` | a droste or a kaleidoscope: recursion by redrawing, crisp at any depth (#38, #39) |
 | `viewfinder.js` | the film is someone looking through a camera: split-image focus, microprism, meter, counter, mirror slap (#44–#46) |
 
-Everything else is in the four pieces, indexed in `docs/TECHNIQUES.md`
+Everything else is in the shipped pieces, indexed in `docs/TECHNIQUES.md`
 ("Canvas: drawing", "Canvas: compositing", "Covers"): the paper cut-out (#28),
 sprite fire (#23), the torn-page mirror (#36), chromatography (#37),
 loop-continuity clocks (#40), the contact-sheet cover (#51). Copy what you

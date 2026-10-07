@@ -1,0 +1,12 @@
+#!/bin/sh
+# Before anything leaves this machine: no name on the private deny list, and no
+# Claude Code session URL, in the commits being pushed. Both fail closed; see
+# CONTRIBUTING.md, "The deny list".
+#
+# Turn it on once per clone:      git config core.hooksPath .githooks
+# Skip it once, on purpose:       git push --no-verify   (CI runs the same checks)
+set -eu
+scripts="$(git rev-parse --show-toplevel)/.github/workflows/scripts"
+pushed=$(cat)
+printf '%s\n' "$pushed" | python3 "$scripts/check_no_session_urls.py" --pre-push
+printf '%s\n' "$pushed" | python3 "$scripts/check_deny_list.py" --pre-push

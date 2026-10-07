@@ -92,22 +92,22 @@ Then, in the folder with your song:
 
 | | |
 |---|---|
-| `/kaleido:direct song.wav ./photos` | direct an edit of your own footage — Claude reads the song, asks what the audio can't answer, writes the brief, shows a contact sheet before anything expensive |
-| `/kaleido:piece song.wav` | make a **drawn** piece: find the rule that generates the film, count the grid, start from the template |
-| `/kaleido:deliver` | cut every deliverable from one silent render, mux and measure the audio |
-| `/kaleido:master old.wav new.wav` | a new master arrived: re-mux, re-render some bars, or start again? |
-| `/kaleido:release` | the whole arc, checking in at each expensive step |
+| `/kaleidophone:direct song.wav ./photos` | direct an edit of your own footage — Claude reads the song, asks what the audio can't answer, writes the brief, shows a contact sheet before anything expensive |
+| `/kaleidophone:piece song.wav` | make a **drawn** piece: find the rule that generates the film, count the grid, start from the template |
+| `/kaleidophone:deliver` | cut every deliverable from one silent render, mux and measure the audio |
+| `/kaleidophone:master old.wav new.wav` | a new master arrived: re-mux, re-render some bars, or start again? |
+| `/kaleidophone:release` | the whole arc, checking in at each expensive step |
 
-Also `/kaleido:caption`, `/kaleido:cover`, `/kaleido:brief`. It is directing,
+Also `/kaleidophone:caption`, `/kaleidophone:cover`, `/kaleidophone:brief`. It is directing,
 not generating — every frame is your material or code you can read.
 
 #### Which model
 
 | The work | Model | Why |
 |---|---|---|
-| `/kaleido:direct`, `/kaleido:piece`, `/kaleido:release`, and the review before a release | `best` — these three commands ask for it | hours-long jobs across many tools, where taste and code meet. `best` is Fable where your plan has it and Opus otherwise; without either, the command runs on your session's model |
-| `/kaleido:caption`, `/kaleido:cover`, `/kaleido:brief`, `/kaleido:master` | the model you chose (Opus is the default on most plans) | short, judgement-heavy |
-| `/kaleido:deliver`, re-renders, platform files | Sonnet is plenty (`/model sonnet`) | the tools do the work; the agent reads their reports |
+| `/kaleidophone:direct`, `/kaleidophone:piece`, `/kaleidophone:release`, and the review before a release | `best` — these three commands ask for it | hours-long jobs across many tools, where taste and code meet. `best` is Fable where your plan has it and Opus otherwise; without either, the command runs on your session's model |
+| `/kaleidophone:caption`, `/kaleidophone:cover`, `/kaleidophone:brief`, `/kaleidophone:master` | the model you chose (Opus is the default on most plans) | short, judgement-heavy |
+| `/kaleidophone:deliver`, re-renders, platform files | Sonnet is plenty (`/model sonnet`) | the tools do the work; the agent reads their reports |
 | no tokens left | none | the engines are code — see [No tokens, no network, another agent](docs/PORTABILITY.md) |
 
 Model aliases as Claude Code resolves them ([model config](https://code.claude.com/docs/en/model-config), checked 2026-10-01).
@@ -268,7 +268,7 @@ Effects layer on top per section — `strobe`, `kaleidoscope`, `halation`,
 them conditional on the song's own structure (`strobe` only fires on cuts
 containing a real onset). **Framing** is a creative field, not a computation:
 `framing: {mode: crop, x: 700}` or `mode: window`. **Text** is `overlays`: timed
-cards with real right-to-left shaping, so `من از نهایت شب حرف می‌زنم` renders as
+cards with real right-to-left shaping, so `کالیدوفون صدا را تصویر می‌کند` renders as
 connected Persian letterforms.
 
 For drawn pieces the vocabulary is different but the attitude isn't: find the
@@ -423,19 +423,22 @@ tests/          unit tests; synthetic fixtures only; ffmpeg argv asserted, never
 
 - **[AGENTS.md](AGENTS.md)** — the canonical brief for anyone (or any agent)
   working on this repo. Start here if you're contributing code.
-- **[docs/TECHNIQUES.md](docs/TECHNIQUES.md)** — 55 techniques from real releases,
-  numbered, each with where it came from and where it lives.
+- **[docs/TECHNIQUES.md](docs/TECHNIQUES.md)** — every technique the real releases
+  taught, numbered, each with where it came from and where it lives.
 - **[docs/PLATFORMS.md](docs/PLATFORMS.md)** — what every platform wants (size,
   length, audio, file limit, safe area, loudness), sourced and dated.
 - **[docs/PORTABILITY.md](docs/PORTABILITY.md)** — no tokens, no network, or
   another agent: what still runs, and how.
+- **[docs/NIGHT-CLOCK.md](docs/NIGHT-CLOCK.md)** — how long the last six
+  releases took to land, from their folders' file times (measured, rough): the
+  baseline release-night work is measured against.
 - **[canvas/README.md](canvas/README.md)** — the canvas engine: the piece
   contract, song packs, rendering, starting a new piece.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the pipeline in detail, the
   three engines, the measured cost table, the render-design tradeoffs.
 - **[docs/BENCHMARKS.md](docs/BENCHMARKS.md)** — `kaleidophone doctor`, the
   benchmark suites, and how a speed number earns the word *measured*.
-- **[docs/decisions/](docs/decisions/)** — seven ADRs, all accepted. Read
+- **[docs/decisions/](docs/decisions/)** — the ADRs, each with what would overturn it. Read
   [0001](docs/decisions/0001-version-the-brief-not-the-render.md),
   [0002](docs/decisions/0002-deterministic-edit-engine.md) and
   [0007](docs/decisions/0007-three-engines-one-contract.md) first.

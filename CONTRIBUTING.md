@@ -11,7 +11,7 @@ whether you're a person or an agent; it applies to both).
    from the bundled demo.
 2. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how a brief becomes a
    video: the pipeline stages and why the render step is split in two.
-3. **[docs/decisions/](docs/decisions/)** — the five ADRs. Read
+3. **[docs/decisions/](docs/decisions/)** — the ADRs. Read
    [0001](docs/decisions/0001-version-the-brief-not-the-render.md) and
    [0002](docs/decisions/0002-deterministic-edit-engine.md) first; they
    explain the two choices everything else follows from.
@@ -79,7 +79,7 @@ rule that generates your film (see `docs/CREATIVE-GUIDE.md`, "Drawn pieces"),
 and ship it with a `synthetic.json` twin of your song
 (`node tools/synth.mjs --twin`) — never the real song pack. It will build and
 render in CI like the others. Reusable parts belong in `canvas/lib/`, with a
-test in `canvas/test/`. The four shipped pieces are frozen reference
+test in `canvas/test/`. The shipped pieces are frozen reference
 implementations: don't refactor them.
 
 **3c. Frame-program effects.** `src/kaleidophone/frames/effects.py` — numpy,
@@ -96,7 +96,55 @@ tractable work.
 path, a media file or a real song pack past `check_no_personal_paths.py` /
 `check_no_media.sh` / `check_no_real_songpacks.py` / review, that's a report we want — see
 [ADR-0003](docs/decisions/0003-public-framework-private-assets.md) and
-[ADR-0007](docs/decisions/0007-three-engines-one-contract.md).
+[ADR-0007](docs/decisions/0007-three-engines-one-contract.md). The same goes
+for [the deny list](#the-deny-list): a spelling of a listed name it misses, or
+output that gives a term away, is a security report ([SECURITY.md](SECURITY.md)).
+
+## The deny list
+
+Some names are private without looking private: an unreleased song's title, a
+collaborator, a real place a piece was drawn from. No pattern catches them, so
+the artist keeps a list of them outside the repository, and two checks read it.
+
+- **CI** (the `deny-list` job) reads it from the `KP_DENY_LIST` repository
+  secret on every pull request from this repository and every push to `main`.
+  Without the secret it fails: the check fails closed. GitHub gives no secrets
+  to a pull request from a fork or from Dependabot, so there it is skipped with
+  a notice, and it runs when the change reaches `main`.
+- **The pre-push hook** reads it before anything leaves your machine, from
+  `~/.kaleidophone-private/deny-list.txt` (or the file `$KP_DENY_LIST_FILE`
+  names). Turn it on once per clone with `git config core.hooksPath .githooks`.
+  It also refuses a commit whose message has a Claude Code session URL in it.
+  `git push --no-verify` skips it, on purpose; CI still runs.
+
+Both read every commit being pushed (its message, and every path and file it
+adds or changes, so a name added and removed again in one push is still
+caught) and the whole tree at the tip. They print where, never what:
+`file:line` and a hash of the term, keyed by the whole list so it can't be
+reversed by hashing guesses (`term #3f9a0c1b2d`). Never the term, the line it
+is on, or a path that contains one: this repository and its CI logs are
+public. `python3 .github/workflows/scripts/check_deny_list.py --list-hashes`
+shows which line of your list a hash stands for, and `--fingerprint` prints the
+list's size and fingerprint, so you can check that the secret and your file
+agree.
+
+**The list** is one term per line, with `#` comments: the artist site's
+format, so one file can serve both. A term matches in any case, and its words
+match across any spaces, punctuation, underscores or line breaks between them,
+or none (`Some Name`, `some-name`, `SomeName`). `word:` makes a term whole-word
+only, as any term of four characters or fewer already is; `case:` makes it a
+whole word with its capitals as written, for a name that is also an ordinary
+word (this repository's addition to the format); `re:` makes it a Python
+regular expression. Text and terms are normalised first: NFKC, Arabic
+yeh and kaf folded to Persian, zero-width characters and soft hyphens removed.
+A list of fewer than five terms looks truncated, and fails. A word that is
+private on the site but public here belongs on the site's list, not this one.
+
+If a check finds something, remove or reword it and amend or rebase the commit
+that added it; a commit message counts. Never paste a term into an issue, a
+pull request or a commit message to ask about it — that publishes it. You only
+need the list if you are the artist: a fork's pull request is checked when it
+lands.
 
 ## Ground rules for claims
 

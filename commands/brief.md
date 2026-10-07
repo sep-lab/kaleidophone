@@ -5,7 +5,7 @@ argument-hint: "[song file] [media folder] or [existing brief.yaml]"
 
 # Write a brief
 
-Non-interactive counterpart to `/kaleido:direct`. Use when the artist has
+Non-interactive counterpart to `/kaleidophone:direct`. Use when the artist has
 already said what they want, or when editing an existing brief.
 
 Arguments: `$ARGUMENTS`.

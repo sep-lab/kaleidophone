@@ -34,7 +34,7 @@ means the new master goes on after the picture ends, "vocal moved" means the
 beat held but the voice (and every cue cut to it) shifted:
 
 - **remux** (exit 0): same grid, nothing changed. Point the delivery sheet at
-  the new master and run `/kaleido:deliver` again. A shift inside the
+  the new master and run `/kaleidophone:deliver` again. A shift inside the
   tolerance (half a frame at 24 fps) is still a remux; the report gives the
   `silent_start` that makes it exact.
 - **offset** (exit 5): the same material, starting earlier or later — a
