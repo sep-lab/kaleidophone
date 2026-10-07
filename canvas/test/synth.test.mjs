@@ -351,25 +351,16 @@ test('--twin keeps "chords" when it re-measures a piece; the template\'s twin ch
 });
 
 // ---------------------------------------------------------------- every twin, byte for byte
-// sha256 of each piece's whole twin pack as JSON, events.midi and all: the gallery, CI's smoke render and
-// the golden frames render from these. The five that shipped in v0.4.0 have not moved since -- nor, apart
-// from events.midi (and stems and events.chords, where asked for), since v0.3.0. The pitch column and
-// "alias" are new, and only a spec that asks for them gets them; ⛈️'s twin is pinned as it landed.
-const TWINS = {
-  'hamechi-manzor-dare': '06c2e4f33a314328026c26290b8af2c62ced272a2af8eead377a5a5e0c44ea44',
-  minus: 'c0c393e42634089802a115ae957b537dcfa8ba2ad71181089000d92cf13041dc',
-  'same-as-you': '24029df7e0b21ef6ebc8919738545442cdf5a8b65d170796a1bed333e562d843',
-  'should-i': 'c573da10cc4ed0f16cc4dd2c2da3b687a2f2eb0efc54bd285733b97b95b4a7bd',
-  template: '32d09db0e28fb90958e79b309c1d02fcda9ec151c4b1ef1d2ce6370a05106d84',
-  storm: '5084e08150bc3fd38acab86f548e92be5785ae77babc78629a2b937de091071a',
-};
+// The frozen pieces' twins are pinned whole in test/contract.test.mjs (TWINS: the spec and the pack). The
+// template isn't frozen -- it grows with the lib -- but the gallery and CI render it from its twin too, so its
+// pack is pinned here, events.midi and all; it has not moved since v0.4.0. The pitch column and "alias" are
+// new, and only a spec that asks for them gets them.
+const TEMPLATE_PACK = '32d09db0e28fb90958e79b309c1d02fcda9ec151c4b1ef1d2ce6370a05106d84';
 
-test('every piece\'s twin pack is byte-identical to the one it was pinned with, events.midi and all', () => {
-  for (const [id, sha] of Object.entries(TWINS)) {
-    const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', id, 'synthetic.json'), 'utf8'));
-    const got = crypto.createHash('sha256').update(JSON.stringify(synthesize(spec))).digest('hex');
-    assert.equal(got, sha, `${id}: its twin pack changed. If you re-measured or edited pieces/${id}/synthetic.json on purpose, update its hash here; if not, the generator changed what every render and the gallery see`);
-  }
+test('the template\'s twin pack is byte-identical to the one it was pinned with, events.midi and all', () => {
+  const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', 'template', 'synthetic.json'), 'utf8'));
+  const got = crypto.createHash('sha256').update(JSON.stringify(synthesize(spec))).digest('hex');
+  assert.equal(got, TEMPLATE_PACK, 'the template\'s twin pack changed. If you re-measured or edited pieces/template/synthetic.json on purpose, update its hash here; if not, the generator changed what the gallery and CI render');
 });
 
 // ---------------------------------------------------------------- pitches

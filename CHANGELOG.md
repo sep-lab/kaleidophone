@@ -104,8 +104,9 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   don't move. ⛈️'s twin uses it for the intro's keys, so its notes never read
   `undefined` as a colour. `"alias": {"vstem": "voc"}` writes the twin's `voc`
   again under the name a piece reads, and `--twin` measures it from the real
-  pack's key of that name. The five twins that shipped in 0.4.0 are unchanged
-  byte for byte, and every twin pack is now pinned whole, `events.midi` and all.
+  pack's key of that name. Every twin that shipped in 0.4.0 makes the same pack
+  byte for byte (the frozen pieces' are pinned in `contract.test.mjs`, the
+  template's in `synth.test.mjs`).
 - **`"rule"` in piece.json**: every work states its one written rule
   ([CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md#drawn-pieces-the-concept-is-a-rule)),
   and `npm test` requires it.

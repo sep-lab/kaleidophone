@@ -38,6 +38,7 @@ const FROZEN = {
   //   '<id>': { release: '0.5.0', bytes: <bytes>, sha256: '<sha256>' },
   // and, in the same PR: its twin in TWINS below, "libVersion": "0.4.0" in its piece.json (the lib it was
   // built with), and its golden frames (the golden-update job: canvas/README.md, "Frozen pieces").
+  storm: { release: '0.5.0', bytes: 185542, sha256: '7670b46d13167eda7036fe3a44c6c6c0ffe93b4e1a5f679d93b75abeb397013a' },
   // ---- end of the W1 additions
 };
 
@@ -50,6 +51,7 @@ const TWINS = {
   'same-as-you': { spec: '9a58e241d90893b346a383097a265822c3ab57e10ea9dd69b68578a81a5d9d2c', pack: '24029df7e0b21ef6ebc8919738545442cdf5a8b65d170796a1bed333e562d843' },
   'should-i': { spec: '6f131dca27b81f13d90e988ba59835b15d9c337aca966de72933f3a0203edb07', pack: 'c573da10cc4ed0f16cc4dd2c2da3b687a2f2eb0efc54bd285733b97b95b4a7bd' },
   // ---- W1: Setareh's (L3) and STORM's (L4) twins go here, in the same form
+  storm: { spec: '6c848fe22ac0523ba41cb2da8e2ab7f3785c5d2699615c5ff8b8a7b2212a56c9', pack: '5084e08150bc3fd38acab86f548e92be5785ae77babc78629a2b937de091071a' },
 };
 
 // The pinned lib (tools/build.mjs, "the lib pin"): byte copies of the lib as a release had it. A version

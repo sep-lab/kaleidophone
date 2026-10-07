@@ -8,6 +8,7 @@
   "template": "template.html",
   "src": "src",
   "lib": ["core", "live"],
+  "libVersion": "0.4.0",
   "bake": {"__STORM__": "events.storm"},
   "grid": {"bpm": 80, "downbeat": 0.02, "beatsPerBar": 4, "dur": 337.3},
   "render": {"fps": 24, "w": 1080, "h": 1920, "crf": 18, "tune": "animation"},

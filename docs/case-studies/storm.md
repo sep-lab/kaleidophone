@@ -234,8 +234,12 @@ node 24.19):
   onsets with invented pitches (`events.storm.melody` as `[t, s, bin]`, the
   first use of `synth.mjs`'s pitch column), so the sax player's notes always
   have a colour. Thunder, rooms and drums are left to the piece's own
-  constants and its grid. The twin pack's sha256 is pinned in
-  `canvas/test/synth.test.mjs`.
+  constants and its grid.
+- **Frozen.** The page built from the twin (retitled, as the gallery and the
+  release zip ship it), the twin and its pack are pinned in
+  `canvas/test/contract.test.mjs`, and its golden frames in
+  `canvas/test/golden/storm.sha256`. It builds on the lib as v0.4.0 had it
+  (`"libVersion": "0.4.0"`); pinned or not, the private build is the same bytes.
 - The gallery clip starts at 32 s: two seconds of rain over the whole city,
   then it gathers into his cloud.
 
