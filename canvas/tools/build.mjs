@@ -45,6 +45,34 @@ export const LIB_DEPS = {
 export const LIB_ORDER = Object.keys(LIB_DEPS);
 const LIB_DIR = path.join(CANVAS, 'lib');
 
+// ---------------------------------------------------------------- the lib pin
+// A piece can pin the lib it shipped with: "libVersion": "0.4.0" in piece.json builds it from
+// lib/versions/0.4.0/, byte copies of the lib files as that release had them, so later lib work can't
+// move a released piece's bytes (the site vendors them by sha256). Without "libVersion" a piece builds
+// from lib/ as it is now: the templates do, and grow with it. A version folder is never edited.
+export const LIB_VERSIONS = path.join(LIB_DIR, 'versions');
+const RELEASE = /^\d+\.\d+\.\d+$/;
+
+export function pinnedVersions() {
+  if (!fs.existsSync(LIB_VERSIONS)) return [];
+  const key = v => v.split('.').map(Number);
+  return fs.readdirSync(LIB_VERSIONS).filter(v => RELEASE.test(v))
+    .sort((a, b) => key(a).reduce((d, x, i) => d || x - key(b)[i], 0));
+}
+
+// the folder a piece's lib files come from: lib/, or the pinned lib/versions/<libVersion>/
+export function libDir(id, version) {
+  if (version === undefined) return LIB_DIR;
+  if (typeof version !== 'string' || !RELEASE.test(version)) {
+    throw new BuildError(`${id}: piece.json "libVersion" must be a release such as "0.4.0" (got ${JSON.stringify(version)})`);
+  }
+  const dir = path.join(LIB_VERSIONS, version);
+  if (!fs.existsSync(dir)) {
+    throw new BuildError(`${id}: piece.json "libVersion" is ${version}, but canvas/lib/versions/${version}/ does not exist (pinned: ${pinnedVersions().join(', ') || 'none'})`);
+  }
+  return dir;
+}
+
 function libNeeds(name, src) {
   const m = /Needs:([^\n]*)/.exec(src || '');
   const declared = m ? [...m[1].matchAll(/([\w-]+)\.js/g)].map(x => x[1]) : [];
@@ -101,9 +129,9 @@ export function topLevelNames(code) {
   return NAMES.get(code);
 }
 
-function libFiles() {
-  const extra = fs.readdirSync(LIB_DIR).filter(f => f.endsWith('.js')).map(f => f.slice(0, -3)).filter(n => !LIB_ORDER.includes(n)).sort();
-  return [...LIB_ORDER.filter(n => fs.existsSync(path.join(LIB_DIR, `${n}.js`))), ...extra];
+function libFiles(dir = LIB_DIR) {
+  const extra = fs.readdirSync(dir).filter(f => f.endsWith('.js')).map(f => f.slice(0, -3)).filter(n => !LIB_ORDER.includes(n)).sort();
+  return [...LIB_ORDER.filter(n => fs.existsSync(path.join(dir, `${n}.js`))), ...extra];
 }
 
 // { 'core.js': [names in the order the file declares them], ... } -- what `--reserved` prints and
@@ -233,16 +261,26 @@ export function buildPiece(id, { song, pack, out, dir, quiet = false } = {}) {
   const srcDir = path.join(piece.dir, s.src || 'src');
   const files = fs.existsSync(srcDir) ? fs.readdirSync(srcDir).filter(f => f.endsWith('.js')).sort() : [];
   if (!files.length) throw new BuildError(`${id}: no modules in ${path.relative(process.cwd(), srcDir)}`);
-  // canvas/lib modules the piece asks for go first, in dependency order (core before live before ink...)
+  // canvas/lib modules the piece asks for go first, in dependency order (core before live before ink...),
+  // from the lib as it is now or, with "libVersion", as that release pinned it
   const libList = s.lib || [];
+  const pin = s.libVersion;
+  if (pin !== undefined && !libList.length) throw new BuildError(`${id}: piece.json has "libVersion" ${JSON.stringify(pin)} but no "lib": there is nothing to pin`);
+  const from = libDir(id, pin), rel = pin === undefined ? 'lib' : `lib/versions/${pin}`;
   const libSrc = {};
   for (const name of libList) {
-    const f = path.join(LIB_DIR, `${name}.js`);
-    if (!fs.existsSync(f)) throw new BuildError(`${id}: piece.json asks for lib "${name}", but canvas/lib/${name}.js does not exist (the lib: ${libFiles().join(', ')})`);
+    const f = path.join(from, `${name}.js`);
+    if (!fs.existsSync(f)) {
+      throw new BuildError(pin === undefined
+        ? `${id}: piece.json asks for lib "${name}", but canvas/lib/${name}.js does not exist (the lib: ${libFiles().join(', ')})`
+        : `${id}: piece.json asks for lib "${name}" at libVersion ${pin}, but canvas/${rel}/ has no ${name}.js (pinned there: ${libFiles(from).join(', ')})`);
+    }
     libSrc[name] = fs.readFileSync(f, 'utf8');
   }
   checkLibOrder(id, libList, libSrc);
-  const libs = libList.map(name => ({ name: `lib/${name}.js`, lib: true, header: 1, src: libSrc[name], code: `// ---- lib/${name}.js\n` + libSrc[name] }));
+  // the header in the built file says lib/<name>.js whichever folder it came from: a pinned build is
+  // then byte for byte the build its release made
+  const libs = libList.map(name => ({ name: `${rel}/${name}.js`, lib: true, header: 1, src: libSrc[name], code: `// ---- lib/${name}.js\n` + libSrc[name] }));
   const mods = files.map(f => {
     const body = fs.readFileSync(path.join(srcDir, f), 'utf8');
     const header = s.moduleHeader || libs.length ? 1 : 0;
@@ -279,8 +317,19 @@ export function buildPiece(id, { song, pack, out, dir, quiet = false } = {}) {
   const dst = out || path.join(DIST, `${id}.html`);
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   fs.writeFileSync(dst, html);
-  if (!quiet) console.log(`built ${path.relative(process.cwd(), dst)}  ${Math.round(html.length / 1024)} KB  (${libs.length ? `lib ${libList.join('+')} + ` : ''}${files.length} modules${bakes.length ? `, baked ${bakes.map(b => b.name.slice(7, -1)).join(', ')}` : ''})`);
+  if (!quiet) console.log(`built ${path.relative(process.cwd(), dst)}  ${Math.round(html.length / 1024)} KB  (${libs.length ? `lib ${libList.join('+')}${pin ? ` @${pin}` : ''} + ` : ''}${files.length} modules${bakes.length ? `, baked ${bakes.map(b => b.name.slice(7, -1)).join(', ')}` : ''})`);
   return dst;
+}
+
+// ---------------------------------------------------------------- the page as it ships
+// Outside the repository -- the gallery's copy of a piece, and the release zip's -- the page is titled
+// "TITLE — artist"; the source and dist/ keep the template's own title. One function, so the frozen-piece
+// contract (test/contract.test.mjs) hashes exactly what those ship.
+export function pageTitle(spec) { return spec.artist ? `${spec.title} — ${spec.artist}` : spec.title; }
+
+export function retitle(html, spec) {
+  const esc = x => String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return html.replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${esc(pageTitle(spec))}</title>`);
 }
 
 // ---------------------------------------------------------------- the command

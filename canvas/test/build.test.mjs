@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { buildPiece, BuildError, reservedNames, reservedText, LIB_ORDER } from '../tools/build.mjs';
+import { buildPiece, BuildError, reservedNames, reservedText, LIB_ORDER, pinnedVersions } from '../tools/build.mjs';
 import { synthFor } from '../tools/synth.mjs';
 import { CANVAS } from './helpers.mjs';
 
@@ -116,6 +116,33 @@ test('the lib loads in dependency order, or the build says which comes first', (
   assert.throws(() => build('twice', ['core', 'core'], 'const a = 1;\n'), fails(/lists core twice/));
   assert.throws(() => build('nolib', ['core', 'nope'], 'const a = 1;\n'), fails(/canvas\/lib\/nope\.js does not exist/));
   assert.deepEqual(LIB_ORDER, ['core', 'live', 'ink', 'rig', 'recursion', 'viewfinder']);
+});
+
+// ---------------------------------------------------------------- the lib pin
+// "libVersion": "0.4.0" builds a piece's lib from lib/versions/0.4.0/, so lib work can't move the bytes
+// of a piece that shipped with it (test/contract.test.mjs holds the pinned files themselves).
+function pinned(name, lib, libVersion) {
+  const dir = fixture(name, lib, 'const a = 1;\n');
+  const f = path.join(dir, 'piece.json');
+  fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(fs.readFileSync(f, 'utf8')), libVersion }));
+  return buildPiece(name, { dir, out: path.join(tmp, `${name}.html`), quiet: true });
+}
+
+test('"libVersion": the lib comes from lib/versions/<release>/, under the headers a build of that release wrote', () => {
+  const html = fs.readFileSync(pinned('pin', ['core', 'live'], '0.4.0'), 'utf8');
+  for (const n of ['core', 'live']) {
+    const src = fs.readFileSync(path.join(CANVAS, 'lib', 'versions', '0.4.0', `${n}.js`), 'utf8');
+    assert.ok(html.includes(`// ---- lib/${n}.js\n${src}`), `${n}.js inlined from lib/versions/0.4.0`);
+  }
+  assert.ok(!html.includes('lib/versions'), 'nothing in the page says where its lib came from: a pinned build is the build its release made');
+  assert.ok(pinnedVersions().includes('0.4.0'));
+});
+
+test('"libVersion": refused, in one line, when the build can\'t honour it', () => {
+  assert.throws(() => pinned('pin1', ['core'], '9.9.9'), fails(/^pin1: piece\.json "libVersion" is 9\.9\.9, but canvas\/lib\/versions\/9\.9\.9\/ does not exist \(pinned: [\d., ]+\)$/));
+  assert.throws(() => pinned('pin2', ['core'], '0.4'), fails(/^pin2: piece\.json "libVersion" must be a release such as "0\.4\.0" \(got "0\.4"\)$/));
+  assert.throws(() => pinned('pin3', ['core', 'live', 'ink'], '0.4.0'), fails(/^pin3: piece\.json asks for lib "ink" at libVersion 0\.4\.0, but canvas\/lib\/versions\/0\.4\.0\/ has no ink\.js \(pinned there: core, live\)$/));
+  assert.throws(() => pinned('pin4', [], '0.4.0'), fails(/^pin4: piece\.json has "libVersion" "0\.4\.0" but no "lib": there is nothing to pin$/));
 });
 
 test('a syntax error is reported in the piece\'s own file and line', () => {

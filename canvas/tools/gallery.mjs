@@ -23,7 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { CANVAS, DIST, parseArgs, die, listPieces, loadPiece } from './lib/common.mjs';
-import { buildPiece } from './build.mjs';
+import { buildPiece, retitle } from './build.mjs';
 import { synthFor } from './synth.mjs';
 
 const A = parseArgs();
@@ -58,7 +58,7 @@ for (const { id, s, g } of entries) {
   // the live piece, retitled "TITLE — artist" in the site's copy only
   const html = fs.readFileSync(path.join(DIST, `${id}.html`), 'utf8');
   if (!/<title>[\s\S]*?<\/title>/i.test(html)) console.warn(`${id}: the built page has no <title> to normalise`);
-  fs.writeFileSync(path.join(OUT, 'pieces', `${id}.html`), html.replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${esc(pageTitle(s))}</title>`));
+  fs.writeFileSync(path.join(OUT, 'pieces', `${id}.html`), retitle(html, s));
 
   // the clip: rendered at the gallery size, silent, then an animated WebP and a poster frame
   const mp4 = path.join(tmp, `${id}.mp4`);
@@ -137,8 +137,6 @@ function checkEntry(id, s) {
   if (g.alt === undefined) console.warn(`${id}: no "gallery.alt" -- the clip's alt text falls back to the title; describe what the clip shows`);
   return { ...g, t0, dur, fps, poster, quality };
 }
-
-function pageTitle(s) { return s.artist ? `${s.title} — ${s.artist}` : s.title; }
 
 // ---------------------------------------------------------------- the link preview
 // The works' posters side by side on the page's black, each cropped (centred) to fill its tile:

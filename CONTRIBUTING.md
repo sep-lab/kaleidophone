@@ -80,7 +80,8 @@ and ship it with a `synthetic.json` twin of your song
 (`node tools/synth.mjs --twin`) — never the real song pack. It will build and
 render in CI like the others. Reusable parts belong in `canvas/lib/`, with a
 test in `canvas/test/`. The shipped pieces are frozen reference
-implementations: don't refactor them.
+implementations: don't refactor them. CI checks their pages byte for byte and
+their frames pixel for pixel ([canvas/README.md](canvas/README.md#frozen-pieces)).
 
 **3c. Frame-program effects.** `src/kaleidophone/frames/effects.py` — numpy,
 seeded, stateful effects implement `state_dict()`/`load_state_dict()`. If

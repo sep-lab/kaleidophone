@@ -72,7 +72,7 @@ git ignores wherever the command is run from.
 
 ```
 pieces/<id>/
-  piece.json       title, artist, medium, the grid, fonts, lib, cuts, keyframes, covers, gallery clip
+  piece.json       title, artist, medium, the grid, fonts, lib (and libVersion), cuts, keyframes, covers, gallery clip
   template.html    the page; /*__FONTS__*/ and /*__JS__*/ are filled by tools/build.mjs
   src/*.js         the piece, as plain script modules concatenated in name order
   driver.mjs       how the harness talks to it (only what differs from the default)
@@ -327,7 +327,8 @@ node tools/still.mjs my-piece --song out/songs/my-piece.songpack.json --t 1,4,9 
 | `viewfinder.js` | the viewfinder compositor: split-image focusing, microprism, meter, counter, mirror slap |
 
 Everything else a piece can borrow is in the shipped pieces, indexed by technique in
-[docs/TECHNIQUES.md](../docs/TECHNIQUES.md).
+[docs/TECHNIQUES.md](../docs/TECHNIQUES.md). A piece that ships built on the lib pins the version it
+shipped with ([the lib pin](#the-lib-pin)); the template doesn't, and grows with the lib.
 
 ### Reserved names
 
@@ -387,6 +388,74 @@ The ports were checked two ways (measured 2026-09-29, Chromium 141):
   one, and switching that font from DejaVu Sans Mono to Liberation Mono changed
   454 pixels of a 1080×1920 frame, all in that line
   ([case study](../docs/case-studies/hamechi-manzor-dare.md#the-port-in-this-repository)).
+
+## Frozen pieces
+
+Every piece but the templates is frozen. A released piece's page is a published contract (the artist
+site vendors each one by sha256), so CI holds each frozen piece to two things on every push, in the
+`frozen` job:
+
+- **Its bytes.** `test/contract.test.mjs` builds the piece from its synthetic twin, titles it
+  "TITLE — artist" as the gallery and the release zip do (`build.mjs` `retitle`), and asserts the page's
+  size and sha256 equal its release's: for the pieces released in 0.4.0, `kaleidophone-pieces-0.4.0.zip`
+  on the v0.4.0 GitHub release. It also pins each twin (its `synthetic.json`, and the pack `synth.mjs`
+  makes from it) and the pinned lib (below). Every piece in `pieces/` is frozen there or is a template
+  (`"gallery": {"role": "template"}`).
+- **Its pixels.** `tools/golden.mjs` renders 6 frames and 2 covers of each frozen page from its twin, at
+  the piece's own render size, with `still.mjs`, and compares the sha256 of their decoded RGBA pixels (not
+  of the PNGs: an encoder may change where the pixels don't) with `test/golden/<piece>.sha256`.
+
+```bash
+node tools/golden.mjs --check                  # every frozen piece: its page's sha256, then its frames where they can match
+node tools/golden.mjs --check minus --strict   # what CI runs: frames recorded on another environment fail instead of being skipped
+```
+
+Exact pixels only repeat on one environment: Chromium's software rasteriser differs between Linux and
+macOS, and HAMECHI MANZOR DARE's credit line falls back on the system `monospace` font (below). So the
+golden frames are recorded and checked on CI only, on one environment: `ubuntu-24.04`, the Chromium that
+`package-lock.json`'s playwright-core pins, and the fallback font pinned
+(`.github/actions/canvas-env`). Each file names the environment it was recorded on; anywhere else,
+`--check` checks the pages and says it skipped the frames. A failed check leaves the stills it drew in
+`out/golden/<piece>/` (CI uploads them as `golden-stills`).
+
+**When the pixels have to change** (a new runner image, a Chromium bump, a measured fix to a frozen
+piece), re-record them on that environment: Actions → CI → Run workflow on the branch, with
+*golden_update* ticked, or
+
+```bash
+gh workflow run ci.yml --ref my-branch -f golden_update=true
+```
+
+The golden-update job re-records every frozen piece and uploads `test/golden/` as the `golden-frames`
+artifact. Copy it over `canvas/test/golden/`, read the diff, and commit it with a line in the PR saying
+why the pixels moved. A newly frozen piece lands the same way: its page's sha256 in
+`test/contract.test.mjs` (the marked spot), then its golden frames from the job.
+
+Measured on a Mac (macOS, Chromium 149's headless shell: not the CI environment, so a check of the
+mechanism, not of the CI hashes): recorded twice, 32 of 32 stills matched. A single extra pixel drawn
+after every frame of ( - ) turned 6 of 6 frames red; its 2 covers, drawn by another path, stayed green.
+Moving one of its figures 1 px in its source failed `contract.test.mjs` (49,012 B against the release's
+49,008) and `--check`, before a frame was drawn.
+
+### The lib pin
+
+`"libVersion": "0.4.0"` in `piece.json` builds the piece's `"lib"` from `lib/versions/0.4.0/`, byte
+copies of `core.js` and `live.js` as v0.4.0 had them, instead of `lib/` as it is now. A piece that
+shipped built on the lib pins the version it shipped with, so lib work can't move its bytes; the page
+still says `// ---- lib/core.js`, so a pinned build is byte for byte the one its release made. A version
+folder is written once and never edited (`contract.test.mjs` holds each file's sha256). `build.mjs`
+refuses a version that isn't there, a lib file the version doesn't have, and a `libVersion` without a
+`"lib"`. The pieces released in 0.4.0 carry their own code and list no lib.
+
+### Worker identity
+
+What a render captures doesn't depend on `--workers`: `test/workers.test.mjs` renders 2 s of each
+stateless piece losslessly (`--crf 0`, x264's High 4:4:4 Predictive) with 2, 4 and 8 workers and compares
+the decoded frames' framemd5, which for a lossless encode are the captures themselves. CI runs it
+(`KP_BROWSER_TESTS=1`); `npm test` skips it. Never compare MP4 bytes, or the frames of a lossy encode,
+across worker counts or machines: each worker's part is its own encode. Measured on a Mac, 2 s at 12 fps,
+2 against 4 workers: at `--crf 28`, 24 of 24 of ( - )'s decoded frames differ; at `--crf 0`, 24 of 24 match,
+for every stateless piece.
 
 ## Gotchas that cost time
 

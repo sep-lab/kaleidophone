@@ -81,7 +81,11 @@ For `canvas/` specifically:
   their drawing code makes the release unreproducible. Fix a real bug only
   with a measured before/after, and record it (see how ( - )'s grain seeding
   is documented). New work goes in `canvas/lib/` or a new piece started from
-  `canvas/pieces/template`.
+  `canvas/pieces/template`. CI holds each frozen piece to its release: its
+  page byte for byte (`canvas/test/contract.test.mjs`) and what it draws
+  pixel for pixel (golden frames), and a piece built on the lib pins the
+  version it shipped with (`"libVersion"`) —
+  [canvas/README.md, "Frozen pieces"](canvas/README.md#frozen-pieces).
 - **Prefer a pure function of time.** State carried between frames means
   warm-ups, one worker, and renders that can't be split (TECHNIQUES #30).
 - **A real song pack is private**, like the audio it came from: never commit
@@ -101,8 +105,9 @@ For `canvas/` specifically:
   built by `.github/workflows/pages.yml`.
 - **Lyrics, collaborator names and stems never enter the repository**, not in
   code comments either. Real song titles are fine; they're credited.
-- Run `cd canvas && npm ci && npm test && node tools/build.mjs --all` before
-  pushing a canvas change; CI also renders one second of every piece.
+- Run `cd canvas && npm ci && npm test && node tools/build.mjs --all && node
+  tools/golden.mjs --check` before pushing a canvas change; CI also renders one
+  second of every piece and compares the frozen pieces' golden frames.
 
 ## Rules for claims and numbers
 

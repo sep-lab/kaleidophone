@@ -14,6 +14,9 @@
 #   4. The canvas engine: every piece still builds into one self-contained
 #      file and still renders, from its synthetic twin, in a real Chromium
 #         -> job: canvas
+#   5. The released pieces stay what they shipped as: each frozen page byte
+#      for byte, and what it draws pixel for pixel
+#         -> job: frozen (and golden-update, on request, to re-record the pixels)
 #
 # Every failure message in this pipeline should say what to do next, not
 # just what went wrong. If a check ever fails for a reason a contributor
@@ -26,6 +29,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      golden_update:
+        # Actions -> CI -> Run workflow, on a branch, with this ticked (or:
+        # gh workflow run ci.yml --ref <branch> -f golden_update=true): the
+        # golden-update job re-records the canvas golden frames and uploads them.
+        description: "Re-record the canvas golden frames (uploaded as the golden-frames artifact, for a reviewed PR to commit)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -71,6 +82,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install ruff
         run: python -m pip install --disable-pip-version-check "ruff==${RUFF_VERSION}"
@@ -112,6 +125,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install kaleidophone with dev/test dependencies
         run: |
@@ -256,6 +271,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install ffmpeg
         run: |
@@ -304,7 +321,8 @@ jobs:
     # tools, every piece built from its synthetic twin, then one real second of every piece
     # rendered in headless Chromium and encoded by ffmpeg. The real songs never come near CI.
     name: Canvas engine (node tests, build, smoke render)
-    runs-on: ubuntu-latest
+    # The image the frozen job checks golden frames on: every Chromium render in CI sees the same fonts.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
       run:
@@ -312,22 +330,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Node, the canvas packages, Chromium, the pinned fonts, ffmpeg
+        uses: ./.github/actions/canvas-env
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: canvas/package-lock.json
+          ffmpeg: "true"
 
-      - name: "Install (exact versions: the fonts are inlined byte-for-byte from these packages)"
-        run: npm ci
-
-      - name: Unit tests (lib math, rig, glyphs, synthetic twins, self-contained builds, the tools' arguments)
+      - name: Unit tests (lib math, rig, glyphs, synthetic twins, self-contained builds, the frozen pages, the tools' arguments)
         run: npm test
-
-      - name: Chromium and ffmpeg for the smoke render
-        run: |
-          npx playwright-core install --with-deps chromium
-          sudo apt-get update -qq && sudo apt-get install -y ffmpeg
 
       - name: Build every piece from its synthetic twin
         run: node tools/build.mjs --all
@@ -412,6 +421,13 @@ jobs:
                   print "joined: " NR " frames, one every " step " ticks from 0, keyframe at the join (frame " J ")" }'
           echo "endings: $files -- body + $def decodes to the whole window's $N frames exactly"
 
+      - name: A render's frames don't depend on how many workers drew them (lossless at 2, 4 and 8 workers, framemd5)
+        # Never the MP4s: each worker's part is its own encode, so lossy bytes and frames change with
+        # --workers. Lossless, the decoded frames are the captures (canvas/test/workers.test.mjs).
+        env:
+          KP_BROWSER_TESTS: "1"
+        run: node --test test/workers.test.mjs
+
       - name: A page that reaches for the network fails its render
         run: |
           # The guard the step above relies on, shown working in a real Chromium: a built piece that
@@ -435,12 +451,90 @@ jobs:
           retention-days: 7
 
   # =========================================================================
+  frozen:
+    # The released pieces stay what they shipped as. Each frozen piece builds, from its synthetic
+    # twin, into the page its release shipped, byte for byte (the artist site vendors those pages by
+    # sha256: canvas/test/contract.test.mjs), and that page draws its golden frames pixel for pixel
+    # (canvas/tools/golden.mjs). Exact pixels only repeat on one environment, so this job and
+    # golden-update share it (.github/actions/canvas-env) on one image. It stays green before any
+    # change to canvas/lib lands.
+    name: Frozen pieces (pages byte for byte, golden frames pixel for pixel)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: canvas
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Node, the canvas packages, Chromium, the pinned fonts
+        uses: ./.github/actions/canvas-env
+
+      - name: Each frozen piece builds into the page its release shipped, and its twin is unchanged
+        run: node --test test/contract.test.mjs
+
+      - name: Each frozen page draws its golden frames, pixel for pixel
+        # --strict: frames recorded on another environment fail here instead of being skipped
+        run: node tools/golden.mjs --check --strict
+
+      - name: Upload the stills a failed check drew
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: golden-stills
+          path: canvas/out/golden/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # =========================================================================
+  golden-update:
+    # On request only (workflow_dispatch with golden_update): re-records the golden frames on the
+    # environment the frozen job checks them on, and uploads canvas/test/golden as the golden-frames
+    # artifact. Nothing is committed here: a person reviews the new hashes and commits them in a PR
+    # that says why the pixels changed (a new runner image, a Chromium bump, a measured fix).
+    name: Golden frames, re-recorded (on request)
+    if: github.event_name == 'workflow_dispatch' && inputs.golden_update
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: canvas
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Node, the canvas packages, Chromium, the pinned fonts
+        uses: ./.github/actions/canvas-env
+
+      - name: Re-record every frozen piece's golden frames
+        run: node tools/golden.mjs --update
+
+      - name: What changed
+        run: |
+          {
+            echo "### Golden frames, re-recorded"
+            echo
+            echo "Download the **golden-frames** artifact into \`canvas/test/golden/\`, review, and commit it in a PR that says why."
+            echo
+            echo '```'
+            git diff --stat -- test/golden || true
+            git status --short -- test/golden
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: golden-frames
+          path: canvas/test/golden/
+          if-no-files-found: error
+          retention-days: 14
+
+  # =========================================================================
   ci-ok:
     # One check to require in branch protection, so adding a matrix leg
     # later doesn't mean editing repository settings.
     name: CI
     if: always()
-    needs: [lint, test, guardrails, deny-list, demo, canvas]
+    needs: [lint, test, guardrails, deny-list, demo, canvas, frozen]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
