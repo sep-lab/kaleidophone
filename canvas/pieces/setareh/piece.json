@@ -28,6 +28,7 @@
     "core",
     "live"
   ],
+  "libVersion": "0.4.0",
   "bake": {
     "__SETAREH__": "events.setareh"
   },

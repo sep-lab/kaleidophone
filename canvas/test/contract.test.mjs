@@ -38,6 +38,7 @@ const FROZEN = {
   //   '<id>': { release: '0.5.0', bytes: <bytes>, sha256: '<sha256>' },
   // and, in the same PR: its twin in TWINS below, "libVersion": "0.4.0" in its piece.json (the lib it was
   // built with), and its golden frames (the golden-update job: canvas/README.md, "Frozen pieces").
+  setareh: { release: '0.5.0', bytes: 186304, sha256: '293c0bf5f1ea171414ee914d5d8fb24fc996c94fe1f2a0ffdae029afa434a498' },
   // ---- end of the W1 additions
 };
 
@@ -49,6 +50,7 @@ const TWINS = {
   minus: { spec: '7aa0ca89b97fde1b0e4bd3394f9c742acb4290f769e1fb3a555bb97083e0c655', pack: 'c0c393e42634089802a115ae957b537dcfa8ba2ad71181089000d92cf13041dc' },
   'same-as-you': { spec: '9a58e241d90893b346a383097a265822c3ab57e10ea9dd69b68578a81a5d9d2c', pack: '24029df7e0b21ef6ebc8919738545442cdf5a8b65d170796a1bed333e562d843' },
   'should-i': { spec: '6f131dca27b81f13d90e988ba59835b15d9c337aca966de72933f3a0203edb07', pack: 'c573da10cc4ed0f16cc4dd2c2da3b687a2f2eb0efc54bd285733b97b95b4a7bd' },
+  setareh: { spec: '53072f50e10bdf61264325dfa2c0fcec1144416f318fbb5faae21fcabbed5b9f', pack: '93ab66bc277e7eed7393d1d7ff3832b397c4ce44ea98374739c1d8614d59fe72' },
   // ---- W1: Setareh's (L3) and STORM's (L4) twins go here, in the same form
 };
 
