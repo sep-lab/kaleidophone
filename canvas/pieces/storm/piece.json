@@ -1,0 +1,34 @@
+{
+  "title": "⛈️",
+  "artist": "Sep The Concept",
+  "year": 2026,
+  "medium": "a top-down pixel city drawn at a third of the resolution and scaled up by three, 5-bit colour through a 4x4 ordered dither; canvas 2D",
+  "summary": "A man walks through a city at night in a storm, seen from straight above, a step on every beat. The intro's thunder is seen before it is heard, and the gap shrinks as the storm walks toward him. When the beat lands the rain stops for everyone but him: it gathers into one small cloud that follows him through a city drying out, flickering on 2 and 4 and striking where the song changes rooms. A second is a minute, so the song is one sleepless night, 02:00 to 07:36. On the stop the game pauses -- the lamps go out for dawn, the rain hangs in the air, a bolt never lands -- and the only thing still moving is him: he looks up.",
+  "rule": "At 0:33 the rain stops for everyone but him.",
+  "template": "template.html",
+  "src": "src",
+  "lib": ["core", "live"],
+  "bake": {"__STORM__": "events.storm"},
+  "grid": {"bpm": 80, "downbeat": 0.02, "beatsPerBar": 4, "dur": 337.3},
+  "render": {"fps": 24, "w": 1080, "h": 1920, "crf": 18, "tune": "animation"},
+  "cuts": [
+    {"name": "rain", "t0": 0, "dur": 59.958},
+    {"name": "stop", "t0": 278.978333, "dur": 59.958}
+  ],
+  "covers": {
+    "mode": "cover",
+    "size": [3000, 3000],
+    "variants": [
+      {"name": "map"}, {"name": "pause"}, {"name": "couple"}, {"name": "sax"}, {"name": "night"}, {"name": "icon"}
+    ]
+  },
+  "gallery": {
+    "order": 6,
+    "t0": 32,
+    "dur": 6.0,
+    "fps": 12,
+    "quality": 50,
+    "cover": "icon",
+    "alt": "A pixel-art city at night, seen from straight above: octagonal blocks, lamplit pavements and parked cars, with rain falling on everything. The rain draws in from every side into one small grey cloud over a lone figure at a crossing, and the streets start to dry; a clock in the corner counts the minutes from 02:32."
+  }
+}

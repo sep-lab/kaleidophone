@@ -6,7 +6,7 @@
 //   node tools/synth.mjs --twin real.songpack.json --sections 0,32.26,42.26 [--bpm 120 --downbeat 0.255] > synthetic.json
 //   node tools/synth.mjs --twin real.songpack.json --piece <id> [--sections ...]
 //        re-measure a piece's twin in place: its grid, its section boundaries and everything written
-//        by hand (patterns, voc windows, events, chords, beatGrid, keys, quantize) stay; its levels are replaced
+//        by hand (patterns, voc windows, events, chords, beatGrid, keys, alias, quantize) stay; its levels are replaced
 //
 // Why this exists: a real song pack is derived from unreleased audio, so it never enters the
 // repository (docs/decisions/0003, 0007). But a piece is a function of (time, envelope), and to
@@ -28,7 +28,13 @@
 //       voc. `energy` is the rms mean's old name; a band a section leaves out falls back to it.
 //   voc [[from, to, amp]]      vocal-ish syllables, 4-7 a second, into `voc` and the mid band
 //   events {name: {key: [[from, to, rate_hz, strength]]}}   onsets on the song's 16th grid, humanised by at
-//                              most 20 ms; above the grid's rate some steps add a 32nd, below it some rest
+//                              most 20 ms; above the grid's rate some steps add a 32nd, below it some rest.
+//                              A fifth item, a list of pitches, gives every onset in the window a third
+//                              column, [t, s, pitch], drawn from that list: made up, never the song's notes
+//                              (see synthEvents)
+//   alias {name: envelope}     also write an envelope under the name a piece reads it by: {"vstem": "voc"}
+//                              writes the twin's voc again as "vstem" (a vocal envelope taken from a stem);
+//                              --twin then measures that envelope's levels from the real pack's "vstem"
 //   chords {track, progression, every}   a chord progression on the grid, for a piece that moves on chord
 //                              changes: events.chords.<track> = [[t, 1, "Am"], ...], one chord on every bar
 //                              line ("every": "bar", the default; "beat"; or a number of bars), cycling
@@ -354,6 +360,7 @@ export function synthesize(spec) {
   if (q) pack.quantize = q;
   const store = k => Array.from(arrays[k], k === 'rmsdb' ? v => Math.round(v * 10) / 10 : q ? v => Math.round(clamp(v) * q) : v => Math.round(v * 1000) / 1000);
   for (const k of spec.keys || PACK_KEYS) if (arrays[k]) pack[k] = store(k);
+  for (const [k, src] of aliasesOf(spec, pack)) pack[k] = pack[src];
   if (spec.events && spec.events.midi) throw new Error('a spec\'s "events" can\'t have a group named "midi": events.midi is the drums the twin plays');
   if (spec.events && spec.events.chords) throw new Error('a spec\'s "events" can\'t have a group named "chords": events.chords is the chord progression (the spec\'s "chords")');
   pack.events = { ...(spec.events ? synthEvents(spec) : {}), midi: drumMidi(ev), ...(spec.chords != null ? { chords: chordEvents(spec) } : {}) };
@@ -459,19 +466,41 @@ function loudest(rmsdb, downbeat, bar, dur, fps) {
   return { start: +clamp(start, 0, latest).toFixed(3), len: 60 };
 }
 
-// events: { name: { key: [[from, to, rate_hz, strength]] } } -> { name: { key: [[t, s], ...] } }
+// spec.alias = { name: envelope } -> [[name, envelope], ...], each envelope one the pack has just stored
+function aliasesOf(spec, pack) {
+  const a = spec.alias;
+  if (a == null) return [];
+  const bad = msg => new Error(`a spec's "alias" ${msg}`);
+  if (typeof a !== 'object' || Array.isArray(a)) throw bad('must be {"name": "envelope"}, e.g. {"vstem": "voc"}');
+  return Object.entries(a).map(([k, src]) => {
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(k)) throw bad(`names a key ${JSON.stringify(k)}: use letters, digits and _ (it is a top-level key of the pack)`);
+    if (k in pack || k === 'events' || k === 'stems' || ENVELOPES.includes(k)) throw bad(`can't name "${k}": the pack has a key of that name already`);
+    if (!ENVELOPES.includes(src)) throw bad(`"${k}" must name an envelope (${ENVELOPES.join(', ')}), got ${JSON.stringify(src)}`);
+    if (!Array.isArray(pack[src])) throw bad(`"${k}" names "${src}", which the spec's "keys" leave out of the pack`);
+    return [k, src];
+  });
+}
+
+// events: { name: { key: [[from, to, rate_hz, strength, pitches?]] } } -> { name: { key: [[t, s], ...] } }
 // Onsets sit on the song's 16th grid, humanised by at most 20 ms (triangular). A window whose rate is
 // above the grid's adds a 32nd to some steps and one below it rests on some, so it averages `rate`;
-// its first step always sounds.
+// its first step always sounds. A window with a list of pitches gives each of its onsets one, drawn from
+// the list, as a third column: [t, s, pitch]. The pitches come from a stream of their own, so the onsets
+// are the same with or without them -- and the list is made up for the twin, like its drums and chords:
+// never the song's own notes. (A piece that reads a pitch, ⛈️'s CQT bin, would otherwise read undefined.)
 function synthEvents(spec) {
   const out = {}, six = 60 / spec.bpm / 4, t0 = spec.downbeat ?? 0;
   for (const [name, groups] of Object.entries(spec.events)) {
     out[name] = {};
     for (const [key, wins] of Object.entries(groups)) {
-      const R = stream(spec.seed ?? 7, `events:${name}:${key}`), L = [];
-      for (const [a, b, rate = 6, s = 0.9] of wins) {
+      const R = stream(spec.seed ?? 7, `events:${name}:${key}`), Rp = stream(spec.seed ?? 7, `events:${name}:${key}:pitch`), L = [];
+      for (const [a, b, rate = 6, s = 0.9, pitches] of wins) {
+        if (pitches !== undefined && !(Array.isArray(pitches) && pitches.length && pitches.every(Number.isFinite))) {
+          throw new Error(`a spec's events.${name}.${key} window [${a}, ${b}, ...]: its pitches must be a non-empty list of numbers, got ${JSON.stringify(pitches)}`);
+        }
+        const pitch = pitches ? () => pitches[Math.floor(Rp() * pitches.length)] : null;
         // 19.5 ms, so an onset is still within 20 ms of its step once rounded to the ms; kept inside the window
-        const push = t => L.push([+clamp(t + (R() + R() - 1) * 0.0195, a, b - 0.001).toFixed(3), +(s * (0.65 + 0.7 * R())).toFixed(2)]);
+        const push = t => L.push([+clamp(t + (R() + R() - 1) * 0.0195, a, b - 0.001).toFixed(3), +(s * (0.65 + 0.7 * R())).toFixed(2), ...(pitch ? [pitch()] : [])]);
         const per = rate * six;   // onsets per 16th
         for (let k = Math.ceil((a - t0) / six - 1e-9), first = true; t0 + k * six < b; k++, first = false) {
           const g = t0 + k * six;
@@ -508,13 +537,16 @@ export function distribution(values) {
 }
 
 // A real pack's envelopes as 0..1 (flux up to 1.5), whatever era it comes from: toolkit packs stored
-// bytes, and some store the centroid in Hz.
-export function readEnvelopes(P) {
+// bytes, and some store the centroid in Hz. With `alias` ({"vstem": "voc"}, a spec's), an envelope is read
+// from the key the piece reads it by, when the pack has that key.
+export function readEnvelopes(P, { alias } = {}) {
   const fps = P.fps || P.sr || P.sr_env || 100, env = {};
   const peak = a => { let m = -Infinity; for (const v of a) if (v > m) m = v; return m; };
   const bytes = P.quantize === 255 || peak(P.rms.slice(0, 4000)) > 1.5;
+  const has = k => Array.isArray(P[k]) && P[k].length > 0;
   for (const k of ENVELOPES) {
-    const a = P[k]; if (!Array.isArray(a) || !a.length) continue;
+    const from = Object.keys(alias || {}).find(n => alias[n] === k && has(n));
+    const a = P[from ?? k]; if (!Array.isArray(a) || !a.length) continue;
     const scale = bytes ? 255 : k === 'cent' && peak(a) > 1.5 ? CENTROID_HZ : 1;
     env[k] = Float64Array.from(a, v => clamp(v / scale, 0, ceilingOf(k)));
   }
@@ -526,7 +558,7 @@ export function readEnvelopes(P) {
 // hand survives -- per-section patterns, the voc windows, events and chords, beatGrid, keys, quantize, the
 // comment -- and so do its grid and its section boundaries unless new ones are given.
 export function twin(P, { sections, bpm, downbeat, base } = {}) {
-  const B = base || {}, { fps, dur, env } = readEnvelopes(P);
+  const B = base || {}, { fps, dur, env } = readEnvelopes(P, { alias: B.alias });
   const cuts = (sections || (B.sections || []).map(s => +s.from)).slice().sort((a, b) => a - b);
   if (!cuts.length || cuts[0] > 0) cuts.unshift(0);
   const keys = ENVELOPES.filter(k => env[k] && (!B.keys || k === 'rms' || B.keys.includes(k)));
@@ -544,7 +576,7 @@ export function twin(P, { sections, bpm, downbeat, base } = {}) {
   });
   const measured = { seed: 7, fps: 100, dur: +dur.toFixed(3), bpm: +(P.bpm || 120).toFixed(3), downbeat: +(P.downbeat ?? P.beat0 ?? P.t0 ?? P.beat_phase_s ?? 0) };
   const spec = {};
-  for (const k of ['_comment', 'seed', 'fps', 'dur', 'bpm', 'downbeat', 'beatGrid', 'keys', 'quantize', 'voc', 'events', 'chords', 'stems']) {
+  for (const k of ['_comment', 'seed', 'fps', 'dur', 'bpm', 'downbeat', 'beatGrid', 'keys', 'alias', 'quantize', 'voc', 'events', 'chords', 'stems']) {
     const v = k in B ? B[k] : measured[k];
     if (v !== undefined) spec[k] = v;
   }

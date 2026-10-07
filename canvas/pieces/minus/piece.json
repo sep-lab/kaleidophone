@@ -4,6 +4,7 @@
   "year": 2026,
   "medium": "canvas 2D ink cartoon, Flash-style: on twos, boiling lines, flat fills, one red",
   "summary": "An absence piece. A man's ordinary day, and in every scene the paper-shaped hole where she would be. She is never drawn: her silhouette is filled with paper last, so anything that enters it stops.",
+  "rule": "She is never drawn.",
   "template": "template.html",
   "src": "src",
   "grid": {"bpm": 100, "downbeat": 5.95, "beatsPerBar": 4, "dur": 177.6},

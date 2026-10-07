@@ -82,6 +82,34 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 - **Private pieces**, documented: `KALEIDOPHONE_PIECES` points the canvas tools at
   a folder of pieces outside the repository ([canvas/README.md](canvas/README.md#private-pieces-kaleidophone_pieces)).
 
+### Added — ⛈️ lands, frozen as it shipped
+
+- **`canvas/pieces/storm`: ⛈️** (October 2026), a top-down pixel city at night
+  drawn like a console game. Its thunder is seen before it is heard, then the
+  rain gathers into one small cloud that follows him while the city dries; on
+  the stop the world pauses and only he moves. It was built and rendered by this
+  repository's tools as a private piece (`KALEIDOPHONE_PIECES`), and lands as a
+  copy of that folder. Verified privately on the Mac: built from its private
+  pack, the folder as it shipped is the shipped HTML byte for byte, and the port
+  differs only by the scrub (two comments that named real places, and one
+  helper's name). 9 of 9 test frames and 18 of 18 covers render PNG-identical to
+  the shipped file, and frames of the delivered cuts match at 34.3–36.5 dB PSNR
+  (measured). With a synthetic twin, a gallery entry (from 32 s: the rain
+  gathering into his cloud), a case study
+  ([docs/case-studies/storm.md](docs/case-studies/storm.md)) and techniques
+  #63–#71 in [docs/TECHNIQUES.md](docs/TECHNIQUES.md).
+- **`synth.mjs`: invented pitches, and aliases.** An event window takes a fifth
+  item, a list of pitches; every onset in it then gets a third column,
+  `[t, s, pitch]`, drawn from the list on a stream of its own, so the onsets
+  don't move. ⛈️'s twin uses it for the intro's keys, so its notes never read
+  `undefined` as a colour. `"alias": {"vstem": "voc"}` writes the twin's `voc`
+  again under the name a piece reads, and `--twin` measures it from the real
+  pack's key of that name. The five twins that shipped in 0.4.0 are unchanged
+  byte for byte, and every twin pack is now pinned whole, `events.midi` and all.
+- **`"rule"` in piece.json**: every work states its one written rule
+  ([CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md#drawn-pieces-the-concept-is-a-rule)),
+  and `npm test` requires it.
+
 ### Fixed
 
 - **The commands are `/kaleidophone:<name>`.** Claude Code namespaces a plugin's

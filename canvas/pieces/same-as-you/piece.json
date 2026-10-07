@@ -4,6 +4,7 @@
   "year": 2026,
   "medium": "canvas 2D ink cartoon, characters on twos with boil",
   "summary": "The sequel to ( - ). One page torn down the middle: his half-world on the left, hers on the right, mirrored, differing only in the people. The gap between the halves is the distance.",
+  "rule": "One page, torn in two.",
   "template": "template.html",
   "src": "src",
   "grid": {"bpm": 120, "downbeat": 0.255, "beatsPerBar": 4, "dur": 140.245},

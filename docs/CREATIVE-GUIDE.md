@@ -142,6 +142,10 @@ rule:
 - **HAMECHI MANZOR DARE:** *everything means something.* A swarm of eyes and
   words closing in as the track builds; masks for the calm, torn off by the
   loudest hit.
+- **⛈️:** *at 0:33 the rain stops for everyone but him.* Its thunder is seen
+  before it is heard, closer each time; then it gathers into one small cloud
+  that follows him, a step on every beat, through a city drying out. On the
+  stop the world pauses, and only he moves.
 
 What those releases taught about finding the rule:
 

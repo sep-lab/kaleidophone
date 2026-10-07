@@ -205,3 +205,16 @@ test('every piece\'s covers are at least 3000 px a side: what Spotify and Apple 
     assert.ok(Math.min(...spec.covers.size) >= 3000, `${id}: covers.size is ${spec.covers.size.join('x')}`);
   }
 });
+
+// ---------------------------------------------------------------- the rule
+test('every work states its one written rule in piece.json: one sentence, the concept the renderer obeys', () => {
+  // docs/CREATIVE-GUIDE.md, "the concept is a rule": one release, one rule. A template is a starting point, not a release.
+  for (const id of pieces) {
+    const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', id, 'piece.json'), 'utf8'));
+    if ((spec.gallery || {}).role === 'template') continue;
+    assert.equal(typeof spec.rule, 'string', `${id}: piece.json has no "rule"`);
+    const r = spec.rule.trim();
+    assert.ok(r === spec.rule && r.length >= 8 && r.length <= 160, `${id}: "rule" is one short sentence, got ${JSON.stringify(spec.rule)}`);
+    assert.match(r, /^[^.!?]+[.!?]$/, `${id}: "rule" is one sentence, ending once`);
+  }
+});

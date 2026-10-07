@@ -205,7 +205,11 @@ test('a twin spec says nothing about the sound: coarse levels per section, no pe
       for (const x of xs) assert.ok(x >= 0 && x <= FLUX_CEILING && Math.abs(x * 20 - Math.round(x * 20)) < 1e-9, `${id}.${k}: ${x} is rounded to 0.05`);
     }
     assert.ok((s.voc || []).length <= 16, `${id}: voc windows, not syllables`);
-    for (const groups of Object.values(s.events || {})) for (const wins of Object.values(groups)) assert.ok(wins.length <= 8, `${id}: event windows, not onsets`);
+    for (const groups of Object.values(s.events || {})) for (const wins of Object.values(groups)) {
+      assert.ok(wins.length <= 8, `${id}: event windows, not onsets`);
+      // a window's pitches: a made-up scale to draw from, not a line of notes
+      for (const w of wins) if (w[4] !== undefined) assert.ok(w[4].length <= 16, `${id}: a window's pitches are a scale, not a transcription`);
+    }
     // chords: a short progression the grid plays round, never the song's changes in time
     if (s.chords) {
       assert.deepEqual(Object.keys(s.chords).filter(k => !['track', 'progression', 'every'].includes(k)), [], `${id}: chords are a track, a progression and a period`);
@@ -361,4 +365,98 @@ test('--twin keeps "chords" when it re-measures a piece; the template\'s twin ch
   const at = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', 'template', 'piece.json'), 'utf8')).variants.ending.at;
   const ch = Object.values(synthesize(tpl).events.chords)[0], i = ch.findIndex(e => e[0] === at);
   assert.ok(i > 0 && ch[i][2] !== ch[i - 1][2], `a new chord at ${at} s: ${JSON.stringify(ch.slice(i - 1, i + 1))}`);
+});
+
+// ---------------------------------------------------------------- every twin, byte for byte
+// sha256 of each piece's whole twin pack as JSON, events.midi and all: the gallery, CI's smoke render and
+// the golden frames render from these. The five that shipped in v0.4.0 have not moved since (the pitch
+// column and "alias" are new, and only a spec that asks for them gets them); ⛈️'s twin is pinned as it landed.
+const TWINS = {
+  'hamechi-manzor-dare': '06c2e4f33a314328026c26290b8af2c62ced272a2af8eead377a5a5e0c44ea44',
+  minus: 'c0c393e42634089802a115ae957b537dcfa8ba2ad71181089000d92cf13041dc',
+  'same-as-you': '24029df7e0b21ef6ebc8919738545442cdf5a8b65d170796a1bed333e562d843',
+  'should-i': 'c573da10cc4ed0f16cc4dd2c2da3b687a2f2eb0efc54bd285733b97b95b4a7bd',
+  template: '32d09db0e28fb90958e79b309c1d02fcda9ec151c4b1ef1d2ce6370a05106d84',
+  storm: '5084e08150bc3fd38acab86f548e92be5785ae77babc78629a2b937de091071a',
+};
+
+test('every piece\'s twin pack is byte-identical to the one it was pinned with, events.midi and all', () => {
+  for (const [id, sha] of Object.entries(TWINS)) {
+    const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', id, 'synthetic.json'), 'utf8'));
+    const got = crypto.createHash('sha256').update(JSON.stringify(synthesize(spec))).digest('hex');
+    assert.equal(got, sha, `${id}: its twin pack changed. If you re-measured or edited pieces/${id}/synthetic.json on purpose, update its hash here; if not, the generator changed what every render and the gallery see`);
+  }
+});
+
+// ---------------------------------------------------------------- pitches
+const PITCHED = { seed: 7, fps: 100, dur: 20, bpm: 80, downbeat: 0.02, keys: ['rms'], sections: [{ from: 0 }] };
+const SCALE = [9, 12, 14, 16, 19];
+
+test('pitches: a window with a list gives every onset a third column, drawn from it; the onsets don\'t move', () => {
+  const plain = synthesize({ ...PITCHED, events: { storm: { melody: [[1, 15, 3, 0.9]] } } }).events.storm.melody;
+  const P = synthesize({ ...PITCHED, events: { storm: { melody: [[1, 15, 3, 0.9, SCALE]] } } });
+  const mel = P.events.storm.melody;
+  assert.ok(plain.length > 20 && plain.every(e => e.length === 2), 'no list: [t, s], as before');
+  assert.ok(mel.every(e => e.length === 3 && SCALE.includes(e[2])), 'every onset gets a pitch from the list');
+  assert.deepEqual(mel.map(([t, s]) => [t, s]), plain, 'the same onsets, with or without pitches');
+  assert.ok(new Set(mel.map(e => e[2])).size >= 4, 'it plays round the list, not one note');
+  // a piece reading the pitch as ⛈️ does, clamp(bin / 47), gets a number for every note
+  assert.ok(mel.every(([, , bin]) => Number.isFinite(Math.min(1, Math.max(0, bin / 47)))));
+  // windows mix: one with pitches, one without; the drums and the envelopes are untouched
+  const mixed = synthesize({ ...PITCHED, events: { storm: { melody: [[1, 8, 3, 0.9, SCALE], [10, 15, 3, 0.9]] } } }).events.storm.melody;
+  assert.ok(mixed.filter(([t]) => t < 8).every(e => e.length === 3) && mixed.filter(([t]) => t >= 10).every(e => e.length === 2));
+  const { events: a, ...ra } = P, { events: b, ...rb } = synthesize({ ...PITCHED, events: { storm: { melody: [[1, 15, 3, 0.9]] } } });
+  assert.deepEqual(ra, rb); assert.deepEqual(a.midi, b.midi);
+});
+
+test('pitches: a list that can\'t be drawn from is refused, naming the window', () => {
+  const bad = (p, re) => assert.throws(() => synthesize({ ...PITCHED, events: { storm: { melody: [[1, 15, 3, 0.9, p]] } } }), re);
+  for (const p of [[], 'C4', [9, 'E4'], [9, null], [9, NaN], {}]) bad(p, /events\.storm\.melody window \[1, 15, \.\.\.\]: its pitches must be a non-empty list of numbers/);
+});
+
+// ---------------------------------------------------------------- alias
+test('alias: {"vstem": "voc"} writes the voc envelope again under the name a piece reads', () => {
+  const s = { ...spec, keys: ['bass', 'rms', 'voc'], alias: { vstem: 'voc' } };
+  const p = synthesize(s), q = synthesize({ ...s, alias: undefined });
+  assert.deepEqual(p.vstem, p.voc); assert.ok(Math.max(...p.vstem) > 0.3, 'the syllables are in it');
+  const { vstem, ...rest } = p;
+  assert.equal(JSON.stringify(rest), JSON.stringify(q), 'nothing else changes');
+  assert.deepEqual(Object.keys(p).slice(-3), ['voc', 'vstem', 'events'], 'right after the envelopes');
+});
+
+test('alias: one that would shadow a key or name no envelope in the pack is refused', () => {
+  const bad = (alias, re, keys = ['bass', 'rms', 'voc']) => assert.throws(() => synthesize({ ...spec, keys, alias }), re);
+  bad(['vstem', 'voc'], /"alias" must be \{"name": "envelope"\}/);
+  bad({ 'v.stem': 'voc' }, /names a key "v\.stem": use letters, digits and _/);
+  for (const k of ['rms', 'bpm', 'events', 'stems', 'cent']) bad({ [k]: 'voc' }, new RegExp(`can't name "${k}": the pack has a key of that name already`));
+  bad({ vstem: 'vocals' }, /"vstem" must name an envelope \(bass, .*\), got "vocals"/);
+  bad({ vstem: 'voc' }, /"vstem" names "voc", which the spec's "keys" leave out of the pack/, ['bass', 'rms']);
+});
+
+test('alias: --twin keeps it, and measures the envelope from the real pack\'s key of that name', () => {
+  const real = synthesize({ ...spec, keys: undefined });
+  const flat = { ...real, vstem: real.voc.map(() => 0.5) };     // the real vocal stem: what the piece reads
+  const base = { ...spec, keys: ['bass', 'rms', 'voc'], alias: { vstem: 'voc' } };
+  const t = twin(flat, { base });
+  assert.deepEqual(t.alias, { vstem: 'voc' });
+  assert.deepEqual(Object.keys(t).slice(0, 9), ['seed', 'fps', 'dur', 'bpm', 'downbeat', 'keys', 'alias', 'voc', 'events']);
+  assert.ok(t.sections.every(sec => sec.voc.join() === '0.5,0.5,0.5'), 'voc measured from vstem');
+  assert.notDeepEqual(twin(flat, { base: { ...base, alias: undefined } }).sections.map(sec => sec.voc), t.sections.map(sec => sec.voc));
+  assert.deepEqual(twin(real, { base }).sections, twin(real, { base: { ...base, alias: undefined } }).sections, 'a pack without the key: its own voc');
+});
+
+// ---------------------------------------------------------------- ⛈️'s twin
+test('⛈️\'s twin: sections at the beat-in and every room, invented melody pitches, and no storm events the piece keeps itself', () => {
+  const dir = path.join(CANVAS, 'pieces', 'storm'), s = JSON.parse(fs.readFileSync(path.join(dir, 'synthetic.json'), 'utf8'));
+  const rule = fs.readFileSync(path.join(dir, 'src', '00_rule.js'), 'utf8');
+  const num = re => +rule.match(re)[1];
+  const rooms = JSON.parse(rule.match(/rooms: (\[[\s\S]*?\]\]),\n/)[1].replace(/\s+/g, ''));
+  assert.deepEqual(s.sections.map(x => x.from), [0, num(/beat_in: ([\d.]+)/), ...rooms.map(r => r[0])]);
+  assert.equal(s.sections.at(-1).from, num(/stop: ([\d.]+)/), 'the last section is the stop');
+  const P = synthesize(s), st = P.events.storm;
+  assert.deepEqual(Object.keys(st), ['melody'], 'thunder, rooms, kicks and snares: the piece\'s own constants and its grid');
+  const scale = s.events.storm.melody[0][4];
+  assert.ok(st.melody.length > 40 && st.melody.every(([t, , bin]) => t >= 1 && t < 33 && scale.includes(bin) && bin >= 0 && bin <= 47));
+  assert.ok(st.melody.every(e => e.length === 3), 'a pitch on every note: no NaN colour in 52_cast.js');
+  assert.ok(P.events.midi.kick.every(([t]) => t >= 33.02 && t < 336.02), 'no drums in the intro or after the stop');
 });

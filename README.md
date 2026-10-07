@@ -33,10 +33,16 @@
     <td align="center"><sub><b>SAME AS YOU</b><br>one page, torn in two</sub></td>
     <td align="center"><sub><b>SHOULD I ?</b><br>36 frames, 36 snares, a 37th</sub></td>
   </tr>
+  <tr>
+    <td align="center"><a href="https://sep-lab.github.io/kaleidophone/pieces/storm.html"><picture><source media="(prefers-reduced-motion: reduce)" srcset="https://sep-lab.github.io/kaleidophone/gallery/storm.jpg"><img src="https://sep-lab.github.io/kaleidophone/gallery/storm.webp" width="176" height="313" alt="A pixel-art city at night, seen from straight above: octagonal blocks, lamplit pavements and parked cars, with rain falling on everything. The rain draws in from every side into one small grey cloud over a lone figure at a crossing, and the streets start to dry; a clock in the corner counts the minutes from 02:32."></picture></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>⛈️</b><br>the rain stops for everyone but him</sub></td>
+  </tr>
 </table>
 
 <p align="center">
-  <sub>Four songs by <a href="https://soundcloud.com/septheconcept">Sep The Concept</a>, each a single HTML file that plays live, renders its own film and draws its own covers.
+  <sub>Songs by <a href="https://soundcloud.com/septheconcept">Sep The Concept</a>, each a single HTML file that plays live, renders its own film and draws its own covers.
   Clips rendered in CI from <b>synthetic</b> songs — <a href="https://sep-lab.github.io/kaleidophone/">open the gallery</a> to play them live.</sub>
 </p>
 
@@ -302,6 +308,7 @@ are the evidence:
 | [→](docs/case-studies/minus.md) | ( - ) | canvas | the paper cut-out; Flash on twos; demo → master in one evening |
 | [→](docs/case-studies/same-as-you.md) | SAME AS YOU | canvas | rig v2, the torn page, vector droste, frame-exact cuts |
 | [→](docs/case-studies/should-i.md) | SHOULD I ? | canvas | the viewfinder; grid arithmetic; the master drop-in check |
+| [→](docs/case-studies/storm.md) | ⛈️ | canvas | a console pixel pipeline; light before sound; a world that pauses while he walks on |
 
 The music: **[Sep The Concept on SoundCloud](https://soundcloud.com/septheconcept)**.
 The videos: **[The Analog Guys in Digital Worlds on YouTube](https://www.youtube.com/@theanalogguysindigitalworlds)**.

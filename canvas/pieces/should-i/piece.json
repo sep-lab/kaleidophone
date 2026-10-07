@@ -4,6 +4,7 @@
   "year": 2026,
   "medium": "canvas 2D photography: silhouettes and rim light, composited through a film camera's viewfinder",
   "summary": "The whole film is seen through his camera's viewfinder. The shutter fires on every snare: 36 snares from the drop, one 35 mm roll, running out on the bar where the hook asks its question. The split-image circle tears her in two on every vocal onset. A roll only has 36 frames; the film ends on a 37th.",
+  "rule": "We only ever see through his viewfinder.",
   "template": "template.html",
   "src": "src",
   "moduleHeader": true,

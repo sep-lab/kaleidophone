@@ -30,6 +30,7 @@ and one live-mode fix aside, below) plus a driver and a synthetic song.
 | [( - )](pieces/minus/) | ink-on-paper Flash cartoon; she is never drawn, only the paper where she'd be | [→](../docs/case-studies/minus.md) |
 | [SAME AS YOU](pieces/same-as-you/) | the sequel: one page torn in two mirrored half-worlds; rig v2, chromatography, vector droste | [→](../docs/case-studies/same-as-you.md) |
 | [SHOULD I ?](pieces/should-i/) | the whole film through his camera's viewfinder: 36 frames on 36 snares, a 37th | [→](../docs/case-studies/should-i.md) |
+| [⛈️](pieces/storm/) | a top-down pixel city at night, drawn like a console game: light before thunder, then one small storm that follows him while the city dries; on the stop the world pauses and only he moves | [→](../docs/case-studies/storm.md) |
 | [template](pieces/template/) | **start here**: the lib in one 8-bar loop — title write-on, a chair built from the body, a planted walk, a droste; a bulb that pops on the snare, a nod on the kick and the droste's turn on the chord change, from the song's events. Variants: three endings from bar 7, `droste` (the default), `lamp` and `exit` (`--variant ending=lamp`; live, `?variant=ending:lamp`) | — |
 
 ## Quick start
@@ -72,12 +73,16 @@ git ignores wherever the command is run from.
 
 ```
 pieces/<id>/
-  piece.json       title, artist, medium, the grid, fonts, lib (and libVersion), cuts, keyframes, covers, gallery clip
+  piece.json       title, artist, medium, its rule, the grid, fonts, lib (and libVersion), cuts, keyframes, covers, gallery clip
   template.html    the page; /*__FONTS__*/ and /*__JS__*/ are filled by tools/build.mjs
   src/*.js         the piece, as plain script modules concatenated in name order
   driver.mjs       how the harness talks to it (only what differs from the default)
   synthetic.json   the synthetic twin of its song: tempo, downbeat, sections, rounded levels
 ```
+
+`"rule"` is the piece's one written rule, as a sentence: the concept the renderer
+obeys ([CREATIVE-GUIDE.md](../docs/CREATIVE-GUIDE.md#drawn-pieces-the-concept-is-a-rule)).
+Every piece but a template has one, and `npm test` holds it to that.
 
 What the page exposes in render mode:
 
@@ -383,6 +388,15 @@ The ports were checked two ways (measured 2026-09-29, Chromium 141):
   schedule has diverged.
 - ( - )'s paper grain used `Math.random()`, so no two renders matched; it is now
   seeded. Everything else was already deterministic.
+- **⛈️** was built and rendered by these tools as a private piece
+  ([`KALEIDOPHONE_PIECES`](#private-pieces-kaleidophone_pieces)), so it landed as a
+  copy of its folder (measured 2026-10-07, Chromium 141). Built from its private
+  pack, the folder as it shipped was byte-identical to the shipped HTML; the port
+  differs from it only by the scrub (two comments that named real places, and one
+  helper's name). 9 of 9 test frames and 18 of 18 covers render PNG-identical to
+  the shipped build, and the delivered cuts' frames match at 34.3–36.5 dB PSNR
+  (the next frame scores 25.5–33.3 dB)
+  ([case study](../docs/case-studies/storm.md#the-port-in-this-repository)).
 - Deterministic on one machine is not the same across machines: HAMECHI MANZOR
   DARE draws its credit line in the system `ui-monospace` font, not an inlined
   one, and switching that font from DejaVu Sans Mono to Liberation Mono changed

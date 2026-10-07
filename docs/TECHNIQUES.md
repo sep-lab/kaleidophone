@@ -24,11 +24,11 @@ Numbers are measured on the release named unless marked otherwise, per
 
 | | |
 |---|---|
-| The grid and the song | [3](#3-bar-fit) · [11](#11-outro-splice) · [16](#16-signature-card) · [30](#30-pure-function-of-time) · [40](#40-loop-continuity-clocks) · [47](#47-grid-arithmetic) · [48](#48-lyric-map-from-stem) · [49](#49-master-drop-in-check) · [52](#52-what-the-new-master-added) · [53](#53-one-past-the-count) · [55](#55-session-in-midi-and-stems) |
+| The grid and the song | [3](#3-bar-fit) · [11](#11-outro-splice) · [16](#16-signature-card) · [30](#30-pure-function-of-time) · [40](#40-loop-continuity-clocks) · [47](#47-grid-arithmetic) · [48](#48-lyric-map-from-stem) · [49](#49-master-drop-in-check) · [52](#52-what-the-new-master-added) · [53](#53-one-past-the-count) · [55](#55-session-in-midi-and-stems) · [66](#66-light-before-sound) · [67](#67-split-clocks) · [68](#68-landmark-pinned-path) |
 | Rendering and delivery | [5](#5-on-device-rendering) · [10](#10-grain-bank) · [18](#18-aac-true-peak-guard) · [21](#21-deterministic-render-harness) · [27](#27-jpeg-capture) · [41](#41-forced-keyframes) · [42](#42-float-pre-master-check) · [50](#50-aac-guard-per-master) |
-| Canvas: the piece | [19](#19-three-mode-piece) · [20](#20-live-web-audio-fallback) · [22](#22-stroke-scaling) · [26](#26-canvas-rtl) · [31](#31-square-cover-crop) |
-| Canvas: drawing | [23](#23-sprite-fire) · [24](#24-pressure-ring-swarm) · [25](#25-mask-state-machine) · [28](#28-paper-cut-out) · [29](#29-on-twos-and-boil) · [32](#32-rig-primitives) · [33](#33-floor-up-seating) · [34](#34-sill-up-poses) · [35](#35-contact-qa) |
-| Canvas: compositing | [36](#36-torn-page-mirror) · [37](#37-chromatography-bloom) · [38](#38-vector-droste) · [39](#39-vector-kaleidoscope) · [43](#43-inhale-erase-splash) · [44](#44-viewfinder-compositor) · [45](#45-split-image-sync) · [46](#46-mirror-slap) |
+| Canvas: the piece | [19](#19-three-mode-piece) · [20](#20-live-web-audio-fallback) · [22](#22-stroke-scaling) · [26](#26-canvas-rtl) · [31](#31-square-cover-crop) · [69](#69-game-time-hud) |
+| Canvas: drawing | [23](#23-sprite-fire) · [24](#24-pressure-ring-swarm) · [25](#25-mask-state-machine) · [28](#28-paper-cut-out) · [29](#29-on-twos-and-boil) · [32](#32-rig-primitives) · [33](#33-floor-up-seating) · [34](#34-sill-up-poses) · [35](#35-contact-qa) · [70](#70-world-anchored-procedural-city) · [71](#71-puddle-sky-and-drying-trail) |
+| Canvas: compositing | [36](#36-torn-page-mirror) · [37](#37-chromatography-bloom) · [38](#38-vector-droste) · [39](#39-vector-kaleidoscope) · [43](#43-inhale-erase-splash) · [44](#44-viewfinder-compositor) · [45](#45-split-image-sync) · [46](#46-mirror-slap) · [63](#63-console-pixel-pipeline) · [64](#64-deferred-2d-lighting) · [65](#65-screen-door-alpha) |
 | Covers | [31](#31-square-cover-crop) · [51](#51-contact-sheet-cover) · [54](#54-cover-variant-family) |
 | Footage (frame programs) | [6](#6-red-thread-grade) · [7](#7-slit-scan-smear) · [8](#8-kaleido-bloom) · [9](#9-tracked-overlay-inpaint) · [12](#12-memory-canvas) · [13](#13-generation-loss) · [14](#14-mean-face) · [17](#17-lip-sync-test) |
 | Framing and text | [1](#1-window-reveal) · [2](#2-audio-timed-subtitles) · [4](#4-crop-drift) · [15](#15-rtl-title-erosion) |
@@ -244,6 +244,43 @@ will read them — `kick`, `snare`, `hat` — as the synthetic twins' events are
 named, and commit the DAW's groove before exporting, or the notes are straight
 where the bounce swings.
 
+### 66. Light before sound
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/60_sky.js` (`cityStrikes`, `GAPS`, `flashEnv`).
+Every thunder in the intro is preceded by its flash, and the lead is the
+distance: a flash at `t − gap` strikes `gap × 343 m` away (the speed of sound),
+on a bearing from him. The gaps shrink — 1.4, 1.2, 1.0, 0.7 s, then 0.12 and
+0.05 s — so the storm walks toward him, and at 0:33, when the beat lands, the
+gap is zero and the storm is his. A flash dims with its distance, only strikes
+nearer than 160 m draw a bolt, and each one lights the city frame by frame: the
+return stroke, a dip, a restrike, a 0.09 s tail. The thunder times are curated
+by ear and kept in the source (eight of them); the gaps are the choreography.
+The picture may run ahead of the sound because the world says it must.
+
+### 67. Split clocks
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/90_main.js` (`renderGame`: `T = Math.min(t, SONG.stop)`), `55_him.js`, `80_hud.js`.
+Two clocks in one frame. The world is drawn at `T = min(t, stop)` and freezes
+when the music stops dead: the rain hangs in the air, the lamps go out, the last
+bolt is held on its first frame. He, the camera and the HUD keep `t`: he looks
+up at us, the camera keeps sinking toward him, the frame's edges dim the way a game dims behind
+its pause, and the clock blinks. A freeze ending that still moves, with no state
+carried: both clocks are functions of `t`
+([30](#30-pure-function-of-time)), so the paused frames render in any order
+like the rest. The stop cut holds the pause for its last 2.92 s.
+
+### 68. Landmark-pinned path
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/20_walk.js` (`ROUTE`, `arcAt`, `vMid`, `rampF`).
+A walk with a step on every beat (1.2 m/s: a 0.9 m stride at 80 BPM) that has
+to reach two places on time: the kerb of the first zebra on the beat-in (40.9 m
+along the route at 0:34) and the exact centre of a crossing on the stop. The
+walking speed holds in both delivered windows (0–63 s, and from 279.02 s to the
+stop), so each cut shows a true step per beat; in between, the speed is
+whatever covers the rest of the route (`vMid`), reached through a 6 s ease
+whose integral is closed-form, so where he is stays a pure function of `t`.
+The route's corners are rounded into arcs, and his heading and the camera's
+look-ahead are chords over the path (1.8 m; 3 m behind to 6 m ahead), so a
+corner is a turn, not a snap — the camera jumped at every corner while it
+followed the segments' own directions.
+
 ---
 
 ## Rendering and delivery
@@ -357,6 +394,21 @@ Keep the piece's 1080×1920 virtual space and translate a per-variant band onto 
 square canvas (`setTransform(k,0,0,k,0,-top*k)`): stroke weight stays the
 portrait's, and the band of a vertical scene that matters is almost always square.
 
+### 69. Game-time HUD
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/80_hud.js` (`drawHUD`, `clockStr`, `CARD`); `00_rule.js` (`gameMin`, `dawnOf`).
+A readout that belongs to the world, not to the song: a game clock on which a
+second of song is a minute of game, so the song is one night, 02:00 → 07:36,
+with the weather icon beside it — and the icon is the title. It passes the
+[CREATIVE-GUIDE](CREATIVE-GUIDE.md)'s test for on-screen data the way SHOULD I
+?'s frame counter does, and it drives the picture: dawn is computed from game
+time (astronomical twilight from about 06:30, civil dawn about 07:31), so the
+ambient light, the lamps, the cafés' hours and the puddles' sky all follow the
+clock. Bitmap glyphs (3×5 digits, 5×7 letters, a 16×14 icon), drawn after the
+dither so they stay crisp, inside the 9:16 safe frame. A variant of the
+[signature card](#16-signature-card): each cut opens on the icon, big, in the
+middle of the frame (the platform's first frame, so the reel's cover); it holds,
+then flies into the HUD's corner over the card's 1.9 s while the clock starts.
+
 ---
 
 ## Canvas: drawing
@@ -427,6 +479,36 @@ Declare every contact in code — `contact(name, a, b, tol)` logs the distance �
 and `?qa=1` draws them on the frame. "Is the chair fitted?" becomes a number;
 SAME AS YOU passed every contact at 0 px.
 
+### 70. World-anchored procedural city
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/10_city.js` (`block`, `segment`, `crossing`, `visibleWorld`), `30_view.js` (`proj`, `CAM_KEYS`), `45_build.js` (`drawBuildings`, `drawPrism`), `60_sky.js` (`drawRain`).
+A city with no assets. The grid is chamfered octagonal blocks at a 133.3 m pitch
+with 20 m streets, each block a ring of 6-to-8-storey lots round a courtyard;
+lots, shops, street furniture and the wear of the asphalt come from hashes of
+their grid cell, memoised on first sight, and each frame only visits the
+blocks, segments and crossings whose footprint meets the visible ground. The
+camera hangs straight down with perspective (a focal length of 1,100 game
+pixels; its height keyframed from 36 m for close-ups to 430 m for the reveals),
+so a roof is a scaled copy of its footprint pushed away from the middle of the
+frame. Looking straight down, every box leans away from the point under the
+camera, so a nearer box can only ever cover a farther one: painter's order is
+far to near from that point, and walls facing away are never drawn. The rain is
+anchored the same way: each drop is hashed from its 2.5 m cell and its fall
+cycle, so it falls through the world rather than across the frame, and no frame
+needs the one before it.
+
+### 71. Puddle sky and drying trail
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/65_puddles.js` (`drawPuddles`, `skyColor`); `40_ground.js` (`drawTrail`, `groundWet`).
+Looking straight down, the sky shows only where the street is a mirror. The
+puddles (hashed per street segment, mostly in the gutters) are laid on after the
+light pass, because a mirror reflects rather than being lit
+([64](#64-deferred-2d-lighting)). They hold the storm's dark cloud and every
+flash, stars once it clears for everyone else, pink at dawn, and, under his
+cloud, its underside lit by his flicker. Once the rain stops for everyone else,
+the street dries (an exponential with a 120 s time constant), except where his
+rain has fallen: the cloud's ground track is stroked in 15 s bands, each at its
+own age, fading over about 160 s. By dawn, seen from 430 m, the night's route is
+a dark line across the city, and it only shows once the rest has dried.
+
 ---
 
 ## Canvas: compositing
@@ -487,6 +569,40 @@ On the snare, black only the finder window for 55 ms and return over 60 ms; the
 strip stays lit and the counter digit rolls up. Verify on the delivered file:
 `signalstats` YAVG at the snare frame = 16. Microprism tiles at 9 px with a 6 px
 dot lattice (15 px tiles read as a digital glitch).
+
+### 63. Console pixel pipeline
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/70_light.js` (`dither`, `BAYER`, `TONE`), `90_main.js` (`renderGame`, `blit`).
+Draw the world into a frame a third of the output's size (360×640 for
+1080×1920) and scale it up ×3 with smoothing off, so a game pixel is a 3×3
+block, as the live page's `image-rendering: pixelated` shows it too. Before the
+upscale, a tone curve (the shadows lifted, a little contrast through the middle)
+and 5 bits a channel through a 4×4 Bayer ordered dither: the lamp pools and the
+dawn band into a console's ordered hatching instead of smearing, and the
+palette stays hard. The HUD is drawn after the dither, so its letters stay
+clean. A ninth of the pixels also pays for the passes that touch every pixel
+(the dither, the cloud's alpha, [65](#65-screen-door-alpha)). A cover at 2000
+px or wider uses a 6-pixel game pixel, so the square keeps the console's chunk.
+
+### 64. Deferred 2D lighting
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/70_light.js` (`lightPass`, `lightLayer`); `40_ground.js` (`EMIT`).
+Deferred shading in canvas 2D. Draw the ground, then everything standing on it,
+unlit, into two layers. Then draw the light into a third with `lighter`: the
+night's ambient rising to dawn, a pooled radial sprite under every lamp, the
+cafés' spill, headlight cones as gradients, the storm's flashes as full-frame
+fills. `multiply` each layer by the light. Multiply would also paint the
+standing layer's empty pixels, so its alpha is copied aside first and put back
+with `destination-in`. Whatever gives off light — lit windows, signs, coins, the
+sax player's notes — is queued (`EMIT`) and drawn after the light pass, so it
+glows instead of being darkened.
+
+### 65. Screen-door alpha
+*From:* ⛈️. *Where:* `canvas/pieces/storm/src/60_sky.js` (`drawCloud`).
+Transparency the way the old consoles drew it: no partial alpha, only pixels
+kept or left out against the 4×4 Bayer threshold. His cloud keeps two-thirds of
+its pixels with the camera low and all of them from high up, and a soft disc
+over him leaves out every pixel at its centre, so the player can always see
+the man under his own cloud. It reads as see-through at a glance and stays
+crisp under the ×3 upscale, where real alpha would blend off the palette.
 
 ---
 

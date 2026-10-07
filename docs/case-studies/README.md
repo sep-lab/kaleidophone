@@ -30,9 +30,9 @@ out and why, the way [love.md](love.md) does.
 
 ## The releases
 
-The numbered rows are the original tally of twelve, in order. Harja shipped
-in the same stretch and is listed too, unnumbered, because that tally didn't
-count it.
+Rows 1–12 are the original tally of twelve, in order, and the releases since
+carry it on. Harja shipped in the same stretch as the first twelve and is
+listed too, unnumbered, because that tally didn't count it.
 
 | # | Release | Built | Medium | Re-derived | New | Case study |
 |---|---|---|---|---|---|---|
@@ -49,6 +49,7 @@ count it.
 | 10 | **( - )** | Sep 2026 | a canvas ink cartoon on twos | the envelope pack, a silent render, bar-snapped windows, a signature card, the mux where the audio lives | [#28](../TECHNIQUES.md#28-paper-cut-out)–[#32](../TECHNIQUES.md#32-rig-primitives): the paper cut-out, twos and boil, the pure function of time, the square cover crop | [minus.md](minus.md) |
 | 11 | **SAME AS YOU** | Sep 2026 | a canvas ink cartoon on one page torn in two | all of the above | [#33](../TECHNIQUES.md#33-floor-up-seating)–[#43](../TECHNIQUES.md#43-inhale-erase-splash): rig v2 and contact QA, the torn-page mirror, vector droste and kaleidoscope, loop clocks, forced keyframes, the float pre-master check, the inhale erase | [same-as-you.md](same-as-you.md) |
 | 12 | **SHOULD I ?** | Sep 2026 | canvas photography, seen through a film camera's viewfinder | all of the above | [#44](../TECHNIQUES.md#44-viewfinder-compositor)–[#54](../TECHNIQUES.md#54-cover-variant-family): the viewfinder compositor, split-image sync, grid arithmetic, the lyric map, two master-swap checks, the 37th frame, the cover family | [should-i.md](should-i.md) |
+| 14 | **⛈️** | Oct 2026 | a top-down pixel city at night, drawn like a console game: one small storm that follows him | the three-mode piece, a pure function of time, the signature card, song-pack events with grid fallbacks; and the whole piece built and rendered by this repository's own tools while it was private (`KALEIDOPHONE_PIECES`) | [#63](../TECHNIQUES.md#63-console-pixel-pipeline)–[#71](../TECHNIQUES.md#71-puddle-sky-and-drying-trail): the console pixel pipeline and its dither, deferred 2D lighting, screen-door alpha, light before sound, split clocks, a landmark-pinned path, a game-time HUD, a world-anchored city, the puddle sky and the drying trail | [storm.md](storm.md) |
 
 The four canvas pieces (9–12) together close
 [#42](https://github.com/sep-lab/kaleidophone/issues/42), a fully procedural
@@ -98,7 +99,7 @@ vertical release.
   MIKONAMET), a contact-QA overlay (SAME AS YOU) and a list of QA timestamps
   (SHOULD I ?). They are all the same step that `kaleidophone preview`'s
   contact sheet exists to make routine.
-- **A different medium, the same answers.** The four canvas pieces aren't
+- **A different medium, the same answers.** The canvas pieces aren't
   python or ffmpeg frame engines at all. They are browser canvases driven by
   a harness, and they still re-derived every point above.
 

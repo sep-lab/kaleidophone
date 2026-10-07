@@ -5,6 +5,7 @@
   "year": 2026,
   "medium": "live audio-reactive canvas 2D: sprite fire, a pressure-ring swarm, a mask state machine",
   "summary": "A paranoia piece: everything means something. One screaming figure, surrounded by a swarm of eyes, whispering mouths and pointed words that closes in as the track builds; the head on fire; masks that slam on during calm phrases, crack on bass hits and tear off on the loudest one.",
+  "rule": "Everything means something.",
   "template": "template.html",
   "src": "src",
   "fonts": [
