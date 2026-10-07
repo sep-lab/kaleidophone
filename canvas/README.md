@@ -30,6 +30,7 @@ and one live-mode fix aside, below) plus a driver and a synthetic song.
 | [( - )](pieces/minus/) | ink-on-paper Flash cartoon; she is never drawn, only the paper where she'd be | [→](../docs/case-studies/minus.md) |
 | [SAME AS YOU](pieces/same-as-you/) | the sequel: one page torn in two mirrored half-worlds; rig v2, chromatography, vector droste | [→](../docs/case-studies/same-as-you.md) |
 | [SHOULD I ?](pieces/should-i/) | the whole film through his camera's viewfinder: 36 frames on 36 snares, a 37th | [→](../docs/case-studies/should-i.md) |
+| [SETAREH](pieces/setareh/) | each cut is one long exposure developing live: the sky turns a step on every snare, 32 to a turn, and a figure is kept as much as it stayed. Six covers in three formats: `node pieces/setareh/covers.mjs <built.html> <pack.json> <outdir>` | [→](../docs/case-studies/setareh.md) |
 | [template](pieces/template/) | **start here**: the lib in one 8-bar loop — title write-on, a chair built from the body, a planted walk, a droste; a bulb that pops on the snare, a nod on the kick and the droste's turn on the chord change, from the song's events. Variants: three endings from bar 7, `droste` (the default), `lamp` and `exit` (`--variant ending=lamp`; live, `?variant=ending:lamp`) | — |
 
 ## Quick start
@@ -376,6 +377,19 @@ The ports were checked two ways (measured 2026-09-29, Chromium 141):
   never bit-exact): ( - ) 37.4 / 42.2 / 44.0 dB PSNR at three timestamps (the
   adjacent drawing scores 21.1 dB), SAME AS YOU 38.5 dB (adjacent frame 24.5 dB),
   SHOULD I ? 37.0 dB.
+- **SETAREH** (measured 2026-10-07, Chromium 141). Built from its own source
+  with the real events pack and the pinned fonts, the page was byte-identical to
+  the one that shipped (188,124 bytes). The copy here differs from it in 14
+  comment lines, and the code before any `//` on each is identical; 12 of 12 test
+  frames and 6 of 6 square covers render PNG-identical to the unscrubbed build.
+  Against frames decoded from the delivered films: 35.2–44.8 dB PSNR over 12
+  frames, and 38.2–47.9 dB for all 18 covers against the delivered JPEGs. The
+  shutter curtain's two frames pin the alignment: 44.8 and 38.2 dB against their
+  own delivered frames, 13–21 dB against their neighbours. One known flaw, left in
+  because the piece is frozen: a glow sprite's cache key is used for two colours,
+  so a frame's pole-star and moon halos can differ by up to 2 of 255 depending on
+  what the page drew first
+  ([case study](../docs/case-studies/setareh.md#what-went-wrong)).
 - **Not reproduced:** HAMECHI MANZOR DARE's released reel. The piece is stateful
   and seeded, and the one-off harness that rendered the release wasn't kept; the
   driver here is the generalised harness written right after it. It renders the

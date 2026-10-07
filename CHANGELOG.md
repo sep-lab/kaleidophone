@@ -82,6 +82,52 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 - **Private pieces**, documented: `KALEIDOPHONE_PIECES` points the canvas tools at
   a folder of pieces outside the repository ([canvas/README.md](canvas/README.md#private-pieces-kaleidophone_pieces)).
 
+### Added — SETAREH, the fifth canvas piece
+
+- **`canvas/pieces/setareh/`**: the release of 2026-10-03, landed frozen as it
+  shipped. Each 60 s cut is one long exposure developing live: the sky turns a
+  step on every snare, 32 to a turn, so the star trails close into rings on the
+  beat the shutter closes; every sung line leaves a shooting star that stays; and
+  a figure is kept as much as it stayed. Only `core.js` and `live.js` of the lib.
+  Built with the real events pack and the pinned fonts, the page is byte-identical
+  to the one that shipped; the copy here differs in 14 comment lines (the story
+  the picture was made for is not published, only what it does). 12 of 12 test
+  frames and 6 of 6 square covers are PNG-identical to the unscrubbed build, and 35.2–47.9
+  dB PSNR against the delivered films and covers (measured, 2026-10-07; the figures
+  are in [canvas/README.md](canvas/README.md#verified-against-what-shipped)).
+- **Two fonts pinned**: `@fontsource/cormorant-garamond` and
+  `@fontsource/mrs-saint-delafield` 5.3.0, whose woff2 files are byte-identical
+  to the shipped page's (older versions are not). Their SIL OFL licences are
+  published with the gallery like every inlined font's.
+- **Its synthetic twin** (`synthetic.json`): the real tempo, first downbeat and
+  five section boundaries with rounded levels, and eight windows for the line
+  onsets that make the meteors. No snare windows, on purpose: the twin's windows
+  thin a 16th grid at random (gaps up to 12.6 s, over 20 seeds), and the piece
+  counts the grid's backbeats instead
+  (measured: its cuts close 16.5 ms and 21.5 ms after the real ones). No `vstem`,
+  so the pole star's breath reads 0. Pinned by hash in `canvas/test/synth.test.mjs`.
+- **A gallery entry**, six seconds from 67.7 s, and `canvas/pieces/setareh/covers.mjs`,
+  which draws all six covers in all three formats (`still.mjs` draws only the
+  square) with the tools' own launcher, a fresh page for each.
+- **Under the frozen contract**: `"libVersion": "0.4.0"` (the build is byte-identical
+  to the unpinned one), its page and its twin pinned in `contract.test.mjs`, and
+  eight golden stills recorded on Linux CI by the golden-update job (the four
+  existing files came out byte-identical). Their list sits inside the two cuts —
+  the moon, the shutter curtain, the finished photograph, the figure leaving —
+  instead of the default's points across the song, two of which fall outside both.
+- **[docs/case-studies/setareh.md](docs/case-studies/setareh.md)** (row 13) and
+  techniques [#56–#62](docs/TECHNIQUES.md#56-exposure-as-an-integral): the exposure
+  as an integral, the count closes the circle, the occupancy ghost, a deterministic
+  accumulation cache, a meteor per sung line, the cut-aware piece, settling grain
+  and the shutter curtain.
+- **A known flaw, documented and not fixed** (the piece is frozen): two glow
+  sprites share the cache key `'hal'`, so a page's first frame decides the colour
+  of the pole star's and the moon's halos, up to 2 of 255 apart (14,587 of
+  2,073,600 pixels at one frame; the delivered film is not affected, inferred from
+  how a render splits a window). Anything
+  that hashes this piece's frames has to fix the order or use a fresh page per
+  frame ([case study](docs/case-studies/setareh.md#what-went-wrong)).
+
 ### Fixed
 
 - **The commands are `/kaleidophone:<name>`.** Claude Code namespaces a plugin's

@@ -1,0 +1,99 @@
+{
+  "title": "SETAREH",
+  "artist": "Sep The Concept",
+  "year": 2026,
+  "medium": "canvas 2D long-exposure photography: one exposure per cut, star trails, mean-stacked ghosts",
+  "rule": "Each cut is one long exposure: the sky turns one step on every snare, so 32 snares close the star trails into dashed rings on the beat the shutter closes, and anything that moves leaves only its light.",
+  "summary": "Each cut is one long exposure, developing live. Everything that moves leaves only its light; only what stays, stays. Every star moves except the pole star, which only gets brighter. The sky turns one step on every snare, 32 steps to a full turn, so the trails close into rings of dashes exactly when the shutter closes; every sung line leaves a shooting star that stays; the cars in the valley leave only their light. A figure is kept in the photograph exactly as much as it stayed: its ghost is as opaque as the share of the sky's light it blocked.",
+  "template": "template.html",
+  "src": "src",
+  "fonts": [
+    {
+      "family": "Cormorant Garamond",
+      "weight": 500,
+      "file": "@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2"
+    },
+    {
+      "family": "Barlow Condensed",
+      "weight": 600,
+      "file": "@fontsource/barlow-condensed/files/barlow-condensed-latin-600-normal.woff2"
+    },
+    {
+      "family": "Mrs Saint Delafield",
+      "weight": 400,
+      "file": "@fontsource/mrs-saint-delafield/files/mrs-saint-delafield-latin-400-normal.woff2"
+    }
+  ],
+  "lib": [
+    "core",
+    "live"
+  ],
+  "libVersion": "0.4.0",
+  "bake": {
+    "__SETAREH__": "events.setareh"
+  },
+  "grid": {
+    "bpm": 64,
+    "downbeat": 0.01,
+    "beatsPerBar": 4,
+    "dur": 218.0
+  },
+  "render": {
+    "fps": 24,
+    "w": 1080,
+    "h": 1920,
+    "crf": 17,
+    "tune": "film"
+  },
+  "cuts": [
+    {
+      "name": "night",
+      "t0": 13.75,
+      "frames": 1439,
+      "note": "the exposure opens just before the first vocal onset and closes on the 32nd snare (72.181); the figure on the right holds the lean pose throughout; the moon cue starts its rise behind them"
+    },
+    {
+      "name": "dawn",
+      "t0": 89.99,
+      "frames": 1439,
+      "note": "one 16-bar section: the exposure closes on the 32nd snare (149.051), where the vocal ends; the dawn cue lifts the sky; the leave cue starts the figure on the right walking out"
+    }
+  ],
+  "covers": {
+    "mode": "cover",
+    "size": [
+      3000,
+      3000
+    ],
+    "variants": [
+      {
+        "name": "night"
+      },
+      {
+        "name": "dawn"
+      },
+      {
+        "name": "before"
+      },
+      {
+        "name": "rays"
+      },
+      {
+        "name": "close"
+      },
+      {
+        "name": "written"
+      }
+    ]
+  },
+  "gallery": {
+    "order": 5,
+    "t0": 67.7,
+    "dur": 6,
+    "fps": 12,
+    "poster": 5.4,
+    "quality": 50,
+    "cover": "night",
+    "alt": "One long-exposure night photograph, developing. The stars have drawn dashed rings round a bright, still pole star, and shooting stars radiate from it like the spokes of a wheel. Two silhouettes sit in armchairs, seen from behind, one leaning toward the other, in front of a city's lights, a snow-capped peak and thin trails of light along its roads. As the rings close the frame dims for an instant, then holds."
+  }
+}

@@ -299,7 +299,7 @@ flowchart LR
 **Where each one lives in the repository, and why.** The canvas engine is
 JavaScript because the pieces are web pages: the same file is the live,
 shareable artwork and the renderer. It sits in `canvas/` with its own lockfile
-and CI job, so the Python package never depends on Node. The four pieces that
+and CI job, so the Python package never depends on Node. The pieces that
 shipped are kept exactly as they shipped (verified frame by frame; see
 [canvas/README.md](../canvas/README.md), "Verified against what shipped");
 what they have in common was extracted into `canvas/lib/` for new pieces rather
