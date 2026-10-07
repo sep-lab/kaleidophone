@@ -22,9 +22,11 @@ not a port, and rebuilt the HTML that shipped byte for byte.
 
 **What's scrubbed and why:** no lyrics, and nothing sung is quoted or
 paraphrased; no credits beyond the artist's; the story the picture was made for
-is not told — the source's comments and `piece.json` say
-what the picture does (the two silhouettes are "the figure on the left" and
-"the figure on the right"). No stems, no audio, no real song pack: the
+is not told. `piece.json` and this page say what the picture does (the two
+silhouettes are "the figure on the left" and "the figure on the right"); the
+source's comments still call them him and her, as SHOULD I ?'s do, and describe
+the silhouettes' drawn hair and clothes, but say nothing of who they are or why.
+No stems, no audio, no real song pack: the
 repository's copy runs on a synthetic twin. Numbers are **measured on the
 release** unless marked; those marked **measured on the port** were taken on
 the code in `canvas/pieces/setareh/`, which you can run.
@@ -71,7 +73,8 @@ on bar 1: it counts snares, and falls back to the grid's backbeats.
 What the base pack doesn't have, the piece reads from an events pack
 (`events.setareh`) added by hand: **116 snares** over the song, **32 line
 onsets** (16 in each cut), four cue times (the moon's rise, the dawn, the
-leaving, the lean) and a vocal-stem envelope, `vstem`, that breathes the pole
+leaving, and a lean that nothing reads: the night pose is fixed in the code) and a
+vocal-stem envelope, `vstem`, that breathes the pole
 star by 6 % (counts measured from the pack). Within a cut the 32 snares fall
 1.865–1.921 s apart (night) and 1.866–1.886 s apart (dawn): two beats at 64
 BPM, with a human's spread. The pass that produced the events pack was not kept,
@@ -126,8 +129,8 @@ and the cuts open on the exposure itself.
 JPEG capture at q0.92, libx264 CRF 17 with `tune film`. The release's own render
 time was not recorded. **On the port** (measured, an Apple M1 Pro with Node and
 ffmpeg running as x86_64 under Rosetta): 96 frames at 1080×1920 from the start of the
-night cut, two workers, in 8 s (11.6 fps); the same count at the end of the
-cut, including the cold start of the trail cache, in 8 s (12.5 fps). A whole cut
+night cut, two workers, at 11.6 fps (8.3 s); the same count at the end of the
+cut, including the cold start of the trail cache, at 12.5 fps (7.7 s). A whole cut
 is about two minutes at that rate (inferred).
 
 **Covers.** Six variants — *night*, *dawn*, *before* (the moment before the
@@ -136,8 +139,8 @@ written in light) — in three formats: 3000×3000, 1080×1920 and 1080×1350, 1
 files. Each format is composed on its own (`coverView` sets a stage point and a
 zoom per format) rather than cropped from the square. `tools/still.mjs` draws
 the square only, since it doesn't pass a format on;
-`canvas/pieces/setareh/covers.mjs` draws all 18 in one browser session (14 s on
-the port, measured).
+`canvas/pieces/setareh/covers.mjs` draws all 18 in one browser session, a fresh
+page for each cover (31 s on the port, measured).
 
 ## Delivery
 
@@ -169,7 +172,7 @@ per master). Everything the script did that `deliver` can't yet is on
 - **A sprite cache key used for two colours.** `glowSprite` memoises by key, and
   the pole star's halation and the moon's halo both ask for `'hal'`, in
   different colours ((255, 120, 70) and (255, 130, 80)). Whichever a page draws
-  first decides both: a page whose first frame is at or after the moon's cue
+  first decides both: a page whose first frame is after the moon's cue
   (63.70 s in the night cut) gives both halos the moon's colour, one that starts
   earlier gives both the pole star's, so the same frame comes out differently
   depending on what the page drew before it. Measured on the port, the frame at
@@ -179,16 +182,22 @@ per master). Everything the script did that `deliver` can't yet is on
   same four frames twice in order, are byte-identical), and giving the moon's halo
   a key of its own makes alone and in-order identical (measured, in a scratch
   copy). The delivered film is not affected: a render worker starts before the
-  moon, so the first sprite is always the pole star's, while the covers, which
-  draw the moon first, would carry the other colour (inferred from the code). The piece is frozen, so the fix is not
-  applied. Anything that renders frames of it for a hash (the golden frames) must
-  fix the order or open a fresh page per frame, and a module built from this code
-  should give every sprite a key of its own.
+  moon, so the first sprite is always the pole star's (inferred from how
+  `render.mjs` splits a window: the second of two workers starts at 43.7 s). In a
+  fresh page, the covers that draw the moon (*night* and *written*) give both halos
+  its colour and the other four the pole star's, and the gallery clip and CI's
+  one-second render, which start after the moon's cue, carry the moon's. The piece
+  is frozen, so the fix is not applied. Anything that renders frames of it for a
+  hash (the golden frames) must fix the order or open a fresh page per frame, as
+  `covers.mjs` and `still.mjs` do, and a module built from this code should give
+  every sprite a key of its own.
 - **A twin that thins at random.** The synthetic twin's event windows thin a
-  16th grid at random, so a window at the backbeat rate gives snares 0.1 to 27 s
-  apart (measured over three seeds) and the shutter closes tens of seconds out.
-  The twin therefore has no snare events, and the piece counts the grid's
-  backbeats: closes at 72.1975 s and 149.0725 s, 16.5 ms and 21.5 ms after the
+  16th grid at random, so one window per cut at the backbeat rate gives 23–47
+  snares, 0.1–12.6 s apart (measured over 20 seeds). In 11 of the 20 a window
+  held fewer than 32, and the piece then ignores them all; in the rest the
+  night cut's 32nd snare fell between 53.9 s and 72.8 s against the real
+  72.181 s, so the shutter closed up to 18 s early. The twin therefore has no
+  snare events, and the piece counts the grid's backbeats: closes at 72.1975 s and 149.0725 s, 16.5 ms and 21.5 ms after the
   real ones (measured on the port). It has line windows (15 and 17 meteors in the
   two cuts, against 16 and 16) but no `vstem`, so the pole star's breath reads 0.
 - **A cover renderer that only worked in one sandbox.** `covers.mjs` had the

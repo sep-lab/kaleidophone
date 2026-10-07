@@ -47,7 +47,7 @@ frame programs and drawn canvas pieces. See the
       `analyze` (librosa) and `envelope` (comb search) — the release notes
       have the real grids to compare against
       ([#49](https://github.com/sep-lab/kaleidophone/issues/49)).
-- [ ] A case study from someone else's release. Twelve releases by one artist
+- [ ] A case study from someone else's release. The releases by one artist
       prove the architecture repeats, not that it travels.
 
 ## Phase 2 — Quality and cost tuning

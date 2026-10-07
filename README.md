@@ -476,7 +476,7 @@ What's genuinely still open, in the order it hurts:
   templates — a burned-in subtitle, a two-ink screen print, a negative — are
   [designed and not built](https://github.com/sep-lab/kaleidophone/issues/21).
   (Drawn pieces draw their own covers.)
-- **Proven on one artist's work.** Twelve releases, one practice. A case study
+- **Proven on one artist's work.** Many releases, one practice. A case study
   run by someone else would do more to prove it travels than anything else on
   the roadmap — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **`kaleidophone auto` lags the hand-authored path**

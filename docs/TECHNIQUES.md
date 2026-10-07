@@ -268,12 +268,13 @@ makes a lyric map) launches a streak from near the pole star, aimed by the
 golden angle (137.508° from a per-cut start) so any number of them spread
 evenly and never clump, skipping directions within 42° of straight down, where
 they would point at the figures; its length grows with the onset's strength
-(200 + 250 × s px, capped by the distance to the land). Because the exposure
+((200 + 250 × s) px, times a hashed 0.85–1.15, capped by a distance that depends on
+its direction). Because the exposure
 keeps everything that happened, the streaks pile up into rays round the pole
 star, and the number of lines is the number of rays: 16 in each cut (measured
 from the pack's events). There is no fallback — a pack without line events has
 no meteors — so a synthetic twin writes line windows, and its rays are as many
-but not in the same places (15 and 17 in the two cuts, measured). The pass that
+but not in the same places (15 and 17 in the two cuts, measured on the port). The pass that
 found the release's onsets was not kept, so a new master can't re-derive them.
 
 ---
@@ -401,8 +402,8 @@ if the era opens mid-step — erasing whoever was in front after every step
 live. The same operations run whichever frame a worker starts on, so the bitmap
 is a function of (exposure, era, steps done), the frame is still a function of
 time, and a window renders on its own, splits across workers, or resumes. The
-bitmap is rebuilt from step 0 if the page's transform changes or the angle asked
-for goes backwards. Measured on the port: in a copy of the piece with the sprite
+bitmap is rebuilt from the era's start if the page's transform changes or the angle
+asked for goes backwards. Measured on the port: in a copy of the piece with the sprite
 flaw below fixed, the frame at 71.667 s drawn alone and drawn after frames at
 17.9, 42.9 and 59.6 s in the same page are byte-identical PNGs; in the piece as
 shipped they differ by at most 2 of 255 in 14,587 of 2,073,600 pixels, all in

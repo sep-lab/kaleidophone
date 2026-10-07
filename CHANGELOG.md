@@ -92,7 +92,7 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   Built with the real events pack and the pinned fonts, the page is byte-identical
   to the one that shipped; the copy here differs in 14 comment lines (the story
   the picture was made for is not published, only what it does). 12 of 12 test
-  frames and 6 of 6 covers are PNG-identical to the unscrubbed build, and 35.2–47.9
+  frames and 6 of 6 square covers are PNG-identical to the unscrubbed build, and 35.2–47.9
   dB PSNR against the delivered films and covers (measured, 2026-10-07; the figures
   are in [canvas/README.md](canvas/README.md#verified-against-what-shipped)).
 - **Two fonts pinned**: `@fontsource/cormorant-garamond` and
@@ -102,12 +102,13 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 - **Its synthetic twin** (`synthetic.json`): the real tempo, first downbeat and
   five section boundaries with rounded levels, and eight windows for the line
   onsets that make the meteors. No snare windows, on purpose: the twin's windows
-  thin a 16th grid at random, and the piece counts the grid's backbeats instead
+  thin a 16th grid at random (gaps up to 12.6 s, over 20 seeds), and the piece
+  counts the grid's backbeats instead
   (measured: its cuts close 16.5 ms and 21.5 ms after the real ones). No `vstem`,
   so the pole star's breath reads 0. Pinned by hash in `canvas/test/synth.test.mjs`.
 - **A gallery entry**, six seconds from 67.7 s, and `canvas/pieces/setareh/covers.mjs`,
   which draws all six covers in all three formats (`still.mjs` draws only the
-  square) with the tools' own launcher.
+  square) with the tools' own launcher, a fresh page for each.
 - **[docs/case-studies/setareh.md](docs/case-studies/setareh.md)** (row 13) and
   techniques [#56–#62](docs/TECHNIQUES.md#56-exposure-as-an-integral): the exposure
   as an integral, the count closes the circle, the occupancy ghost, a deterministic
@@ -116,7 +117,8 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 - **A known flaw, documented and not fixed** (the piece is frozen): two glow
   sprites share the cache key `'hal'`, so a page's first frame decides the colour
   of the pole star's and the moon's halos, up to 2 of 255 apart (14,587 of
-  2,073,600 pixels at one frame; the delivered film is not affected). Anything
+  2,073,600 pixels at one frame; the delivered film is not affected, inferred from
+  how a render splits a window). Anything
   that hashes this piece's frames has to fix the order or use a fresh page per
   frame ([case study](docs/case-studies/setareh.md#what-went-wrong)).
 

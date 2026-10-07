@@ -30,7 +30,7 @@ and one live-mode fix aside, below) plus a driver and a synthetic song.
 | [( - )](pieces/minus/) | ink-on-paper Flash cartoon; she is never drawn, only the paper where she'd be | [→](../docs/case-studies/minus.md) |
 | [SAME AS YOU](pieces/same-as-you/) | the sequel: one page torn in two mirrored half-worlds; rig v2, chromatography, vector droste | [→](../docs/case-studies/same-as-you.md) |
 | [SHOULD I ?](pieces/should-i/) | the whole film through his camera's viewfinder: 36 frames on 36 snares, a 37th | [→](../docs/case-studies/should-i.md) |
-| [SETAREH](pieces/setareh/) | each cut is one long exposure developing live: the sky turns a step on every snare, 32 to a turn, and a figure is kept as much as it stayed. Six covers in three formats: `node pieces/setareh/covers.mjs` | [→](../docs/case-studies/setareh.md) |
+| [SETAREH](pieces/setareh/) | each cut is one long exposure developing live: the sky turns a step on every snare, 32 to a turn, and a figure is kept as much as it stayed. Six covers in three formats: `node pieces/setareh/covers.mjs <built.html> <pack.json> <outdir>` | [→](../docs/case-studies/setareh.md) |
 | [template](pieces/template/) | **start here**: the lib in one 8-bar loop — title write-on, a chair built from the body, a planted walk, a droste; a bulb that pops on the snare, a nod on the kick and the droste's turn on the chord change, from the song's events. Variants: three endings from bar 7, `droste` (the default), `lamp` and `exit` (`--variant ending=lamp`; live, `?variant=ending:lamp`) | — |
 
 ## Quick start
