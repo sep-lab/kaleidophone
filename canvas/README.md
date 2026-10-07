@@ -174,7 +174,11 @@ to 0.05, with every hit generated (SHOULD I ?'s also keeps the hand-placed vocal
 and stutter windows it needs). A twin can also play a chord progression on its
 bar lines — `"chords": {"track": "keys", "progression": ["Am", "F", "C", "G"],
 "every": "bar"}` writes `events.chords.keys` — made up like its drums, never the
-song's own harmony (the template's droste turns on it). Enough to run, test and show a piece — the
+song's own harmony (the template's droste turns on it). An event window can carry a list of pitches
+to draw from — `[from, to, rate, strength, [9, 12, 14, ...]]` gives each onset a third column,
+`[t, s, pitch]` — invented the same way: ⛈️'s twin colours the sax player's notes with them, never
+with the song's melody. And `"alias": {"vstem": "voc"}` writes an envelope again under the name a
+piece reads it by (`--twin` then measures it from the real pack's key of that name). Enough to run, test and show a piece — the
 biggest hit still lands where it should — and nothing about the sound
 ([ADR-0007](../docs/decisions/0007-three-engines-one-contract.md)). CI refuses any
 tracked pack that isn't marked `"synthetic": true`.

@@ -63,6 +63,9 @@ const BANDS = ['bass', 'lowmid', 'mid', 'high', 'air'];
 export const ENVELOPES = [...BANDS, 'rms', 'flux', 'bflux', 'hflux', 'cent', 'voc'];
 // songpack/1's envelopes (src/kaleidophone/audio/envelope.py) -- a pack carries these unless `keys` trims it
 const PACK_KEYS = [...BANDS, 'rms', 'rmsdb', 'flux', 'bflux', 'hflux', 'cent', 'voc'];
+// and its other top-level fields, which an alias may not take even where this pack leaves one out
+const PACK_FIELDS = new Set([...PACK_KEYS, 'kaleidophone', 'synthetic', 'fps', 'dur', 'bpm', 'beat0', 'period', 'beats',
+  'downbeat', 'loudest', 'quantize', 'grid_check', 'voc_source', 'events', 'stems']);
 // songpack/1 lets the three flux envelopes run to 1.5 (envelope.py, _FLUX_CEILING), so the biggest hit
 // in a song stands out from an ordinary strong one instead of both clipping at 1
 export const FLUX_CEILING = 1.5;
@@ -474,7 +477,7 @@ function aliasesOf(spec, pack) {
   if (typeof a !== 'object' || Array.isArray(a)) throw bad('must be {"name": "envelope"}, e.g. {"vstem": "voc"}');
   return Object.entries(a).map(([k, src]) => {
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(k)) throw bad(`names a key ${JSON.stringify(k)}: use letters, digits and _ (it is a top-level key of the pack)`);
-    if (k in pack || k === 'events' || k === 'stems' || ENVELOPES.includes(k)) throw bad(`can't name "${k}": the pack has a key of that name already`);
+    if (k in pack || PACK_FIELDS.has(k)) throw bad(`can't name "${k}": a song pack has a key of that name already`);
     if (!ENVELOPES.includes(src)) throw bad(`"${k}" must name an envelope (${ENVELOPES.join(', ')}), got ${JSON.stringify(src)}`);
     if (!Array.isArray(pack[src])) throw bad(`"${k}" names "${src}", which the spec's "keys" leave out of the pack`);
     return [k, src];

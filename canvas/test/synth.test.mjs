@@ -252,25 +252,8 @@ test('the drums it plays are in the pack as MIDI: events.midi.kick / .snare / .h
   assert.throws(() => synthesize({ ...spec, events: { midi: { k: [[1, 2]] } } }), /can't have a group named "midi"/);
 });
 
-// sha256 of each piece's v0.3.0 twin pack as JSON (Node 22): the gallery and CI render from these, so a
-// spec must still produce them byte for byte, apart from what is new since: events.midi, and stems and
-// events.chords where the spec asks for them (the template's twin plays chords now; nothing else moved).
-const V030 = {
-  'hamechi-manzor-dare': '24a17ceb9667c5d0a06a2095bade3481f65c580d30a7b90c0669ba9ff1c7c5f3',
-  minus: '77a00c7c595cd6ff2fefbf4282f9fa52a6a1c3c966b70ad66e62a680ba423149',
-  'same-as-you': 'b5a2b7e32dfd0c4ec4aadf42aa50d4f426ce06fd8d6df77987c848d47e406344',
-  'should-i': '2336386ecbbb916fd52a7e94bb7a4bd44fe83363eb4ee86392da05ff8d8f04d9',
-  template: 'bfd62876e947b37a1ead7d8b59584e53ae9a687c71cd3c54c8e5ffd5b1db2851',
-};
+// a pack without what the generator learned after v0.3.0: events.midi, and stems and events.chords where asked for
 const withoutNew = p => { const q = { ...p, events: { ...p.events } }; delete q.events.midi; delete q.events.chords; if (!Object.keys(q.events).length) delete q.events; delete q.stems; return q; };
-
-test('every piece\'s twin is byte-identical to v0.3.0\'s, apart from events.midi (and stems and events.chords, where asked for)', () => {
-  for (const [id, sha] of Object.entries(V030)) {
-    const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', id, 'synthetic.json'), 'utf8'));
-    const got = crypto.createHash('sha256').update(JSON.stringify(withoutNew(synthesize(spec)))).digest('hex');
-    assert.equal(got, sha, `${id}: its twin pack changed. If you re-measured or edited pieces/${id}/synthetic.json on purpose, update its hash here; if not, the generator changed what every render and the gallery see`);
-  }
-});
 
 test('stems: true adds stems and changes nothing else', () => {
   const a = synthesize(spec), b = synthesize({ ...spec, stems: true });
@@ -369,8 +352,9 @@ test('--twin keeps "chords" when it re-measures a piece; the template\'s twin ch
 
 // ---------------------------------------------------------------- every twin, byte for byte
 // sha256 of each piece's whole twin pack as JSON, events.midi and all: the gallery, CI's smoke render and
-// the golden frames render from these. The five that shipped in v0.4.0 have not moved since (the pitch
-// column and "alias" are new, and only a spec that asks for them gets them); ⛈️'s twin is pinned as it landed.
+// the golden frames render from these. The five that shipped in v0.4.0 have not moved since -- nor, apart
+// from events.midi (and stems and events.chords, where asked for), since v0.3.0. The pitch column and
+// "alias" are new, and only a spec that asks for them gets them; ⛈️'s twin is pinned as it landed.
 const TWINS = {
   'hamechi-manzor-dare': '06c2e4f33a314328026c26290b8af2c62ced272a2af8eead377a5a5e0c44ea44',
   minus: 'c0c393e42634089802a115ae957b537dcfa8ba2ad71181089000d92cf13041dc',
@@ -428,7 +412,9 @@ test('alias: one that would shadow a key or name no envelope in the pack is refu
   const bad = (alias, re, keys = ['bass', 'rms', 'voc']) => assert.throws(() => synthesize({ ...spec, keys, alias }), re);
   bad(['vstem', 'voc'], /"alias" must be \{"name": "envelope"\}/);
   bad({ 'v.stem': 'voc' }, /names a key "v\.stem": use letters, digits and _/);
-  for (const k of ['rms', 'bpm', 'events', 'stems', 'cent']) bad({ [k]: 'voc' }, new RegExp(`can't name "${k}": the pack has a key of that name already`));
+  for (const k of ['rms', 'bpm', 'events', 'stems', 'cent']) bad({ [k]: 'voc' }, new RegExp(`can't name "${k}": a song pack has a key of that name already`));
+  // songpack/1's own fields, even where this pack leaves them out: rmsdb is read as dB, quantize as a byte scale
+  for (const k of ['rmsdb', 'quantize', 'grid_check']) bad({ [k]: 'voc' }, new RegExp(`can't name "${k}": a song pack has a key`));
   bad({ vstem: 'vocals' }, /"vstem" must name an envelope \(bass, .*\), got "vocals"/);
   bad({ vstem: 'voc' }, /"vstem" names "voc", which the spec's "keys" leave out of the pack/, ['bass', 'rms']);
 });

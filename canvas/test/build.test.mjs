@@ -215,6 +215,7 @@ test('every work states its one written rule in piece.json: one sentence, the co
     assert.equal(typeof spec.rule, 'string', `${id}: piece.json has no "rule"`);
     const r = spec.rule.trim();
     assert.ok(r === spec.rule && r.length >= 8 && r.length <= 160, `${id}: "rule" is one short sentence, got ${JSON.stringify(spec.rule)}`);
-    assert.match(r, /^[^.!?]+[.!?]$/, `${id}: "rule" is one sentence, ending once`);
+    assert.match(r, /[.!?]$/, `${id}: "rule" is a sentence, with its full stop`);
+    assert.doesNotMatch(r, /[.!?]["')\]]*\s+[A-Z]/, `${id}: "rule" is one sentence, not two`);
   }
 });

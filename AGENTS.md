@@ -99,8 +99,9 @@ For `canvas/` specifically:
   windows, to the millisecond). Nothing else derived from the audio goes in.
   The pack `synth.mjs` makes from a twin plays its own drums, written as MIDI
   (`events.midi`), and, when the twin asks, a chord progression
-  (`events.chords`) and stems — all invented for the twin, never the song's
-  own notes, harmony or parts.
+  (`events.chords`), stems, and pitches for an event window's onsets (a list
+  to draw from, as ⛈️'s melody has) — all invented for the twin, never the
+  song's own notes, harmony or parts.
 - **Never commit a render** — clip, still, cover or built HTML. The gallery is
   built by `.github/workflows/pages.yml`.
 - **Lyrics, collaborator names and stems never enter the repository**, not in
