@@ -14,6 +14,7 @@ stand-in "ffmpeg" (a two-line sh script) that tries to read a line.
 from __future__ import annotations
 
 import ast
+import json
 import os
 import shutil
 import subprocess
@@ -109,6 +110,7 @@ def recorded(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess, "run", fake)
     monkeypatch.setattr(fu.shutil, "which", lambda name: f"/usr/bin/{name}")
     fu.filter_options.cache_clear()
+    fu.encoders.cache_clear()
     (tmp_path / "a.wav").write_bytes(b"placeholder")
     return calls, str(tmp_path / "a.wav")
 
@@ -122,6 +124,8 @@ HELPERS = {
     "probe_stream": lambda path: fu.probe_stream(path, "a:0", "channels"),
     "probe_keyframes": lambda path: fu.probe_keyframes(path),
     "filter_options": lambda path: fu.filter_options("/usr/bin/ffmpeg", "alimiter"),
+    "encoders": lambda path: fu.encoders("/usr/bin/ffmpeg"),
+    "capture": lambda path: fu.capture(["/usr/bin/node", "--version"]),
 }
 
 
@@ -418,3 +422,135 @@ def test_first_frame_png_degrades_to_none_for_an_unreadable_clip(monkeypatch, wh
     monkeypatch.setattr(fu.shutil, "which", lambda name: which)
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: proc)
     assert fu.first_frame_png("clip.mp4") is None
+
+
+# --- encoders and capture (kaleidophone doctor) --------------------------------
+
+ENCODERS_71 = """\
+Encoders:
+ V..... = Video
+ A..... = Audio
+ ------
+ V....D libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+ V....D h264_videotoolbox    VideoToolbox H.264 Encoder (codec h264)
+ A....D aac                  AAC (Advanced Audio Coding)
+ A....D aac_at               aac (AudioToolbox) (codec aac)
+ S..... ass                  ASS (Advanced SubStation Alpha) subtitle
+"""
+
+
+def test_encoders_reads_the_list_once_per_binary(monkeypatch):
+    fu.encoders.cache_clear()
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Proc(stdout=ENCODERS_71))
+    assert fu.encoders("/x/ffmpeg") == {"libx264", "h264_videotoolbox", "aac", "aac_at", "ass"}
+    fu.encoders("/x/ffmpeg")
+    assert len(calls) == 1 and calls[0][-1] == "-encoders"
+
+
+@pytest.mark.parametrize("failure", ["oserror", "exit"])
+def test_encoders_is_empty_when_it_cant_ask(monkeypatch, failure):
+    fu.encoders.cache_clear()
+
+    def fake(cmd, **kw):
+        if failure == "oserror":
+            raise FileNotFoundError(cmd[0])
+        return _Proc(returncode=1)
+
+    monkeypatch.setattr(subprocess, "run", fake)
+    assert fu.encoders("/x/ffmpeg") == frozenset()
+
+
+def test_capture_returns_what_the_tool_said(monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: _Proc(returncode=0, stdout="v24.19.0\n", stderr=""))
+    assert fu.capture(["/usr/bin/node", "--version"]) == (0, "v24.19.0\n", "")
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError("node"), subprocess.TimeoutExpired("node", 20)])
+def test_capture_is_none_when_the_tool_cant_answer(monkeypatch, error):
+    def fake(cmd, **kw):
+        raise error
+
+    monkeypatch.setattr(subprocess, "run", fake)
+    assert fu.capture(["/usr/bin/node", "--version"]) is None
+
+
+def test_capture_refuses_a_shell_string():
+    with pytest.raises(TypeError, match="never a shell string"):
+        fu.capture("node --version")
+
+
+# --- the profile ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("args", "kind"),
+    [
+        (["-y", "-loop", "1", "-i", "/p/a b.jpg", "-vf", "scale=640:360,noise=alls=20", "-c:v", "libx264", "o.mp4"],
+         "loop|vf|noise|scale|v=libx264"),
+        (["-f", "concat", "-safe", "0", "-i", "list.txt", "-c", "copy", "out.mp4"], "concat|v=copy|a=copy"),
+        (["-i", "x.mp4", "-vn", "-af", "ebur128=peak=true", "-f", "null", "-"], "af|ebur128|v=none|null"),
+        (["-i", "a.mp4", "-filter_complex", "[0:v]split[a][b];[a][b]overlay", "-c:v", "libx264", "-an", "o.mp4"],
+         "filter_complex|overlay|split|v=libx264|a=none"),
+        (["-f", "lavfi", "-i", "testsrc2", "-c:v", "weird codec!", "o.mp4"], "lavfi|v=other"),
+        (["-i", "a.wav", "o.wav"], "other"),
+    ],
+)
+def test_argv_kind(args, kind):
+    assert fu.argv_kind(args) == kind
+
+
+def test_argv_kind_never_carries_a_title_or_a_path():
+    """A drawtext's text, a path, a title that happens to contain a filter's
+    name: none of it reaches the kind, only the fixed filter names do."""
+    args = ["-i", "/Users/someone/Unreleased Song/clip.mp4", "-vf",
+            "drawtext=text='Unreleased Song, scale of grief':fontfile=/Users/someone/f.ttf", "-c:v", "libx264", "o.mp4"]
+    kind = fu.argv_kind(args)
+    assert kind == "vf|drawtext|scale|v=libx264"
+    assert "/" not in kind and "Unreleased" not in kind and "someone" not in kind
+
+
+def test_without_the_variable_nothing_is_written(monkeypatch, tmp_path):
+    monkeypatch.delenv(fu.PROFILE_ENV, raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc())
+    fu.run("/fake/ffmpeg", ["-i", "a.mp4", "b.mp4"])
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_every_run_measure_and_decode_appends_a_line(monkeypatch, tmp_path):
+    prof = tmp_path / "p.jsonl"
+    monkeypatch.setenv(fu.PROFILE_ENV, str(prof))
+    monkeypatch.setattr(fu, "require_ffmpeg", lambda: "/fake/ffmpeg")
+
+    def fake(cmd, **kw):
+        return _Proc(stdout="" if kw.get("text") else b"\0" * 8, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake)
+    (tmp_path / "a.wav").write_bytes(b"x")
+    fu.run("/fake/ffmpeg", ["-i", "a.mp4", "-c:v", "libx264", "b.mp4"])
+    fu.run_measure("/fake/ffmpeg", ["-i", "b.mp4", "-af", "ebur128=peak=true", "-f", "null", "-"])
+    fu.decode_f32le(str(tmp_path / "a.wav"), sample_rate=48000, channels=2)
+    lines = [json.loads(line) for line in prof.read_text().splitlines()]
+    assert [(r["call"], r["kind"], r["exit"]) for r in lines] == [
+        ("run", "v=libx264", 0),
+        ("run_measure", "af|ebur128|null", 0),
+        ("decode_f32le", "v=none", 0),
+    ]
+    assert all(r["wall_ms"] >= 0 and r["pid"] == os.getpid() and r["ts"] > 0 for r in lines)
+    assert str(tmp_path) not in prof.read_text().replace(str(prof), "")
+
+
+def test_a_failed_call_is_profiled_with_its_exit_code(monkeypatch, tmp_path):
+    prof = tmp_path / "p.jsonl"
+    monkeypatch.setenv(fu.PROFILE_ENV, str(prof))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc(returncode=1, stderr="boom"))
+    with pytest.raises(RuntimeError, match="boom"):
+        fu.run("/fake/ffmpeg", ["-i", "a.mp4", "b.mp4"])
+    assert json.loads(prof.read_text())["exit"] == 1
+
+
+def test_a_profile_that_cant_be_written_never_breaks_a_render(monkeypatch, tmp_path):
+    monkeypatch.setenv(fu.PROFILE_ENV, str(tmp_path))  # a folder: open() fails
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc())
+    fu.run("/fake/ffmpeg", ["-i", "a.mp4", "b.mp4"])

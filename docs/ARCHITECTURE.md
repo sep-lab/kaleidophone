@@ -180,7 +180,9 @@ CONTRIBUTING.md, "Ground rules for claims" for how to reproduce these.
 **Measured on:** Apple M1 Pro (10 cores), macOS 15.7, ffmpeg 7.1, CPython
 3.11.10 — an *x86_64* interpreter under Rosetta 2 rather than a native
 arm64 build, so a native run should be faster. Named because "one machine"
-only means something if you know which one.
+only means something if you know which one. `kaleidophone doctor` says what
+each tool runs as, and [BENCHMARKS.md](BENCHMARKS.md) is where "faster" gets
+measured rather than assumed.
 
 | Stage | Resolution | Time |
 |---|---|---|

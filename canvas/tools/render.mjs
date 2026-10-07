@@ -14,6 +14,7 @@
 //        [--html file.html]        render this HTML instead of building the piece now (golden-frame checks)
 //        [--png-frames 60,450]     also save these window frames as lossless PNGs next to the output (QA)
 //        [--allow-page-errors]     keep going when the page throws or asks for anything but a local file
+//        [--profile]               time every frame -- draw, capture, the wait for the encoder -- into the sidecar
 //
 // Writes <out> and <out>.json: what was rendered and how -- piece, t0 asked for and snapped, the
 // frames and keyframes (as frames and as seconds), size, workers, the tool, Chromium and ffmpeg
@@ -84,6 +85,7 @@ const SPEC = {
     html: { type: 'string', arg: 'file.html', help: 'render this HTML instead of building the piece now' },
     'png-frames': { type: 'ints', arg: 'n,n,...', help: 'also save these window frames as lossless PNGs (QA)' },
     'allow-page-errors': { type: 'bool', help: 'keep rendering when the page throws or requests anything but a local file' },
+    profile: { type: 'bool', help: 'time every frame (draw, capture, the wait for the encoder, in ms) into the sidecar\'s "profile"' },
   },
 };
 
@@ -191,6 +193,9 @@ await main(async () => {
   const encodeFile = (p, e) => path.join(tmp, `${p.name ? p.name + '.' : ''}part${String(e.k).padStart(2, '0')}.mp4`);
   const framesDir = p => fileOf(p).replace(/\.mp4$/, '') + '_frames';
   const probes = new Map(); // part -> sha256 of the lossless frame just before the join (--endings)
+  // --profile: part -> [frame, draw ms, capture ms, sink wait ms] for every frame written (benchmarks/ reads it)
+  const timings = new Map();
+  const r3 = x => +x.toFixed(3);
 
   // A page drawing the frames of part p, with p's choice. A driver of its own for every page: a
   // stateful driver keeps its schedule on `this` (plan()).
@@ -250,9 +255,16 @@ await main(async () => {
       const sink = ffmpegSink(encodeFile(p, e), { fps, crf, tune, keyframes: e.keys });
       sinks.push(sink);
       for (let i = e.a; i < e.b && !failed; i++) {
+        const start = performance.now();
         await draw(i);
-        const jpg = await page.evaluate(([sel, qq]) => document.querySelector(sel).toDataURL('image/jpeg', qq), [d.canvasSelector, q]);
-        await sink.write(dataUrlToBuffer(jpg));
+        const drawn = performance.now();
+        const jpg = dataUrlToBuffer(await page.evaluate(([sel, qq]) => document.querySelector(sel).toDataURL('image/jpeg', qq), [d.canvasSelector, q]));
+        const captured = performance.now();
+        await sink.write(jpg);
+        if (A.profile) {
+          if (!timings.has(p.name)) timings.set(p.name, []);
+          timings.get(p.name).push([i, r3(drawn - start), r3(captured - drawn), r3(performance.now() - captured)]);
+        }
         if (pngFrames.has(i) || i === run.probe) {
           const buf = await png();
           if (i === run.probe) probes.set(p.name, sha256(buf));
@@ -324,8 +336,18 @@ await main(async () => {
     } : {}),
     encode,
     tools,
+    ...(A.profile ? { profile: profileOf(p) } : {}),
   });
   const el = () => (Date.now() - T) / 1000;
+  // --profile: every frame's timings, in frame order, and each column's spread
+  const profileOf = p => {
+    const rows = (timings.get(p.name) || []).sort((a, b) => a[0] - b[0]);
+    const spread = k => {
+      const xs = rows.map(r => r[k]).sort((a, b) => a - b), at = f => xs[Math.min(xs.length - 1, Math.floor(f * xs.length))];
+      return xs.length ? { mean: r3(xs.reduce((a, b) => a + b, 0) / xs.length), p50: at(0.5), p95: at(0.95), max: xs[xs.length - 1] } : null;
+    };
+    return { unit: 'ms', columns: ['frame', 'draw', 'capture', 'sink_wait'], frames: rows.length, summary: { draw: spread(1), capture: spread(2), sink_wait: spread(3) }, rows };
+  };
 
   if (!endings) {
     const [p] = plan.parts;
