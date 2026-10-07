@@ -134,11 +134,11 @@ export function formatGolden({ id, html, env, size, stills }) {
     ...stills.map(s => `${s.sha256}  ${stillName(id, s)}`)].join('\n') + '\n';
 }
 
-export function parseGolden(id, text) {
+export function parseGolden(id, text, where = `test/golden/${id}.sha256`) {
   const g = { id, html: null, env: null, size: null, stills: [] };
   for (const [i, line] of text.split('\n').entries()) {
     if (!line.trim()) continue;
-    const bad = why => { throw new RunError(`test/golden/${id}.sha256:${i + 1}: ${why}`); };
+    const bad = why => { throw new RunError(`${where}:${i + 1}: ${why}`); };
     let m;
     if ((m = /^# html ([0-9a-f]{64})$/.exec(line))) g.html = m[1];
     else if ((m = /^# env (.+)$/.exec(line))) g.env = m[1];
@@ -150,7 +150,7 @@ export function parseGolden(id, text) {
       g.stills.push({ ...s, sha256: m[1] });
     } else bad(`not a "<sha256>  <still>.png" line: ${JSON.stringify(line.slice(0, 80))}`);
   }
-  if (!g.html || !g.env || !g.size) throw new RunError(`test/golden/${id}.sha256 is missing its ${['html', 'env', 'size'].filter(k => !g[k]).join(', ')} line`);
+  if (!g.html || !g.env || !g.size) throw new RunError(`${where} is missing its ${['html', 'env', 'size'].filter(k => !g[k]).join(', ')} line`);
   return g;
 }
 
@@ -172,6 +172,7 @@ export function defaultStills(id, spec, pack) {
 }
 
 // ---------------------------------------------------------------- the machine
+const UNAVAILABLE = 'unavailable';
 // What a still's pixels depend on besides the piece: the OS and CPU family, the Chromium build, and the
 // system font a piece's "monospace" falls back to (with its package version where dpkg can say).
 export async function environment() {
@@ -181,7 +182,7 @@ export async function environment() {
     chromium = browser.version();
     await browser.close();
   } catch (e) {
-    chromium = `unavailable (${firstLine(e.message).slice(0, 60)})`;
+    chromium = `${UNAVAILABLE} (${firstLine(e.message).slice(0, 80)})`;
   }
   const fc = spawnSync('fc-match', ['-f', '%{family[0]}', 'monospace'], { encoding: 'utf8' });
   const dpkg = spawnSync('dpkg-query', ['-W', '-f=${Version}', 'fonts-dejavu-core'], { encoding: 'utf8' });
@@ -248,11 +249,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     const ids = A._.length ? A._ : frozen;
     const fileOf = id => path.join(dir, `${id}.sha256`);
     const shown = f => (path.relative(process.cwd(), f).startsWith('..') ? f : path.relative(process.cwd(), f));
-    if (A.check && !A._.length && fs.existsSync(dir)) {
-      const stray = fs.readdirSync(dir).filter(f => f.endsWith('.sha256')).map(f => f.slice(0, -7)).filter(id => !frozen.includes(id));
-      if (stray.length) throw new RunError(`${shown(dir)} has golden frames for ${stray.join(', ')}, which ${stray.length > 1 ? 'are' : 'is'} not a frozen piece here: remove ${stray.length > 1 ? 'them' : 'it'} or put the piece back`);
-    }
+    // golden frames of a piece that is gone, or a template now: --check refuses them, --update (all) removes them
+    const stray = !A._.length && fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter(f => f.endsWith('.sha256')).map(f => f.slice(0, -7)).filter(id => !frozen.includes(id)) : [];
+    if (A.check && stray.length) throw new RunError(`${shown(dir)} has golden frames for ${stray.join(', ')}, which ${stray.length > 1 ? 'are' : 'is'} not a frozen piece here: remove ${stray.length > 1 ? 'them' : 'it'} or put the piece back`);
     const env = await environment();
+    const chromium = env.split(' | ')[1];
+    if ((A.update || A.strict) && chromium.startsWith(`chromium ${UNAVAILABLE}`)) {
+      throw new RunError(`Chromium didn't start, so no frame can be drawn: ${chromium.slice(9)}. Install it (\`npx playwright-core install chromium\` in canvas/) or set KALEIDOPHONE_CHROMIUM`);
+    }
     if (A.update && process.platform !== 'linux' && !A.force) {
       throw new UsageError(`golden frames are recorded on Linux CI (this is ${env.split(' | ')[0]}): run the golden-update job (Actions -> CI -> Run workflow, golden_update) and commit what it uploads. --force writes hashes that only this machine will match`);
     }
@@ -262,7 +267,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     let skipped = 0;
     for (const id of ids) {
       const T = Date.now();
-      const old = fs.existsSync(fileOf(id)) ? parseGolden(id, fs.readFileSync(fileOf(id), 'utf8')) : null;
+      const old = fs.existsSync(fileOf(id)) ? parseGolden(id, fs.readFileSync(fileOf(id), 'utf8'), shown(fileOf(id))) : null;
       if (A.check && !old) {
         problems.push(`${id}: no golden frames (${shown(fileOf(id))}) -- a frozen piece needs them: run the golden-update job and commit what it uploads`);
         continue;
@@ -294,16 +299,27 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
         continue;
       }
       const got = renderStills(id, page.file, song, old.stills, old.size);
-      const diff = got.filter((s, i) => s.sha256 !== old.stills[i].sha256);
+      let differ = 0;
       got.forEach((s, i) => {
-        if (s.sha256 !== old.stills[i].sha256) problems.push(`${id}: ${stillName(id, s)} draws different pixels (sha256 ${s.sha256.slice(0, 12)}…, golden ${old.stills[i].sha256.slice(0, 12)}…) -- ${shown(s.file)}`);
+        if (s.sha256 === old.stills[i].sha256) return;
+        differ++;
+        problems.push(`${id}: ${stillName(id, s)} draws different pixels (sha256 ${s.sha256.slice(0, 12)}…, golden ${old.stills[i].sha256.slice(0, 12)}…) -- ${shown(s.file)}`);
       });
-      console.log(`${id}: ${diff.length ? `${diff.length} of ${got.length} stills differ` : `${got.length} stills match`}  (${((Date.now() - T) / 1000).toFixed(1)} s)`);
+      console.log(`${id}: ${differ ? `${differ} of ${got.length} stills differ` : `${got.length} stills match`}  (${((Date.now() - T) / 1000).toFixed(1)} s)`);
+    }
+    if (A.update) {
+      for (const id of stray) { fs.rmSync(fileOf(id)); console.log(`${id}: no longer a frozen piece -- removed ${shown(fileOf(id))}`); }
     }
     if (problems.length) {
+      // the CPU isn't part of "env" (it would fail runs whose pixels match), but Skia picks its code paths by
+      // CPU: name it, so a mismatch on a runner of another kind can be told from a change to a piece
       throw new RunError(`golden frames: ${problems.length} problem${problems.length > 1 ? 's' : ''}\n  ${problems.join('\n  ')}\n` +
+        `This run: ${env} | cpu ${(os.cpus()[0] || {}).model || 'unknown'}.\n` +
         'A frozen piece must draw exactly what it shipped drawing. If the change is meant (a new CI image, a measured fix), regenerate with the golden-update job and say why in the PR.');
     }
-    if (A.check) console.log(`golden frames: ${ids.length - skipped} of ${ids.length} pieces compared${skipped ? ` (${skipped} recorded on another machine: pages checked only)` : ''}, all match`);
+    if (A.check) {
+      console.log(`golden frames: ${ids.length} page${ids.length > 1 ? 's' : ''} as shipped; frames of ${ids.length - skipped} compared, all match` +
+        `${skipped ? ` (${skipped} recorded on another machine: CI compares them)` : ''}`);
+    }
   });
 }

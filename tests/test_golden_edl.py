@@ -31,11 +31,12 @@ def demo_edl(where: Path) -> str:
     """The demo's edl.json, as `kaleidophone run` writes it, with the fixture folder named <fixtures>."""
     from kaleidophone import cli
 
-    subprocess.run(
+    made = subprocess.run(
         [sys.executable, str(ROOT / "examples" / "demo" / "generate_fixtures.py"), "--out", str(where)],
-        check=True,
         capture_output=True,
+        text=True,
     )
+    assert made.returncode == 0, f"examples/demo/generate_fixtures.py failed:\n{made.stderr[-3000:]}"
     out = where / "out"
     assert cli.main(["run", str(where / "brief.yaml"), "-o", str(out), "--preview-only"]) == 0
     return (out / "edl.json").read_text(encoding="utf-8").replace(str(where), FIXTURES)

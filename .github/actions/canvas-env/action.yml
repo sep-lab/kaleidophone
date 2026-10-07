@@ -51,5 +51,6 @@ runs:
       if: inputs.ffmpeg == 'true'
       shell: bash
       run: |
+        # apt's lists were refreshed by the step above
         sudo apt-get install -y ffmpeg
         ffmpeg -version | head -n 1

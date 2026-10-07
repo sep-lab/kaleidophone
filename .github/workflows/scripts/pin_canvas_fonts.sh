@@ -12,9 +12,10 @@
 #   and a runner where "monospace" means anything else stops here instead of
 #   failing the goldens for a reason no diff would show.
 #
-# Runs after `npx playwright-core install --with-deps chromium`, which has run
-# apt-get update and pulls in other fonts (fonts-liberation among them);
-# fontconfig still prefers DejaVu Sans Mono for "monospace" when it is there.
+# Runs after `npx playwright-core install --with-deps chromium`, which pulls in
+# other fonts (fonts-liberation among them); fontconfig still prefers DejaVu
+# Sans Mono for "monospace" when it is there. It refreshes apt's lists itself,
+# and installs from them (canvas-env's ffmpeg step relies on that too).
 #
 # USAGE
 #   .github/workflows/scripts/pin_canvas_fonts.sh     (Ubuntu 24.04 runners; needs sudo)
@@ -22,6 +23,7 @@ set -euo pipefail
 
 FONTS_DEJAVU_CORE="2.37-8"   # Ubuntu 24.04 (noble)
 
+sudo apt-get update -qq
 sudo apt-get install -y --no-install-recommends --allow-downgrades "fonts-dejavu-core=${FONTS_DEJAVU_CORE}"
 
 have="$(fc-match -f '%{family[0]}' monospace)"

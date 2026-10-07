@@ -1,0 +1,14 @@
+# kaleidophone golden frames: minus, from its synthetic twin. Each line is the sha256 of one still's decoded
+# RGBA pixels (canvas/tools/golden.mjs), drawn from the page with the "html" sha256 below: the page as the
+# release zip ships it. Recorded by the golden-update job on the machine named in "env"; never edit by hand.
+# html f707602f55c60c07b091f08e3db473ed85f510f01fefe57872b59059cb143b94
+# env linux-x64 | chromium 141.0.7390.37 | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
+# size 1080x1920
+2d01402eaf669cc20b1952c23bbe907fcf58477626c534d77c97d3cc3dfc3373  minus_29.583.png
+f4240ad57abb5b7da34bb671425bb5e4893f6d0ca60c66a9c62851995548e99b  minus_59.208.png
+1a1dedbe0a200fdff4b45cc72b4fdaed8c8a1120748f8847c2e8a3cd40511a44  minus_88.792.png
+9252e9e1f71476a8fe0447174d9c34ad67915ae77ae041abdd89ecd734d60c19  minus_118.417.png
+f624cfe70df0409bc56f9ae2faf63f2bca40b91cb2939954bd5d5ef98b9a748f  minus_131.500.png
+cb1985b80c977316353ab6658fe7cb3a2d69e12efe15e568ab9b214ce2787ed1  minus_148.000.png
+ba6c52cafb207284d84b2f8ac32a15ee00815ad680b9b9e83221a6cc1d2b3900  minus_cover_plates_1200.png
+7afa6d84fc409c555e6d640d2dcbf95510a1c93065b4ed91fa0653c039b1716e  minus_cover_sunrise_1200.png

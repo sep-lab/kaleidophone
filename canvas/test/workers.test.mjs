@@ -24,6 +24,7 @@ const ON = process.env.KP_BROWSER_TESTS === '1';
 const COUNTS = (process.env.KP_WORKER_COUNTS || '2,4,8').split(',').map(Number);
 const FPS = 12, DUR = 2, FRAMES = FPS * DUR;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kp-workers-'));
+test.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: CANVAS, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 << 20 });
 
 // the decoded frames, one md5 per frame, in order
