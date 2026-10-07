@@ -191,6 +191,18 @@ export async function environment() {
     ...(dpkg.status === 0 && dpkg.stdout.trim() ? [`fonts-dejavu-core ${dpkg.stdout.trim()}`] : [])].join(' | ');
 }
 
+// The CPU, which isn't part of "env": Chromium's software rasteriser picks code paths by CPU, so what
+// it draws can depend on it. Vendor and vector width where Linux says, else the model.
+export function cpu() {
+  const model = (os.cpus()[0] || {}).model || 'unknown';
+  try {
+    const info = fs.readFileSync('/proc/cpuinfo', 'utf8');
+    const vendor = (/^vendor_id\s*:\s*(\S+)/m.exec(info) || [])[1] || '?';
+    const flags = new Set(((/^flags\s*:(.*)$/m.exec(info) || [])[1] || '').trim().split(/\s+/));
+    return `${vendor}/${flags.has('avx512f') ? 'avx512' : flags.has('avx2') ? 'avx2' : 'pre-avx2'} (${model.trim()})`;
+  } catch { return model; }
+}
+
 // ---------------------------------------------------------------- rendering
 const node = process.execPath;
 function still(args) {
@@ -254,6 +266,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       ? fs.readdirSync(dir).filter(f => f.endsWith('.sha256')).map(f => f.slice(0, -7)).filter(id => !frozen.includes(id)) : [];
     if (A.check && stray.length) throw new RunError(`${shown(dir)} has golden frames for ${stray.join(', ')}, which ${stray.length > 1 ? 'are' : 'is'} not a frozen piece here: remove ${stray.length > 1 ? 'them' : 'it'} or put the piece back`);
     const env = await environment();
+    console.log(`on ${env} | cpu ${cpu()}`);
     const chromium = env.split(' | ')[1];
     if ((A.update || A.strict) && chromium.startsWith(`chromium ${UNAVAILABLE}`)) {
       throw new RunError(`Chromium didn't start, so no frame can be drawn: ${chromium.slice(9)}. Install it (\`npx playwright-core install chromium\` in canvas/) or set KALEIDOPHONE_CHROMIUM`);
@@ -314,11 +327,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       // the CPU isn't part of "env" (it would fail runs whose pixels match), but Skia picks its code paths by
       // CPU: name it, so a mismatch on a runner of another kind can be told from a change to a piece
       throw new RunError(`golden frames: ${problems.length} problem${problems.length > 1 ? 's' : ''}\n  ${problems.join('\n  ')}\n` +
-        `This run: ${env} | cpu ${(os.cpus()[0] || {}).model || 'unknown'}.\n` +
+        `This run: ${env} | cpu ${cpu()}.\n` +
         'A frozen piece must draw exactly what it shipped drawing. If the change is meant (a new CI image, a measured fix), regenerate with the golden-update job and say why in the PR.');
     }
     if (A.check) {
-      console.log(`golden frames: ${ids.length} page${ids.length > 1 ? 's' : ''} as shipped; frames of ${ids.length - skipped} compared, all match` +
+      const compared = ids.length - skipped;
+      console.log(`golden frames: ${ids.length} page${ids.length > 1 ? 's' : ''} as shipped; ${compared ? `frames of ${compared} compared, all match` : 'no frames compared here'}` +
         `${skipped ? ` (${skipped} recorded on another machine: CI compares them)` : ''}`);
     }
   });

@@ -47,6 +47,12 @@ runs:
       shell: bash
       run: bash .github/workflows/scripts/pin_canvas_fonts.sh
 
+    - name: The runner's CPU (Chromium's software rasteriser picks code paths by it)
+      shell: bash
+      run: |
+        lscpu | grep -E '^(Vendor ID|Model name|CPU\(s\)):' || true
+        echo "vector extensions: $(grep -m 1 '^flags' /proc/cpuinfo | grep -o -w -E 'avx2|fma|avx512f|avx512bw|avx512vl' | sort -u | tr '\n' ' ')"
+
     - name: ffmpeg
       if: inputs.ffmpeg == 'true'
       shell: bash

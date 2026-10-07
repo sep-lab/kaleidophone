@@ -529,6 +529,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload the stills they were recorded from (to compare with a failed check's)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: golden-stills-recorded
+          path: canvas/out/golden/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # =========================================================================
   ci-ok:
     # One check to require in branch protection, so adding a matrix leg
