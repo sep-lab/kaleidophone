@@ -99,7 +99,7 @@ def namespaced(text: str) -> set[tuple[str, str]]:
 
 
 def test_every_documented_command_uses_the_prefix_and_exists():
-    from tests.test_doc_drift import live_lines, tracked_markdown
+    from tests.repo_files import live_lines, tracked_markdown
 
     names = {p.stem for p in COMMANDS} | {p.parent.name for p in SKILLS}
     wrong = []

@@ -19,15 +19,22 @@ commit whose tree is checked whole.
   check may skip: GitHub gives no repository secrets to a pull request from
   a fork or from Dependabot. It is decided from the event, never from the
   secret being empty -- an unset secret on main must fail, not pass.
+- `pull_request_texts(event_name, payload)`: a pull request's title and body,
+  which a squash merge can turn into the commit message on main. Checked
+  before the merge, not after it is history.
+- `tag_messages(specs)`: an annotated tag pushed carries a message of its own,
+  published with it.
 
 Standard library only, Python 3.9+ (macOS's /usr/bin/python3 runs the hook).
 """
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
-from typing import Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 Spec = Tuple[str, ...]
 ZERO = re.compile(r"^0+$")
@@ -69,6 +76,35 @@ def pre_push(lines: Iterable[str]) -> Tuple[List[Spec], List[str]]:
     return specs, refs
 
 
+def github_event() -> Tuple[str, dict]:
+    """(event name, payload) of the running Actions job. RangeError if there is none."""
+    try:
+        with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as fh:
+            return os.environ.get("GITHUB_EVENT_NAME", ""), json.load(fh)
+    except (KeyError, OSError, ValueError):
+        raise RangeError("no readable GITHUB_EVENT_PATH (is this a GitHub Actions job?)") from None
+
+
+def pull_request_texts(event_name: str, payload: dict) -> List[Tuple[str, str]]:
+    """(what, text) for a pull request's title and body; empty for other events."""
+    if event_name != "pull_request":
+        return []
+    pr = payload.get("pull_request") or {}
+    return [(what, pr.get(key) or "") for what, key in (("the pull request title", "title"), ("the pull request body", "body"))]
+
+
+def tag_messages(specs: List[Spec]) -> Dict[str, str]:
+    """tag object sha -> message, for every annotated tag among the pushed tips."""
+    out = {}
+    for spec in specs:
+        sha = tip(spec)
+        kind = subprocess.run(["git", "cat-file", "-t", sha], capture_output=True, text=True).stdout.strip()
+        if kind == "tag":
+            raw = git("cat-file", "tag", sha)
+            out[sha] = raw.partition(b"\n\n")[2].decode("utf-8", "replace")
+    return out
+
+
 def from_github(event_name: str, payload: dict) -> Tuple[List[Spec], List[str]]:
     """(specs, notices) for a GitHub Actions event."""
     notices: List[str] = []
@@ -86,7 +122,7 @@ def from_github(event_name: str, payload: dict) -> Tuple[List[Spec], List[str]]:
             return [("range", before, after)], notices
         notices.append("the push's previous tip is unknown here (a new branch or a force-push): checking the pushed commit and its tree only")
         return [("commit", after)], notices
-    notices.append(f"a {event_name or 'manual'} run has no commit range: checking HEAD's tree only")
+    notices.append(f"a {event_name or 'manual'} run has no commit range: checking HEAD, its tree and its message only")
     return [("commit", "HEAD")], notices
 
 

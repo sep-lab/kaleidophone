@@ -26,7 +26,8 @@ when a file there was last written, which makes this a partial clock:
 | ⛈️ STORM | 5 Oct 12:30 → 14:32 | 2.0 h | 57 | 10 · 178 MiB | the master, a day and a half earlier |
 
 Transfer parts are the hand-split files a release moved through on its way from
-a cloud session to the Mac: 8 MiB parts for ( - ), 18 MiB for the rest.
+a cloud session to the Mac, most of them 18 MiB (18,874,368 B, measured); ( - )
+also used 8 MiB ones.
 
 ## What it shows
 
@@ -48,9 +49,9 @@ On any release folder (the output names no files):
 
 ```bash
 python3 - /path/to/release-folder <<'EOF'
-import os, sys, time
-ts = sorted(os.lstat(os.path.join(r, f)).st_mtime
-            for r, _, fs in os.walk(sys.argv[1]) for f in fs if f != ".DS_Store")
+import os, re, sys, time
+files = [os.path.join(r, f) for r, _, fs in os.walk(sys.argv[1]) for f in fs if f != ".DS_Store"]
+ts = sorted(os.lstat(f).st_mtime for f in files)
 sessions, start, prev = [], ts[0], ts[0]
 for t in ts[1:] + [float("inf")]:
     if t - prev > 6 * 3600:
@@ -60,7 +61,13 @@ for t in ts[1:] + [float("inf")]:
 at = lambda t: time.strftime("%Y-%m-%d %H:%M", time.localtime(t))
 for a, b, n in sessions:
     print(f"{at(a)} -> {at(b)}  {(b - a) / 3600:.1f} h  {n} files")
+# transfer parts: the hand-split pieces of one file (x.part03, x.bin, x_part_03, ...)
+parts = [f for f in files if re.search(r"\.(bin|part\d*)$|part[^/]*\d\d[^/]*$", f, re.I)]
+sizes = sorted({os.lstat(f).st_size for f in parts}, reverse=True)[:2]
+print(f"{len(parts)} transfer parts, {sum(os.lstat(f).st_size for f in parts) / 2**20:.0f} MiB"
+      + (f", largest {', '.join(f'{s:,} B' for s in sizes)}" if parts else ""))
 EOF
 ```
 
-The session with the most files is the row's landing session.
+The session with the most files is the row's landing session; the last line
+is its transfer parts.

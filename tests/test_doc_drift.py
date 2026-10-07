@@ -16,12 +16,12 @@ from __future__ import annotations
 import html
 import json
 import re
-import subprocess
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+from tests.repo_files import ROOT, live_lines, tracked_markdown
+
 TECHNIQUES = ROOT / "docs" / "TECHNIQUES.md"
 PIECES = ROOT / "canvas" / "pieces"
 DECISIONS = ROOT / "docs" / "decisions"
@@ -40,29 +40,6 @@ def as_int(word: str) -> int:
     return int(word) if word.isdigit() else WORDS[word.lower()]
 
 
-def tracked_markdown() -> list[Path]:
-    try:
-        out = subprocess.run(
-            ["git", "ls-files", "-z", "*.md"], cwd=ROOT, capture_output=True, text=True, check=True
-        ).stdout
-    except (OSError, subprocess.CalledProcessError) as e:  # pragma: no cover - CI always has git
-        pytest.skip(f"not a git checkout: {e}")
-    return [ROOT / f for f in out.split("\0") if f]
-
-
-def live_lines(path: Path, text: str):
-    """(line number, line) for every line that describes the present.
-
-    Skipped: CHANGELOG.md from its first released section on, and any
-    checked-off list item (`- [x] ...`), which records what shipped."""
-    for no, line in enumerate(text.splitlines(), 1):
-        if path.name == "CHANGELOG.md" and re.match(r"## \[\d", line):
-            return
-        if re.match(r"\s*[-*] \[x\]", line, re.I):
-            continue
-        yield no, line
-
-
 def live_text_of_every_doc():
     for path in tracked_markdown():
         yield path, list(live_lines(path, path.read_text(encoding="utf-8")))
@@ -75,17 +52,22 @@ def technique_numbers() -> list[int]:
     return [int(n) for n in re.findall(r"^#{2,4} (\d+)\. ", TECHNIQUES.read_text(encoding="utf-8"), re.M)]
 
 
-def technique_drift(line: str, count: int) -> list[str]:
+RANGE = re.compile(r"(?<![\w#])T?#1\s*(?:[–—-]|to)\s*(?:T?#)?(\d+)\b")
+
+
+def technique_drift(line: str, count: int, next_line: str = "") -> list[str]:
     """What in one line of prose disagrees with TECHNIQUES.md's count.
 
     Two shapes: a range from the first technique ("#1–#54", "#1-54",
-    "#1 to #54", on a line about techniques -- "#2–#4" Dependabot PRs aren't),
-    and a count on a line that names the file ("[TECHNIQUES.md] -- 55
-    techniques"); "this release taught three techniques" is a different count."""
+    "#1 to #54", "T#1–T#54", on a line about techniques -- "#2–#4" Dependabot
+    PRs aren't), which may wrap onto the next line, and a count on a line that
+    names the file ("[TECHNIQUES.md] -- 55 techniques"); "this release taught
+    three techniques" is a different count."""
     found = []
-    if re.search(r"techni", line, re.I):
-        for m in re.finditer(r"(?<![\w#])#1\s*(?:[–—-]|to)\s*#?(\d+)\b", line):
-            if int(m.group(1)) != count:
+    pair = f"{line} {next_line}"
+    if re.search(r"techni", pair, re.I):
+        for m in RANGE.finditer(pair):
+            if m.start() < len(line) and int(m.group(1)) != count:
                 found.append(f"{m.group(0)!r} but TECHNIQUES.md numbers #1–#{count}")
     for m in re.finditer(rf"\b{NUMBER} techniques\b", line, re.I):
         if "TECHNIQUES" in line and as_int(m.group(1)) != count:
@@ -109,8 +91,8 @@ def test_every_count_of_the_techniques_matches_the_headings():
     stale = [
         f"{path.relative_to(ROOT)}:{no}: {msg}"
         for path, lines in live_text_of_every_doc()
-        for no, line in lines
-        for msg in technique_drift(line, count)
+        for i, (no, line) in enumerate(lines)
+        for msg in technique_drift(line, count, lines[i + 1][1] if i + 1 < len(lines) else "")
     ]
     assert not stale, "a doc counts the techniques wrong (say it without a count, or fix it):\n" + "\n".join(stale)
 
@@ -123,11 +105,18 @@ def test_every_count_of_the_techniques_matches_the_headings():
         "See the techniques, #1 to #99.",
         "[docs/TECHNIQUES.md](docs/TECHNIQUES.md) — 99 techniques from real releases,",
         "TECHNIQUES.md: twelve techniques, numbered",
+        "the techniques T#1–T#99",
     ],
 )
 def test_the_drift_check_catches_a_wrong_count(line):
     """The check itself, on a count no doc will ever reach."""
     assert technique_drift(line, 55)
+
+
+def test_the_drift_check_follows_a_range_onto_the_next_line():
+    assert technique_drift("Technique numbers (#1–", 55, "#99) refer to TECHNIQUES.md")
+    assert technique_drift("Technique numbers (#1–", 55, "#55) refer to TECHNIQUES.md") == []
+    assert technique_drift("unrelated", 55, "Technique numbers (#1–#99)") == [], "reported on its own line, once"
 
 
 @pytest.mark.parametrize(

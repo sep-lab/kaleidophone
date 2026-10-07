@@ -16,36 +16,15 @@ Links to the web are not fetched: the tests never touch the network
 from __future__ import annotations
 
 import re
-import subprocess
 import unicodedata
 from functools import cache
-from pathlib import Path
 from urllib.parse import unquote
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+from tests.repo_files import ROOT, tracked, tracked_dirs
 
-
-@cache
-def tracked() -> frozenset[str]:
-    try:
-        out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError) as e:  # pragma: no cover - CI always has git
-        pytest.skip(f"not a git checkout: {e}")
-    return frozenset(f for f in out.split("\0") if f)
-
-
-def tracked_dirs() -> set[str]:
-    dirs = set()
-    for f in tracked():
-        parts = f.split("/")[:-1]
-        for i in range(1, len(parts) + 1):
-            dirs.add("/".join(parts[:i]))
-    return dirs
-
-
-DOCS = sorted(f for f in tracked() if f.endswith(".md")) if (ROOT / ".git").exists() else []
+DOCS = sorted(f for f in tracked() if f.endswith(".md"))
 
 
 def without_fences(text: str) -> str:
@@ -61,7 +40,7 @@ def without_code(text: str) -> str:
 
 LINK = re.compile(
     r"!?\[(?:[^\[\]]|\[[^\]]*\])*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)"  # [text](target "title")
-    r"|^\s*\[[^\]]+\]:\s*<?(\S+?)>?(?:\s|$)"  # [ref]: target
+    r"|^\s*\[[^\]^][^\]]*\]:\s*<?(\S+?)>?(?:\s|$)"  # [ref]: target (not a [^footnote]:)
     r"|\b(?:href|src)=\"([^\"]+)\"",  # raw HTML
     re.M,
 )
@@ -95,7 +74,7 @@ def anchors(rel: str) -> frozenset[str]:
         n = seen.get(s, 0)
         out.add(s if n == 0 else f"{s}-{n}")
         seen[s] = n + 1
-    out.update(re.findall(r"<a\s+(?:id|name)=\"([^\"]+)\"", text))
+    out.update(a.lower() for a in re.findall(r"<a\s+(?:id|name)=\"([^\"]+)\"", text))
     return frozenset(out)
 
 
@@ -156,6 +135,7 @@ def test_the_checker_finds_each_kind_of_broken_link():
         '<img src="docs/missing.png"> [up](../outside.md) [abs](/docs/TECHNIQUES.md)\n'
         "[ref]: docs/also-missing.md\n"
         "`[in code](nope.md)` and the web: [w](https://example.invalid/x.md)\n"
+        "[^1]: a footnote, not a link\n"
     )
     found = {target: problem("README.md", target) for _, target in links(text)}
     assert set(found) == {

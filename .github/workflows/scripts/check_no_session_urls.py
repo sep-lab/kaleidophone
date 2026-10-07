@@ -9,7 +9,11 @@ WHY
     commits from before that decision still carry one, and stay, because
     history is not rewritten here (tags and the artist site's sha256s depend
     on it). This keeps the count at three: it reads only the commits being
-    pushed -- a pull request's own commits, or a push's new ones.
+    pushed -- a pull request's own commits, or a push's new ones -- and names
+    those three, so a push that can't tell what the remote has (a clone with
+    no remote-tracking refs reads its whole history) doesn't trip on them. In
+    CI it also reads a pull request's title and body, which a squash merge can
+    make main's commit message, and the hook an annotated tag's message.
 
 WHAT IT PRINTS
     The commit and the message line, never the URL.
@@ -25,7 +29,6 @@ USAGE
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from typing import List, Optional
@@ -33,6 +36,12 @@ from typing import List, Optional
 import gitrange
 
 MARKER = "claude.ai/code/session_"
+# On main from before the rule (v0.3.0, its numba fix, v0.4.0). They stay: history isn't rewritten.
+BEFORE_THE_RULE = {
+    "0e9316e4d4cbc53b156b2bd18207660435a900a8",
+    "09c27aba9fe69ce78fa4d41547dd832c8f71d54d",
+    "7d450609aa30a4c745e70a63315078800adcc73f",
+}
 
 
 def offending_lines(message: str) -> List[int]:
@@ -50,32 +59,31 @@ def main(argv: Optional[List[str]] = None) -> int:
     err = "::error::" if gha else ""
 
     specs: List[gitrange.Spec] = []
+    found: List[str] = []
     try:
         if args.github:
-            try:
-                with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as fh:
-                    payload = json.load(fh)
-            except (KeyError, OSError, ValueError):
-                print(f"{err}check_no_session_urls --github: no readable GITHUB_EVENT_PATH; failing closed.")
-                return 2
-            specs, notices = gitrange.from_github(os.environ.get("GITHUB_EVENT_NAME", ""), payload)
+            event, payload = gitrange.github_event()
+            specs, notices = gitrange.from_github(event, payload)
             for n in notices:
                 print(f"::notice::{n}" if gha else f"note: {n}")
+            for what, text in gitrange.pull_request_texts(event, payload):
+                found += [f"{what}, line {n}" for n in offending_lines(text)]
         if args.pre_push:
             specs += gitrange.pre_push(sys.stdin.read().splitlines())[0]
         specs += [gitrange.parse_range(r) for r in args.range] + [("commit", c) for c in args.commit]
-        commits = list(dict.fromkeys(c for spec in specs for c in gitrange.commits(spec)))
-        found = []
+        commits = [c for c in dict.fromkeys(c for spec in specs for c in gitrange.commits(spec)) if c not in BEFORE_THE_RULE]
         for c in commits:
             message = gitrange.git("log", "-1", "--format=%B", c).decode("utf-8", "replace")
-            found += [(c, n) for n in offending_lines(message)]
+            found += [f"commit {c[:12]}, message line {n}" for n in offending_lines(message)]
+        for sha, message in gitrange.tag_messages(specs).items():
+            found += [f"tag {sha[:12]}, message line {n}" for n in offending_lines(message)]
     except gitrange.RangeError as e:
         print(f"{err}check_no_session_urls: {e}. Failing closed.")
         return 2
 
     if found:
-        for c, n in found:
-            print(f"{err}commit {c[:12]}, message line {n}: a Claude Code session URL ({MARKER}...)")
+        for where in found:
+            print(f"{err}{where}: a Claude Code session URL ({MARKER}...)")
         print(
             "\n  Session URLs stay out of commit messages: they point a public commit at a\n"
             "  private session. Drop the trailer -- `git commit --amend` for the last\n"

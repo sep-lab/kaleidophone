@@ -32,6 +32,7 @@ URLS = SCRIPTS / "check_no_session_urls.py"
 sys.path.insert(0, str(SCRIPTS))
 
 import check_deny_list as cdl  # noqa: E402
+import check_no_session_urls as csu  # noqa: E402
 import gitrange  # noqa: E402
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
@@ -169,6 +170,12 @@ def test_case_keeps_a_name_that_is_also_a_word_apart_from_the_word(text, hit):
     assert bool(cdl.find(text, cdl.parse_list("case:Dunewell\n"))) is hit
 
 
+def test_re_anchors_a_line_as_the_site_does():
+    """The site's check tests each regex line by line, so ^ and $ mean a line."""
+    terms = cdl.parse_list("re:^zz secret line$\n")
+    assert cdl.find("first\nzz secret line\nlast\n", terms) == [(2, terms[0].hash)]
+
+
 def test_a_hit_is_on_the_line_the_name_starts_on():
     text = "one\ntwo Quillmere\nFenwick three\nVandermoss\n"
     terms = {t.line: t.hash for t in cdl.parse_list(LIST)}
@@ -211,6 +218,29 @@ def test_a_name_added_and_removed_inside_the_push_is_still_caught(repo):
     assert leaked(r.stdout + r.stderr) == []
 
 
+def test_a_name_only_a_merge_brings_in_is_caught(repo):
+    """An evil merge: the conflict resolution adds the name, the next commit
+    removes it, so neither branch's commits nor the tip hold it -- only the
+    merge's own diff does."""
+    base = repo.commit({"a.txt": "one\n"}, "base")
+    repo.git("checkout", "-q", "-b", "side")
+    repo.commit({"a.txt": "side\n"}, "side")
+    repo.git("checkout", "-q", "main")
+    repo.commit({"a.txt": "main\n"}, "main")
+    subprocess.run(["git", "merge", "-q", "side"], cwd=repo.path, env=repo.env, capture_output=True)
+    merge = repo.commit({"a.txt": "resolved by Vandermoss\n"}, "merge side")
+    assert len(repo.git("rev-list", "--parents", "-n1", merge).split()) == 3, "not a merge"
+    head = repo.commit({"a.txt": "clean\n"}, "reword")
+    r = repo.run(DENY, "--range", f"{base}..{head}")
+    assert r.returncode == 1 and f"a.txt:1 (in commit {merge[:12]})" in r.stdout
+
+
+def test_diff_tree_output_the_parser_doesnt_know_fails_closed(monkeypatch):
+    monkeypatch.setattr(cdl.gitrange, "git", lambda *a, **k: b":100644 100644 aa bb M\0a.txt\0something else\0")
+    with pytest.raises(gitrange.RangeError):
+        cdl.changed_entries("f" * 40)
+
+
 def test_the_whole_tree_at_the_tip_is_read_not_only_the_new_commits(repo):
     repo.commit({"old.txt": "Vandermoss\n"}, "already on main")
     base = repo.git("rev-parse", "HEAD")
@@ -225,6 +255,16 @@ def test_a_clean_push_passes(repo):
     r = repo.run(DENY, "--range", f"{base}..{head}")
     assert r.returncode == 0, r.stdout
     assert "clean" in r.stdout
+
+
+def test_a_path_cant_inject_a_workflow_command_or_break_an_annotation(repo):
+    base = repo.git("rev-parse", "HEAD")
+    head = repo.commit({"x\n::warning::y.txt": "Vandermoss\n", "a,b:c.md": "Vandermoss, again\n"}, "odd names")
+    r = repo.run(DENY, "--range", f"{base}..{head}", GITHUB_ACTIONS="true")
+    assert r.returncode == 1
+    assert not [line for line in r.stdout.splitlines() if line.startswith("::warning")]
+    assert "x\\x0a::warning::y.txt:1" in r.stdout
+    assert "file=a%2Cb%3Ac.md,line=1::" in r.stdout
 
 
 def test_github_annotations_name_the_file_and_line_but_not_the_term(repo):
@@ -380,6 +420,18 @@ def test_a_pull_request_without_shas_fails_closed(repo, tmp_path):
     assert r.returncode == 2
 
 
+def test_a_pull_requests_title_and_body_are_read(repo, tmp_path):
+    """A squash merge can make them main's commit message."""
+    head = repo.git("rev-parse", "HEAD")
+    event = pr_event(base=head, head=head)
+    event["pull_request"].update(title="fix: clean", body="notes\n\nfrom the Quillmere Fenwick session")
+    r = github_run(repo, DENY, "pull_request", event, tmp_path, deny=LIST)
+    assert r.returncode == 1 and "the pull request body, line 3" in r.stdout
+    assert leaked(r.stdout + r.stderr) == []
+    event["pull_request"].update(body=None)  # an empty description is null in the payload
+    assert github_run(repo, DENY, "pull_request", event, tmp_path, deny=LIST).returncode == 0
+
+
 def test_a_push_with_an_unknown_before_reads_the_pushed_commit_and_says_so(repo, tmp_path):
     head = repo.commit({"a.txt": "clean\n"}, "clean")
     r = github_run(repo, DENY, "push", {"before": ZERO, "after": head}, tmp_path, deny=LIST)
@@ -396,6 +448,16 @@ def test_pre_push_reads_what_git_says_it_is_pushing(repo):
     assert repo.run(DENY, "--pre-push", stdin=line).returncode == 1
     deletion = f"(delete) {ZERO} refs/heads/old {base}\n"
     assert repo.run(DENY, "--pre-push", stdin=deletion).returncode == 0
+
+
+def test_pre_push_reads_an_annotated_tags_own_message(repo):
+    head = repo.git("rev-parse", "HEAD")
+    repo.git("tag", "-a", "v9", "-m", "release notes\n\nrecorded near Vandermoss")
+    tag = repo.git("rev-parse", "v9")
+    assert tag != head
+    r = repo.run(DENY, "--pre-push", stdin=f"refs/tags/v9 {tag} refs/tags/v9 {ZERO}\n")
+    assert r.returncode == 1 and f"tag {tag[:12]} message, line 3" in r.stdout
+    assert leaked(r.stdout + r.stderr) == []
 
 
 def test_pre_push_refuses_a_branch_named_after_a_term(repo):
@@ -467,3 +529,29 @@ def test_session_urls_are_read_from_the_github_event(repo, tmp_path):
 
 def test_session_urls_fail_closed_on_a_bad_range(repo):
     assert repo.run(URLS, "--range", "nope..HEAD", deny=None).returncode == 2
+
+
+def test_session_urls_in_a_pull_request_or_a_tag_are_found(repo, tmp_path):
+    head = repo.git("rev-parse", "HEAD")
+    event = pr_event(base=head, head=head)
+    event["pull_request"].update(title="feat: x", body=f"summary\n\n{SESSION}")
+    r = github_run(repo, URLS, "pull_request", event, tmp_path, deny=None)
+    assert r.returncode == 1 and "the pull request body, line 3" in r.stdout and "session_01AbCd" not in r.stdout
+    repo.git("tag", "-a", "v9", "-m", f"notes\n\n{SESSION}")
+    tag = repo.git("rev-parse", "v9")
+    r = repo.run(URLS, "--pre-push", stdin=f"refs/tags/v9 {tag} refs/tags/v9 {ZERO}\n", deny=None)
+    assert r.returncode == 1 and f"tag {tag[:12]}, message line 3" in r.stdout
+
+
+def test_the_three_commits_from_before_the_rule_are_named_and_skipped(monkeypatch, capsys):
+    """A clone with no remote-tracking refs reads its whole history on a push;
+    the three historic trailers on main must not block it."""
+    assert len(csu.BEFORE_THE_RULE) == 3 and all(re.fullmatch(r"[0-9a-f]{40}", c) for c in csu.BEFORE_THE_RULE)
+    old, new = sorted(csu.BEFORE_THE_RULE)[0], "f" * 40
+    monkeypatch.setattr(csu.gitrange, "commits", lambda spec: [old, new])
+    monkeypatch.setattr(csu.gitrange, "tag_messages", lambda specs: {})
+    monkeypatch.setattr(csu.gitrange, "git", lambda *a, **k: SESSION.encode())
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    assert csu.main(["--range", "a..b"]) == 1
+    out = capsys.readouterr().out
+    assert f"commit {new[:12]}" in out and old[:12] not in out

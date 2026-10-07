@@ -15,8 +15,10 @@ WHAT IT READS
     Every commit being pushed: its message, and every path and file it adds or
     changes, as committed (so a name added in one commit and removed in the
     next is still caught -- both commits are published). Then the whole tree at
-    the tip. History before the range is not read: it is public already, and
-    it is not rewritten (tags and the artist site's sha256s depend on it).
+    the tip, an annotated tag's message, and in CI a pull request's title and
+    body (a squash merge can make them main's commit message). History before
+    the range is not read: it is public already, and it is not rewritten (tags
+    and the artist site's sha256s depend on it).
 
 WHAT IT PRINTS
     Where, never what: `file:line` (or a commit and its message line) and a
@@ -45,7 +47,8 @@ THE LIST
                          that is also an ordinary word (this repository's own
                          addition; the site's check reads it as a plain term)
         re:pattern       a Python regular expression, matched case-insensitively
-                         against the normalised text
+                         against the normalised text; ^ and $ anchor lines, as
+                         they do in the site's line-by-line check
     Both the text and the terms are normalised first: NFKC, Arabic yeh and kaf
     folded to Persian, zero-width characters and soft hyphens removed, case
     folded. Every file is read as UTF-8 text, binary ones included.
@@ -69,7 +72,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
-import json
 import os
 import re
 import sys
@@ -103,7 +105,7 @@ class Term:
         self.raw, self.line, self.hash, self.cased = raw, line, "", raw.startswith("case:")
         if raw.startswith("re:"):
             try:
-                self.pattern = re.compile(raw[3:], re.IGNORECASE)
+                self.pattern = re.compile(raw[3:], re.IGNORECASE | re.MULTILINE)
             except re.error:
                 raise ListError(f"list line {line}: its re: pattern doesn't compile as a Python regular expression") from None
             if self.pattern.search(""):
@@ -218,6 +220,8 @@ def changed_entries(commit: str) -> List[Tuple[str, str]]:
         if status != "D" and mode != GITLINK:
             entries.append((path, sha))
         i += 2
+    if any(fields[i:]):  # output this parser doesn't know: never skip what it says
+        raise gitrange.RangeError(f"unexpected `git diff-tree` output for commit {commit[:12]}")
     return entries
 
 
@@ -229,6 +233,21 @@ def message_of(raw_commit: bytes) -> str:
 # --------------------------------------------------------------------------
 # the check
 # --------------------------------------------------------------------------
+def shown(path: str) -> str:
+    """A path as it is printed: a control character in a file name (git allows a
+    newline) must not start a new output line, which Actions could read as a
+    workflow command."""
+    return re.sub(r"[\x00-\x1f\x7f]", lambda m: f"\\x{ord(m.group()):02x}", path)
+
+
+def escape_data(text: str) -> str:
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def escape_property(text: str) -> str:
+    return escape_data(text).replace(":", "%3A").replace(",", "%2C")
+
+
 class Report:
     def __init__(self, annotate: bool):
         self.annotate, self.lines = annotate, []
@@ -236,18 +255,25 @@ class Report:
     def hit(self, at: str, term: str, file: Optional[str] = None, line: Optional[int] = None) -> None:
         self.lines.append(f"  {at}  term #{term}")
         if self.annotate:
-            loc = f" file={file},line={line}" if file and line else ""
-            print(f"::error{loc}::deny-list term #{term} at {at} (the term is not printed: this repository is public)")
+            loc = f" file={escape_property(file)},line={line}" if file and line else ""
+            print(f"::error{loc}::{escape_data(f'deny-list term #{term} at {at}')} (the term is not printed: this repository is public)")
 
 
-def scan(specs: List[gitrange.Spec], trees: List[str], refs: List[str], terms: List[Term], report: Report) -> Tuple[int, int]:
+def scan(
+    specs: List[gitrange.Spec],
+    trees: List[str],
+    refs: List[str],
+    terms: List[Term],
+    report: Report,
+    texts: Optional[List[Tuple[str, str]]] = None,
+) -> Tuple[int, int]:
     blobs: Dict[str, List[Tuple[str, str]]] = {}  # blob sha -> (path, "" or the commit it is only in)
     paths: Dict[str, List[str]] = {}  # path -> which tree or commit it is in
-    commits: List[str] = []
+    commits: Dict[str, None] = {}  # ordered, and a set
     for spec in specs:
         for c in gitrange.commits(spec):
             if c not in commits:
-                commits.append(c)
+                commits[c] = None
                 for path, sha in changed_entries(c):
                     blobs.setdefault(sha, []).append((path, c[:12]))
                     paths.setdefault(path, []).append(f"commit {c[:12]}")
@@ -268,8 +294,14 @@ def scan(specs: List[gitrange.Spec], trees: List[str], refs: List[str], terms: L
     for ref in refs:
         for h in matches(ref, terms):
             report.hit("the name of a branch or tag being pushed (not printed)", h)
+    for what, text in texts or []:
+        for line, h in find(text, terms):
+            report.hit(f"{what}, line {line}", h)
+    for sha, message in gitrange.tag_messages(specs).items():
+        for line, h in find(message, terms):
+            report.hit(f"tag {sha[:12]} message, line {line}", h)
 
-    for c, raw in read_objects(commits).items():
+    for c, raw in read_objects(list(commits)).items():
         for line, h in find(message_of(raw), terms):
             report.hit(f"commit {c[:12]} message, line {line}", h)
 
@@ -278,17 +310,15 @@ def scan(specs: List[gitrange.Spec], trees: List[str], refs: List[str], terms: L
         if not found:
             continue
         path, only_in = blobs[sha][0]
-        shown: Optional[str] = path
-        if path in private_paths:
-            shown = None
-        others = len(blobs[sha]) - 1
+        public = None if path in private_paths else path
+        others = len({p for p, _ in blobs[sha]} - {path})  # other paths holding the same file
         for line, h in found:
-            at = f"{shown}:{line}" if shown else f"<a path holding term #{private_paths[path]}>:{line}"
+            at = f"{shown(public)}:{line}" if public else f"<a path holding term #{private_paths[path]}>:{line}"
             if only_in:
                 at += f" (in commit {only_in})"
             if others:
-                at += f" (and {others} more place{'s' * (others > 1)})"
-            report.hit(at, h, file=shown, line=line)
+                at += f" (and at {others} more path{'s' * (others > 1)})"
+            report.hit(at, h, file=public, line=line)
     return len(commits), len(blobs)
 
 
@@ -317,14 +347,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = ap.parse_args(argv)
     gha = os.environ.get("GITHUB_ACTIONS") == "true"
 
-    withheld, notices = False, []
+    withheld, notices, event, payload = False, [], "", {}
     if args.github:
-        event = os.environ.get("GITHUB_EVENT_NAME", "")
         try:
-            with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as fh:
-                payload = json.load(fh)
-        except (KeyError, OSError, ValueError):
-            print("::error::check_deny_list --github: no readable GITHUB_EVENT_PATH; failing closed.")
+            event, payload = gitrange.github_event()
+        except gitrange.RangeError as e:
+            print(f"::error::check_deny_list --github: {e}; failing closed.")
             return 2
         withheld = gitrange.secrets_withheld(event, payload)
 
@@ -370,7 +398,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     trees = list(args.tree)
     try:
         if args.github:
-            specs, notices = gitrange.from_github(os.environ.get("GITHUB_EVENT_NAME", ""), payload)
+            specs, notices = gitrange.from_github(event, payload)
         if args.pre_push:
             specs, refs = gitrange.pre_push(sys.stdin.read().splitlines())
             if not specs:
@@ -382,7 +410,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         for n in notices:
             print(f"::notice::{n}" if gha else f"note: {n}")
         report = Report(annotate=gha)
-        n_commits, n_files = scan(specs, trees, refs, terms, report)
+        n_commits, n_files = scan(specs, trees, refs, terms, report, texts=gitrange.pull_request_texts(event, payload))
     except gitrange.RangeError as e:
         print(f"{'::error::' if gha else ''}check_deny_list: {e}. Failing closed.")
         return 2
