@@ -33,10 +33,16 @@
     <td align="center"><sub><b>SAME AS YOU</b><br>one page, torn in two</sub></td>
     <td align="center"><sub><b>SHOULD I ?</b><br>36 frames, 36 snares, a 37th</sub></td>
   </tr>
+  <tr>
+    <td align="center"><a href="https://sep-lab.github.io/kaleidophone/pieces/setareh.html"><picture><source media="(prefers-reduced-motion: reduce)" srcset="https://sep-lab.github.io/kaleidophone/gallery/setareh.jpg"><img src="https://sep-lab.github.io/kaleidophone/gallery/setareh.webp" width="176" height="313" alt="One long-exposure night photograph, developing. The stars have drawn dashed rings round a bright, still pole star, and shooting stars radiate from it like the spokes of a wheel. Two silhouettes sit in armchairs, seen from behind, one leaning toward the other, in front of a city's lights, a snow-capped peak and thin trails of light along its roads. As the rings close the frame dims for an instant, then holds."></picture></a></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>SETAREH</b><br>one exposure, 32 snares to a turn</sub></td>
+  </tr>
 </table>
 
 <p align="center">
-  <sub>Four songs by <a href="https://soundcloud.com/septheconcept">Sep The Concept</a>, each a single HTML file that plays live, renders its own film and draws its own covers.
+  <sub>Songs by <a href="https://soundcloud.com/septheconcept">Sep The Concept</a>, each a single HTML file that plays live, renders its own film and draws its own covers.
   Clips rendered in CI from <b>synthetic</b> songs — <a href="https://sep-lab.github.io/kaleidophone/">open the gallery</a> to play them live.</sub>
 </p>
 
@@ -288,7 +294,7 @@ camera does.) Full vocabulary: [docs/CREATIVE-GUIDE.md](docs/CREATIVE-GUIDE.md).
 
 This isn't a framework looking for a user. It was extracted from a working
 practice — the releases came first, the tool second, and each new song still
-finds something it gets wrong. Twelve releases, built independently, kept
+finds something it gets wrong. The releases, built independently, kept
 re-deriving the same architecture; the [case studies](docs/case-studies/README.md)
 are the evidence:
 
@@ -302,6 +308,7 @@ are the evidence:
 | [→](docs/case-studies/minus.md) | ( - ) | canvas | the paper cut-out; Flash on twos; demo → master in one evening |
 | [→](docs/case-studies/same-as-you.md) | SAME AS YOU | canvas | rig v2, the torn page, vector droste, frame-exact cuts |
 | [→](docs/case-studies/should-i.md) | SHOULD I ? | canvas | the viewfinder; grid arithmetic; the master drop-in check |
+| [→](docs/case-studies/setareh.md) | SETAREH | canvas | one long exposure: light as an integral; the count closes the circle |
 
 The music: **[Sep The Concept on SoundCloud](https://soundcloud.com/septheconcept)**.
 The videos: **[The Analog Guys in Digital Worlds on YouTube](https://www.youtube.com/@theanalogguysindigitalworlds)**.

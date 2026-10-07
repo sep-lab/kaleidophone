@@ -182,7 +182,8 @@ songs wait for the release lane to reopen at v0.6.0
       clock's baseline ([NIGHT-CLOCK.md](NIGHT-CLOCK.md)).
 - [ ] **M1 · The Mac is the studio** — benchmarks, `doctor`, the frozen-piece
       contract and golden frames ([#74](https://github.com/sep-lab/kaleidophone/issues/74)).
-- [ ] **M2 · Six pieces** — Setareh and ⛈️ STORM land; the Lib Lab (v0.5.0,
+- [ ] **M2 · Six pieces** — Setareh has landed (frozen, with its twin, gallery
+      entry and case study); ⛈️ STORM and the Lib Lab are next (v0.5.0,
       [#75](https://github.com/sep-lab/kaleidophone/issues/75)).
 - [ ] **M3 · STORM, the whole night** — deliver v2, the full film, no
       hand-written mux (v0.6.0, [#76](https://github.com/sep-lab/kaleidophone/issues/76)).

@@ -268,6 +268,33 @@ test('every piece\'s twin is byte-identical to v0.3.0\'s, apart from events.midi
   }
 });
 
+// The same, for the pieces that landed after v0.4.0, pinned the day each one landed (same fields left out as above;
+// the hash is identical on Node 22 and 24). A change that is meant -- the generator learning a key, a re-measured
+// twin -- updates the line; one that isn't has moved what the gallery and CI render.
+const LANDED = {
+  setareh: '547e8c4f738605e24f81798be699eb8982a284dc311eaf7cd8305aef07c92cfc',
+};
+
+test('the twins of the pieces that landed after v0.4.0 are pinned too', () => {
+  for (const [id, sha] of Object.entries(LANDED)) {
+    const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', id, 'synthetic.json'), 'utf8'));
+    const got = crypto.createHash('sha256').update(JSON.stringify(withoutNew(synthesize(spec)))).digest('hex');
+    assert.equal(got, sha, `${id}: its twin pack changed. If you re-measured or edited pieces/${id}/synthetic.json on purpose, update its hash here; if not, the generator changed what every render and the gallery see`);
+  }
+});
+
+test('setareh\'s twin: no snare events (the piece counts the grid\'s backbeats), a meteor line in each cut, no vstem', () => {
+  const spec = JSON.parse(fs.readFileSync(path.join(CANVAS, 'pieces', 'setareh', 'synthetic.json'), 'utf8'));
+  const p = synthesize(spec), E = p.events.setareh;
+  assert.equal(E.snare, undefined, 'no snare windows: the piece counts the grid\'s backbeats itself');
+  assert.equal(p.vstem, undefined, 'tools/synth.mjs has no vstem key: the pole star\'s breath reads 0');
+  for (const [a, b] of [[13.75, 73.7], [89.99, 149.1]]) {
+    const n = E.line.filter(([t]) => t >= a && t < b).length;
+    assert.ok(n >= 13 && n <= 19, `${n} lines in the cut that opens at ${a}: the rays of the picture`);
+  }
+  assert.ok(E.line.every(([t, s], i) => t >= 13.9 && t < 146.1 && s > 0 && (!i || t >= E.line[i - 1][0])), 'in order, inside the windows');
+});
+
 test('stems: true adds stems and changes nothing else', () => {
   const a = synthesize(spec), b = synthesize({ ...spec, stems: true });
   assert.equal(a.stems, undefined);
