@@ -433,6 +433,8 @@ tests/          unit tests; synthetic fixtures only; ffmpeg argv asserted, never
   contract, song packs, rendering, starting a new piece.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the pipeline in detail, the
   three engines, the measured cost table, the render-design tradeoffs.
+- **[docs/BENCHMARKS.md](docs/BENCHMARKS.md)** — `kaleidophone doctor`, the
+  benchmark suites, and how a speed number earns the word *measured*.
 - **[docs/decisions/](docs/decisions/)** — seven ADRs, all accepted. Read
   [0001](docs/decisions/0001-version-the-brief-not-the-render.md),
   [0002](docs/decisions/0002-deterministic-edit-engine.md) and

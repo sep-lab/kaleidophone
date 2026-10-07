@@ -21,22 +21,126 @@ itself: each passes /dev/null, and each ffmpeg command line carries
 an inherited stdin is whatever the calling shell was reading next -- in
 `printf 'first\\nsecond\\n' | while read x; do kaleidophone deliver ...; done`
 the second iteration got "econd".
+
+`kaleidophone doctor` asks other tools about themselves too (node's version,
+macOS's power source); it does that through capture() here, for the same
+reasons.
+
+Profiling. With KALEIDOPHONE_PROFILE=<file.jsonl> in the environment, every
+run(), run_measure() and decode_f32le() call appends one JSON line to that
+file: what kind of call it was, its wall time in ms and its exit code. The
+kind is built from flags, codec names and a fixed list of filter names --
+never from a path, a title or any other text a command carries -- so a
+profile can sit next to benchmark results (benchmarks/, docs/BENCHMARKS.md).
+Without the variable nothing is timed and nothing is written.
 """
 
 from __future__ import annotations
 
+import contextlib
 import errno
 import functools
+import json
 import os
 import re
 import shutil
 import subprocess
+import threading
+import time
+from collections.abc import Iterator
 from typing import IO
 
 # A bitrate as ffmpeg's -b:a / -maxrate / -bufsize take it: a number with an
 # optional k/M suffix. The brief and the delivery sheet both validate against
 # it, because the value goes straight into an argv (SECURITY.md).
 BITRATE_RE = re.compile(r"^\d+(\.\d+)?[kKmM]?$")
+
+PROFILE_ENV = "KALEIDOPHONE_PROFILE"
+_PROFILE_LOCK = threading.Lock()
+# The filters a profile names when a call uses them: the expensive ones and
+# the measuring ones. Anything else in a filter graph is left out, so a
+# drawtext's text can never reach the file.
+_PROFILE_FILTERS = (
+    "alimiter", "aresample", "boxblur", "concat", "drawtext", "ebur128", "gblur", "loudnorm", "noise",
+    "overlay", "pad", "scale", "split", "ssim", "xfade", "zoompan",
+)
+_CODEC_RE = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
+_CODEC_FLAGS = {
+    "-c:v": "v", "-vcodec": "v", "-codec:v": "v",
+    "-c:a": "a", "-acodec": "a", "-codec:a": "a",
+    "-c": "*", "-codec": "*",
+}
+
+
+def argv_kind(args: list[str]) -> str:
+    """What an ffmpeg command line does, in a few path-free words.
+
+    `concat`, `loop` (a still looped into video) or `lavfi` for the input;
+    `filter_complex`, `vf`, `af` for the graph, then any of the filters in
+    _PROFILE_FILTERS it uses; `v=<codec>` and `a=<codec>` for the output
+    (`copy` when it is stream-copied, `none` with -vn/-an); `null` when the
+    output is discarded (a measurement). E.g. `loop|vf|scale|noise|v=libx264`.
+    """
+    words: list[str] = []
+    codecs: dict[str, str] = {}
+    graphs: list[str] = []
+    for i, arg in enumerate(args):
+        value = args[i + 1] if i + 1 < len(args) else ""
+        if arg == "-f" and value == "concat" and "concat" not in words:
+            words.append("concat")
+        elif arg == "-f" and value == "lavfi" and "lavfi" not in words:
+            words.append("lavfi")
+        elif arg == "-loop" and value == "1" and "loop" not in words:
+            words.append("loop")
+        elif arg in ("-filter_complex", "-lavfi") and "filter_complex" not in words:
+            words.append("filter_complex")
+            graphs.append(value)
+        elif arg in ("-vf", "-filter:v") and "vf" not in words:
+            words.append("vf")
+            graphs.append(value)
+        elif arg in ("-af", "-filter:a") and "af" not in words:
+            words.append("af")
+            graphs.append(value)
+        elif arg in _CODEC_FLAGS:
+            name = value if _CODEC_RE.match(value) else "other"
+            for stream in ("v", "a") if _CODEC_FLAGS[arg] == "*" else (_CODEC_FLAGS[arg],):
+                codecs[stream] = name
+        elif arg in ("-vn", "-an"):
+            codecs[arg[1]] = "none"
+    text = " ".join(graphs)
+    words += [f for f in _PROFILE_FILTERS if re.search(rf"(?<![A-Za-z0-9_]){f}(?![A-Za-z0-9_])", text)]
+    words += [f"{stream}={codecs[stream]}" for stream in ("v", "a") if stream in codecs]
+    if len(args) >= 2 and args[-2:] == ["null", "-"]:
+        words.append("null")
+    return "|".join(words) or "other"
+
+
+@contextlib.contextmanager
+def _profiled(call: str, args: list[str]) -> Iterator[dict]:
+    """Time the body and append a line to $KALEIDOPHONE_PROFILE, if it is set.
+
+    The body puts the exit code into the dict it is given. Profiling never
+    breaks a render: a profile file that can't be written is skipped.
+    """
+    path = os.environ.get(PROFILE_ENV)
+    record: dict = {"exit": None}
+    if not path:
+        yield record
+        return
+    started = time.perf_counter()
+    try:
+        yield record
+    finally:
+        line = {
+            "call": call,
+            "kind": argv_kind(args),
+            "wall_ms": round((time.perf_counter() - started) * 1000.0, 2),
+            "exit": record["exit"],
+            "pid": os.getpid(),
+            "ts": round(time.time(), 3),
+        }
+        with _PROFILE_LOCK, contextlib.suppress(OSError), open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(line) + "\n")
 
 
 class FfmpegNotFound(RuntimeError):
@@ -69,12 +173,14 @@ def concat_quote(path: str) -> str:
 
 
 def run(ffmpeg: str, args: list[str]) -> None:
-    proc = subprocess.run(
-        [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", *args],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-    )
+    with _profiled("run", args) as record:
+        proc = subprocess.run(
+            [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", *args],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+        )
+        record["exit"] = proc.returncode
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg failed (args tail: {' '.join(args[-6:])}):\n{proc.stderr[-2000:]}")
 
@@ -165,12 +271,14 @@ def run_measure(ffmpeg: str, args: list[str]) -> str:
     level, so under run() the numbers would simply never arrive. `-nostats`
     drops the progress line, the only other thing info adds.
     """
-    proc = subprocess.run(
-        [ffmpeg, "-hide_banner", "-nostats", "-nostdin", *args],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-    )
+    with _profiled("run_measure", args) as record:
+        proc = subprocess.run(
+            [ffmpeg, "-hide_banner", "-nostats", "-nostdin", *args],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+        )
+        record["exit"] = proc.returncode
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg failed (args tail: {' '.join(args[-6:])}):\n{proc.stderr[-2000:]}")
     return proc.stderr
@@ -198,6 +306,42 @@ def filter_options(ffmpeg: str, name: str) -> frozenset[str]:
     if proc.returncode != 0:
         return frozenset()
     return frozenset(re.findall(r"^\s+([A-Za-z_][\w-]*)\s+<\w+>", proc.stdout, re.MULTILINE))
+
+
+@functools.lru_cache(maxsize=None)
+def encoders(ffmpeg: str) -> frozenset[str]:
+    """The encoder names this ffmpeg lists (`ffmpeg -encoders`) -- empty if
+    it can't say. `kaleidophone doctor` asks for libx264, aac and aac_at."""
+    try:
+        proc = subprocess.run(
+            [ffmpeg, "-hide_banner", "-nostdin", "-encoders"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return frozenset()
+    if proc.returncode != 0:
+        return frozenset()
+    return frozenset(re.findall(r"^\s*[VAS][F.][S.][X.][B.][D.]\s+([A-Za-z0-9_][\w.-]*)", proc.stdout, re.MULTILINE))
+
+
+def capture(argv: list[str], *, timeout: float = 20.0) -> tuple[int, str, str] | None:
+    """Run a tool to completion for what it says about itself: (exit code,
+    stdout, stderr), or None when it can't be started or doesn't finish in
+    `timeout` seconds.
+
+    For `kaleidophone doctor`, which asks node for its version and macOS's
+    pmset for the power source: best-effort like the probes above, an
+    argument list, never a shell string, and never the caller's stdin.
+    """
+    if not isinstance(argv, list) or not all(isinstance(a, str) for a in argv):
+        raise TypeError("capture() takes an argument list, never a shell string")
+    try:
+        proc = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return proc.returncode, proc.stdout, proc.stderr
 
 
 def decode_f32le(
@@ -229,16 +373,18 @@ def decode_f32le(
         window += ["-ss", f"{start:.6f}"]
     if duration is not None:
         window += ["-t", f"{duration:.6f}"]
-    proc = subprocess.run(
-        [
-            ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
-            # Absolute, so a file whose name begins with "-" can't be read as a flag.
-            *window, "-i", os.path.abspath(path),
-            "-vn", "-ac", str(channels), "-ar", str(sample_rate), "-f", "f32le", "-",
-        ],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-    )
+    args = [
+        # Absolute, so a file whose name begins with "-" can't be read as a flag.
+        *window, "-i", os.path.abspath(path),
+        "-vn", "-ac", str(channels), "-ar", str(sample_rate), "-f", "f32le", "-",
+    ]
+    with _profiled("decode_f32le", args) as record:
+        proc = subprocess.run(
+            [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", *args],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+        )
+        record["exit"] = proc.returncode
     if proc.returncode != 0:
         stderr = proc.stderr.decode("utf-8", errors="replace")
         raise RuntimeError(f"ffmpeg could not decode {path}:\n{stderr[-2000:]}")

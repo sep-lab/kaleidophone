@@ -475,6 +475,34 @@ def test_result_reports_its_rate(tmp_path):
     assert result.elapsed_s == 10.0 and result.fps == 1.0
 
 
+def test_the_time_is_split_into_read_program_and_write(tmp_path):
+    """The fake clock moves only inside the program: every second is the
+    program's, none the reader's or the writer's -- and each part's log line
+    says so per frame."""
+    clock, lines = FrameClock(), []
+    result = _run(_job(tmp_path), _ticking(identity, clock), clock=clock, log=lines.append)
+    assert (result.read_s, result.program_s, result.write_s) == (0.0, 23.0, 0.0)
+    assert lines[0].endswith("(1.0 fps; read 0.0 / program 1000.0 / write 0.0 ms a frame)")
+
+
+def test_reading_and_writing_are_timed_too(tmp_path):
+    clock = FrameClock()
+
+    class SlowSource(FakeSource):
+        def __iter__(self):
+            for frame in super().__iter__():
+                clock.now += 0.25
+                yield frame
+
+    class SlowSink(FakeSink):
+        def write(self, frame):
+            clock.now += 0.5
+            super().write(frame)
+
+    result = _run(_job(tmp_path, end_frame=4), identity, clock=clock, open_source=SlowSource, open_sink=SlowSink)
+    assert (result.read_s, result.program_s, result.write_s) == (1.0, 0.0, 2.0)
+
+
 # --- job_parts --------------------------------------------------------------
 
 

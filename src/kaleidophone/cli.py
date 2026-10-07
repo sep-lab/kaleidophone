@@ -20,13 +20,15 @@ kaleidophone's command-line entry point.
     kaleidophone master-check <old.wav> <new.wav>      -> is a new master a drop-in for the picture?
     kaleidophone deliver      <sheet.yaml>             -> every deliverable, cut from one silent render, audio muxed
     kaleidophone platforms    [ID]                     -> what each platform asks for, cited and dated
+    kaleidophone doctor                                -> is this machine ready to render (and to benchmark)?
 
 `master-check` answers in its exit code as well as in words: 0 remux, 3
 re-render the listed bars, 4 new grid, 5 offset (the same material starting
 earlier or later: set the delivery sheet's silent_start to the printed
 value). 2 keeps meaning what it means for every command: a failure -- bad
 usage (argparse's own exit code) or an error the command reported. 1 is
-kaleidophone run with no command at all.
+kaleidophone run with no command at all. `doctor --bench-gate` exits 8 when
+the machine can't be benchmarked now: too busy, on battery, or a check failed.
 
 See docs/CONFIG-SCHEMA.md for the brief format and skills/ for the full
 per-stage methodology.
@@ -395,6 +397,37 @@ def _build_parser() -> argparse.ArgumentParser:
     shape.add_argument("--json", dest="as_json", action="store_true", help="As JSON.")
     shape.add_argument("--markdown", action="store_true", help="As markdown: docs/PLATFORMS.md is this, whole.")
     p.set_defaults(func=_cmd_platforms)
+
+    p = sub.add_parser(
+        "doctor",
+        help="Is this machine ready to render, and quiet enough to benchmark? The toolchain's builds and "
+        "architectures, encoders, Chromium, disk, power and load.",
+    )
+    p.add_argument(
+        "-o",
+        "--out",
+        default=".",
+        help="The folder you'll render into: free space, a write test and '?' in file names are checked "
+        "there (default: here). Nothing is left in it.",
+    )
+    p.add_argument(
+        "--wav",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="A master to check is finished: its size must hold still for --wav-wait seconds and match its "
+        "header (repeat for each). Reported by number, never by name.",
+    )
+    p.add_argument("--wav-wait", type=_finite_float, default=2.0, metavar="SECONDS", help="Default 2.")
+    p.add_argument("--canvas", metavar="DIR", help="The canvas/ folder of a checkout (default: found from here).")
+    p.add_argument("--json", dest="as_json", action="store_true", help="The report as JSON: no paths, no host name.")
+    p.add_argument(
+        "--bench-gate",
+        action="store_true",
+        help="Refuse, with exit 8, unless the machine can be benchmarked now: 1-min load at most 1, not on "
+        "battery, no failing check.",
+    )
+    p.set_defaults(func=_cmd_doctor)
 
     return parser
 
@@ -986,6 +1019,18 @@ def _cmd_platforms(args: argparse.Namespace) -> int:
     else:
         print(platforms.describe(entry) if entry is not None else platforms.platform_table())
     return EXIT_OK
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from kaleidophone import doctor
+
+    if args.wav_wait < 0:
+        raise ValueError("--wav-wait is a number of seconds to watch the file: 0 or more")
+    report = doctor.diagnose(
+        out=args.out, wavs=args.wav, wav_wait=args.wav_wait, canvas=args.canvas, gate=args.bench_gate
+    )
+    print(json.dumps(report.to_dict(), indent=2) if args.as_json else doctor.format_report(report))
+    return report.exit_code
 
 
 def _write_yaml_brief(brief: CreativeBrief, path) -> None:

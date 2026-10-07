@@ -188,13 +188,22 @@ class RenderJob:
 @dataclass(frozen=True)
 class RenderResult:
     """What one call to run_job() did: where the job now stands, and what this
-    call rendered and wrote."""
+    call rendered and wrote.
+
+    `read_s`, `program_s` and `write_s` split the frames' time three ways:
+    waiting for the decoder and converting its bytes to float; the program;
+    converting back and waiting for the encoder to take the frame. Each part's
+    log line says the same per frame, so a run log shows which of the three a
+    render waits on (benchmarks/ reads them)."""
 
     job: RenderJob
     next_frame: int
     frames: int = 0
     parts: tuple[str, ...] = ()
     elapsed_s: float = 0.0
+    read_s: float = 0.0
+    program_s: float = 0.0
+    write_s: float = 0.0
 
     @property
     def done(self) -> bool:
@@ -655,10 +664,15 @@ def run_job(
     sink: FrameSink | None = None
     partial: str | None = None
     part_started = clock()
+    # Seconds spent reading, in the program, and writing: this call's, and this part's.
+    spent = [0.0, 0.0, 0.0]
+    in_part_spent = [0.0, 0.0, 0.0]
     try:
         frames = iter(source)
         while next_frame < job.end_frame:
+            t_read = clock()
             raw = next(frames, None)
+            read = clock() - t_read
             if raw is None:
                 raise RuntimeError(
                     f"{job.tag}: the source ended at frame {next_frame} of {job.start_frame}..{job.end_frame} "
@@ -668,9 +682,17 @@ def run_job(
                 partial = _partial_path(job, part)
                 sink = open_sink(job, partial)
                 part_started = clock()
+            t_convert = clock()
             frame = _decoded_to_float(raw, shape)
+            t_program = clock()
             out = program(frame, job.time_at(next_frame), env, state)
+            t_write = clock()
             sink.write(_float_to_u8(out, scratch, next_frame))
+            t_done = clock()
+            split = (read + t_program - t_convert, t_write - t_program, t_done - t_write)
+            for k in range(3):
+                spent[k] += split[k]
+                in_part_spent[k] += split[k]
             next_frame += 1
             rendered += 1
             in_part += 1
@@ -686,9 +708,14 @@ def run_job(
                 if log is not None:
                     took = clock() - part_started
                     rate = in_part / took if took > 0 else 0.0
-                    log(f"{job.tag}: part {part:03d} done, next frame {next_frame} of {job.end_frame} ({rate:.1f} fps)")
+                    read_ms, program_ms, write_ms = (1000.0 * s / in_part for s in in_part_spent)
+                    log(
+                        f"{job.tag}: part {part:03d} done, next frame {next_frame} of {job.end_frame} ({rate:.1f} fps; "
+                        f"read {read_ms:.1f} / program {program_ms:.1f} / write {write_ms:.1f} ms a frame)"
+                    )
                 part += 1
                 in_part = 0
+                in_part_spent = [0.0, 0.0, 0.0]
                 if out_of_time:
                     break
     finally:
@@ -700,7 +727,7 @@ def run_job(
         if partial is not None and os.path.exists(partial):
             os.remove(partial)
         source.close()
-    return RenderResult(job, next_frame, rendered, tuple(written), clock() - started)
+    return RenderResult(job, next_frame, rendered, tuple(written), clock() - started, *spent)
 
 
 def job_status(job: RenderJob) -> RenderResult:

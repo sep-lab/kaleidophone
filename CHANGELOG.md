@@ -5,6 +5,28 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — the Mac is the studio, part one: measure first
+
+- **`kaleidophone doctor`** says what each tool on this machine is and what it
+  runs as: python, ffmpeg, ffprobe and node by version, architecture (read
+  from the binary's own header) and install prefix, and whether Rosetta 2 is
+  translating them. Also the PATH order of `/usr/local/bin` and
+  `/opt/homebrew/bin`, the encoders (libx264, aac, aac_at), the Chromium
+  revision `canvas/`'s playwright-core launches, free disk, a write test, `?`
+  in file names, a master that is still being written (`--wav`), AC power and
+  load. `--json` holds no path or host name. `--bench-gate` exits 8 unless the
+  machine is quiet and on AC power.
+- **`benchmarks/`**: `run.py --suite quick|canvas-knee|footage|deliver|aac-vs-aac_at|loop-seam|long-form|all`,
+  the median of N runs, written as `kp-bench/1` JSON with the toolchain and
+  no host, user or path (checked before writing). The method and the empty
+  tables are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). No number goes in
+  them until a gated run measures it.
+- **Profiling hooks.** `KALEIDOPHONE_PROFILE=<file.jsonl>` records every
+  ffmpeg run's kind, wall time and exit. `render.mjs --profile` puts every
+  frame's draw, capture and encoder-wait ms in the sidecar. The frame
+  engine's run log and `RenderResult` split each part into read, program and
+  write time.
+
 ## [0.4.0] — 2026-10-01
 
 **The session, every platform, every ending.** 0.3 gave three engines one
