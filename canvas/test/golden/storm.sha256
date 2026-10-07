@@ -1,0 +1,14 @@
+# kaleidophone golden frames: storm, from its synthetic twin. Each line is the sha256 of one still's decoded
+# RGBA pixels (canvas/tools/golden.mjs), drawn from the page with the "html" sha256 below: the page as the
+# release zip ships it. Recorded by the golden-update job on the machine named in "env"; never edit by hand.
+# html 7670b46d13167eda7036fe3a44c6c6c0ffe93b4e1a5f679d93b75abeb397013a
+# env linux-x64 | chromium 141.0.7390.37 --disable-skia-runtime-opts | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
+# size 1080x1920
+e222fa67f64d680df05e8fbddf0c8003c64c58e8838be1f81b20f579e5130364  storm_35.583.png
+1891dd0d3e27979be1c8f4aa72d1d41faafe7ae68e73ae2808d491e6b74a47f4  storm_56.208.png
+fea62354169f1d1173dc4f9df4195c96c657f7304075da890e08b9748434940d  storm_112.417.png
+5664884c21c4ba826bf2d3dd0fc2030a6ad30ca013952eeb8bbd448a79d4626d  storm_168.667.png
+4757f75d708f4cb517cde8fa0d9963575f8efd9f969ad4a7b651560837abc9f2  storm_224.875.png
+cd5f244f1c406d1a92485663f75374fb78a43144c0b344861685cca93197952d  storm_281.083.png
+1b09302546ce94cc612a47b1ad246ea70de56260693938e1b95ffbc723ddf00d  storm_cover_icon_1200.png
+ba80f7d306a92457186fc8cb128a25d3218b8a956f1481c76630be26d70de282  storm_cover_map_1200.png
