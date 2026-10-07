@@ -1,0 +1,14 @@
+# kaleidophone golden frames: same-as-you, from its synthetic twin. Each line is the sha256 of one still's decoded
+# RGBA pixels (canvas/tools/golden.mjs), drawn from the page with the "html" sha256 below: the page as the
+# release zip ships it. Recorded by the golden-update job on the machine named in "env"; never edit by hand.
+# html af5900ac1527b2e4262bc73f5d97978a813394cb4d7b71668313f80a6d194faf
+# env linux-x64 | chromium 141.0.7390.37 --disable-skia-runtime-opts | monospace DejaVu Sans Mono | fonts-dejavu-core 2.37-8
+# size 1080x1920
+e7d50281f73c96c336d2d817f2e792b56b1124368ec1506708c95c6f035c6144  same-as-you_23.375.png
+5fe8287d7c92a1c84e9d98198564f456e8469328be09a357b91408fc60b3cf3b  same-as-you_46.750.png
+a400265e056c1ae98e754287bdefc00979a14d1da46c18e3a1047cffb5fae6dc  same-as-you_70.125.png
+4988c9b29e3805ce7f36dc95a50dd607d04f56a0b4d9eb92d9f421aadf75c3cd  same-as-you_90.500.png
+d598aa3bf88a1c29c82f93db2ef050d576c7b4c3118efde5ca75ed8d8d9cd6cd  same-as-you_93.500.png
+5e41fc2bbab24ebfed7d50aa049ca57a8886ebb53392de2cb358b2786e2d3116  same-as-you_116.875.png
+25a08d25e85547e6d1421d10897c8ec19226b8c0a0cce65f0f865230422a6765  same-as-you_cover_main_1200.png
+85d4c77714429652dd18e732c27406c308504ac1384c72bac28ed159774ca189  same-as-you_cover_psychedelic_1200.png

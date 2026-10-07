@@ -27,6 +27,37 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   engine's run log and `RenderResult` split each part into read, program and
   write time.
 
+### Added — the Mac is the studio, part two: frozen means frozen
+
+- **The frozen-piece contract.** `canvas/test/contract.test.mjs` builds every
+  frozen piece from its synthetic twin, as the gallery and the release zip ship
+  it, and holds the page to its release's size and sha256: for the pieces
+  released in 0.4.0, the pages in `kaleidophone-pieces-0.4.0.zip`, which the
+  artist site vendors. It pins each twin (its `synthetic.json` and the pack
+  `synth.mjs` makes from it), and every piece is frozen there or a template.
+- **Golden frames.** `canvas/tools/golden.mjs --check|--update`: 6 frames and 2
+  covers of each frozen page, as the sha256 of their decoded pixels, in
+  `canvas/test/golden/`. Exact on CI only, where the new `frozen` job pins the
+  environment (`ubuntu-24.04`, Chromium by playwright-core's version, the
+  fallback monospace font) and Skia's baseline code path, so the pixels don't
+  depend on which CPU the runner has (measured: the same 32 hashes on AMD and
+  Intel runners); elsewhere `--check` checks the pages and skips the frames. A `golden-update` job (CI → Run workflow, *golden_update*) re-records
+  them there and uploads them for a reviewed PR to commit.
+- **The lib pin.** `"libVersion": "0.4.0"` in `piece.json` builds a piece's lib
+  from `canvas/lib/versions/0.4.0/`, byte copies of v0.4.0's `core.js` and
+  `live.js`, so lib work can't move the bytes of a piece that shipped on it.
+- **Worker identity.** `canvas/test/workers.test.mjs` renders each stateless
+  piece losslessly with 2, 4 and 8 workers and compares the frames by
+  framemd5, never the MP4s (lossy, 24 of 24 frames differ between 2 and 4
+  workers: measured).
+- **The demo's edit is pinned.** `tests/test_golden_edl.py` runs
+  `kaleidophone run --preview-only` on the demo's generated fixtures and holds
+  its `edl.json` byte for byte to `tests/golden/demo_edl.json` (ADR-0001: same
+  brief, same edit).
+- **Faster CI.** pip caches on every Python job, and a Chromium cache keyed on
+  playwright-core's version (`.github/actions/canvas-env`, shared by every job
+  that renders a canvas piece).
+
 ### Added — privacy first
 
 - **The deny list.** A `deny-list` CI job and a pre-push hook
